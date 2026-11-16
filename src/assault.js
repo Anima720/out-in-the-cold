@@ -10,7 +10,7 @@ import { D, after, afterReal } from './director.js';
 import { S, ground5 } from './station.js';
 import { Builder } from './geom.js';
 import { M } from './mats.js';
-import { Raider } from './part5.js';
+import { Raider } from './raider.js';
 
 const _e = new THREE.Vector3(), _d = new THREE.Vector3();
 function truckMesh() {

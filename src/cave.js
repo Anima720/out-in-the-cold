@@ -14,7 +14,8 @@ import { D, LINES, say, after, afterReal, startCheckpoint } from './director.js'
 import { T } from './train.js';
 import { WP, resetWeapons, giveWeapon } from './weapon.js';
 import { los, addBox, rayBoxes } from './physics.js';
-import { Raider, mateCustom, goMate, placeMate, prep, clear5 } from './part5.js';
+import { Raider, mateCustom, goMate, placeMate, prep } from './raider.js';
+import { clear5 } from './part5.js';
 import { hideStation } from './station.js';
 
 Object.assign(LINES, {
