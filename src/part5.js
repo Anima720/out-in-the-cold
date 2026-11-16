@@ -22,7 +22,7 @@ const GUN0 = GUN_PIVOT.clone();
 import { W } from './world.js';
 import { INSIDE, IN_BLDG, ENTRY, route, walk, prep, Raider, visibleMate, mateCustom, goMate, placeMate } from './raider.js';
 export { prep, Raider, mateCustom, goMate, placeMate };
-import { assaultEvents, sendJuggTruck, updateAssault, clearAssault } from './assault.js';
+import { assaultEvents, sendJuggernauts, JUGG_COUNT, updateAssault, clearAssault } from './assault.js';
 import { startFinale, startWake, updateFinale, finaleCleanup } from './finale.js';
 import { WP, giveIgla, resetWeapons, giveWeapon, WDEF } from './weapon.js';
 
@@ -41,9 +41,10 @@ Object.assign(LINES, {
   P5_TRUCK_07: ['TRUCK', "Sandman, roof! Somebody's gotta realign that dish!", 'Sandman，上楼顶！得有人把天线重新对准！'],
   P5_SAND_09: ['SANDMAN', 'Dish is aligned. Try it now!', '天线对好了，再试试！'],
   P5_GRIN_06: ['GRINCH', "Signal's back! Seventy-five… come on, come on…", '信号回来了！百分之七十五……快点，快点……'],
-  P5_TRUCK_02: ['TRUCK', 'Juggernaut! Coming through the gate!', '重装兵！从大门冲进来了！'],
-  P5_SAND_05: ['SANDMAN', 'Focus fire! Hit him with everything!', '集中火力！所有家伙都往他身上招呼！'],
-  P5_GRIN_07: ['GRINCH', "He's down! Big boy's down!", '他倒了！大块头倒了！'],
+  P5_TRUCK_02: ['TRUCK', 'Juggernauts! Three of them, coming through the gate!', '重装兵！三个，正从大门冲进来！'],
+  P5_SAND_05: ['SANDMAN', 'Focus fire! One at a time — hit them with everything!', '集中火力！一个一个来——所有家伙都往他们身上招呼！'],
+  P5_GRIN_07: ['GRINCH', "Last one's down! Big boys are down!", '最后一个也倒了！大块头全趴下了！'],
+  P5_GRIN_07A: ['GRINCH', "One down! Keep hitting 'em!", '倒了一个！接着打！'],
   P5_TRUCK_03: ['TRUCK', "That Hind's back!", '那架雌鹿又回来了！'],
   P5_GRIN_10: ['GRINCH', 'Truck! TRUCK!', 'Truck！TRUCK！'],
   P5_SAND_07: ['SANDMAN', "…He's gone. Stay on that uplink, Grinch.", '……他走了。盯住上行链路，Grinch。'],
@@ -245,7 +246,7 @@ export function clear5() {
   clearHumans(); clearVehicles(); clearFX(); clearNades();
   for (const r of Q.missiles) G.scene.remove(r.mesh);
   Q.missiles.length = 0; Q.wreck = null;
-  clearAssault(); finaleCleanup();
+  clearAssault(); finaleCleanup(); hideHint5();
   setDoor(1.62); setUplink(S.powered ? 'up' : 'off', 0);
   for (const c of CLAY) G.scene.remove(c.mesh); CLAY.length = 0;
   if (P.mounted) { P.mounted = false; WP.hidden = false; if (T.dshk) T.dshk.gloves.visible = false; }
@@ -340,8 +341,25 @@ G.startPart5 = (k, cont) => {
   if (k !== 7) HUD.show(true);
 };
 
+// on-screen hint card (own DOM node inside #ui; hud.js belongs to the lead)
+let hintEl = null;
+function hint5(html, dur = 10) {
+  if (typeof document === 'undefined') return;
+  if (!hintEl) {
+    const st = document.createElement('style');
+    st.textContent = '#p5hint{left:50%;top:15%;transform:translate(-50%,-8px);max-width:min(600px,84vw);padding:10px 18px 11px;background:rgba(10,12,14,.66);border-left:3px solid #ffc54a;color:#ebe7dc;font-size:14px;line-height:1.7;letter-spacing:.05em;opacity:0;transition:opacity .4s,transform .4s;text-shadow:0 1px 2px #000}#p5hint.on{opacity:1;transform:translate(-50%,0)}#p5hint b{color:#ffc54a;margin-right:.6em;letter-spacing:.2em}#p5hint kbd{font:inherit;padding:0 5px;border:1px solid rgba(255,255,255,.4);border-radius:3px}';
+    document.head.appendChild(st);
+    hintEl = document.createElement('div'); hintEl.id = 'p5hint'; (document.getElementById('ui') || document.body).appendChild(hintEl);
+  }
+  hintEl.innerHTML = html; hintEl.classList.add('on');
+  const me = (hintEl._n = (hintEl._n || 0) + 1);
+  after(dur, () => { if (hintEl && hintEl._n === me) hintEl.classList.remove('on'); });
+}
+const hideHint5 = () => { if (hintEl) hintEl.classList.remove('on'); };
+
 function startDefend() {
   const P5 = D.p5;
+  hint5('<b>补给</b>楼内南墙的武器架上有 PKM、SVD、霰弹枪和 RPG，旁边有弹药箱，走近按 <kbd>F</kbd> 拿取或补给。<br>楼顶北侧架着一挺 DShK 重机枪——从东侧外楼梯上去。', 11);
   P5.ph = 'defend'; P5.up = 0; P5.rate = 0.5;
   WP.clay = 3; P.canMount = true;
   HUD.objective('守住雷达站，直到情报上传完毕');
@@ -350,7 +368,24 @@ function startDefend() {
   spawnWave(1);
 }
 
-const aliveEnemies = () => G.enemies.filter((e) => e.h.alive).length;
+const aliveEnemies = () => { let n = 0; for (const e of G.enemies) if (e.h.alive) n++; return n; };
+export const CAP5 = 16; // never more than this many enemies alive (assault.js holds vehicles back at the same cap)
+// target head-count: busy from the first minute, rising with the upload; lighter while the Hind is the main threat
+function pressureTarget(P5) {
+  if (P5.ph === 'hind' || P5.ph === 'igla') return P5.hindDown ? 0 : 8;
+  if (P5.ph === 'dish') return 11;
+  return P5.up < 25 ? 10 : P5.up < 50 ? 11 : P5.up < 70 ? 12 : 13;
+}
+const REFILL = [() => ({ x: rr(-40, 40), z: rr(-112, -96) }), () => ({ x: rr(-78, -64), z: rr(-62, -48) }), () => ({ x: rr(64, 78), z: rr(-56, -40) })];
+function pressure(dt, P5) {
+  if ((P5.refT = (P5.refT ?? 6) - dt) > 0) return; // first refill a few seconds into the defence
+  const n = aliveEnemies(), tgt = pressureTarget(P5);
+  if (n >= tgt || n >= CAP5) { P5.refT = 0.8; return; }
+  const p = REFILL[(P5.refN = (P5.refN || 0) + 1) % 3]();
+  const rpg = P5.refN % 6 === 0;
+  new Raider(p.x, p.z, { maxTier: rpg ? 1 : 2, rpg });
+  P5.refT = n < tgt - 4 ? 0.6 : 1.4; // far below target: refill fast
+}
 // wave n -> list of raiders; spawn points on the northern ridge and flanks
 const SPAWN_N = () => ({ x: rr(-40, 40), z: rr(-112, -96) });
 const SPAWN_NW = () => ({ x: rr(-78, -64), z: rr(-62, -48) });
@@ -370,7 +405,7 @@ function spawnWave(n) {
   for (const [fn, cnt, tier] of plan) for (let i = 0; i < cnt; i++) {
     const p = fn();
     const rpg = i === 0 && fn === plan[0][0] && n >= 2;
-    after(k * 0.5, () => { if (G.lvl === 5 && aliveEnemies() < 13) new Raider(p.x, p.z, { maxTier: rpg ? 1 : tier, rpg }); });
+    after(k * 0.5, () => { if (G.lvl === 5 && aliveEnemies() < CAP5) new Raider(p.x, p.z, { maxTier: rpg ? 1 : tier, rpg }); });
     k++;
   }
   P5.lastWaveT = D.t;
@@ -412,11 +447,15 @@ function enterIgla(fromCk) {
   if (fromCk) { musicMode('p5final'); HUD.objective('去军械库拿针式导弹'); HUD.setMarker(S.iglaPos.clone().setY(1.6), ''); D.ck = 6; }
 }
 
+// three Juggernauts walk in (assault.js); the beat ends when all of them are down
 G.p5JuggDown = () => {
-  const P5 = D.p5; if (!P5) return;
+  const P5 = D.p5; if (!P5 || P5.juggDone) return;
+  P5.juggKills = (P5.juggKills || 0) + 1;
+  if (P5.juggKills < JUGG_COUNT) { say('P5_GRIN_07A', 0.4); HUD.toast(`重装兵倒下了——还剩 ${JUGG_COUNT - P5.juggKills} 个`); HUD.objective(`击倒重装兵（还剩 ${JUGG_COUNT - P5.juggKills} 个）`); return; }
   P5.juggDone = true; say('P5_GRIN_07', 0.6);
   after(3, () => { if (P5.ph === 'defend') musicMode('p5defend'); });
 };
+G.p5JuggNear = () => { const P5 = D.p5; if (P5 && !P5.juggDone) { say('P5_TRUCK_02', 0.2); say('P5_SAND_05', 0.2); } };
 
 G.p5TruckHit = () => {
   const P5 = D.p5, tr = D.truck;
@@ -569,13 +608,12 @@ G.updatePart5 = (dt, rdt) => {
     }
     // juggernaut at 70%
     if (P5.dishDone && !P5.juggSpawned && P5.up >= 69.5) {
-      P5.juggSpawned = true; P5.rate = 0.35;
-      sendJuggTruck();
-      say('P5_TRUCK_02', 2.0); say('P5_SAND_05', 0.2);
+      P5.juggSpawned = true; P5.rate = 0.35; P5.juggKills = 0;
+      sendJuggernauts(); // three, on foot from the north; Truck calls them when the first reaches the gate (G.p5JuggNear)
       if (G.bark) after(1.0, () => G.bark('RU_08', new THREE.Vector3(0, 1, -40), true));
       musicMode('p5jugg');
-      HUD.objective('击倒重装兵');
-      after(6, () => { if (!P5.juggDone) HUD.objective('击倒重装兵（打头部，或用手雷）'); });
+      HUD.objective('击倒三名重装兵');
+      after(8, () => { if (!P5.juggDone && !P5.juggKills) HUD.objective('击倒三名重装兵（打头部，或用手雷、RPG）'); });
     }
     if (P5.juggDone && !P5.hindIn && P5.up >= 80) {
       P5.hindIn = true; P5.ph = 'hind';
@@ -600,11 +638,8 @@ G.updatePart5 = (dt, rdt) => {
       }
       if (P5.iglaTip && D.t - P5.iglaTip < 7) prompt = prompt || '按住 <kbd>右键</kbd> 对准直升机锁定，方框变红后按 <kbd>左键</kbd> 发射';
     }
-    // keep pressure up: top up enemies between scripted waves
-    P5.spawnT -= dt;
-    if (P5.ph !== 'igla' || !P5.hindDown) {
-      if (P5.spawnT <= 0 && P5.wave >= 2 && aliveEnemies() < (P5.ph === 'hind' || P5.ph === 'igla' ? 5 : 8)) { P5.spawnT = rr(6, 9); spawnWave(7); }
-    }
+    // keep the pressure up: refill toward a target head-count whenever it drops (vehicles and waves come on top; cap 16)
+    pressure(dt, P5);
     // Igla lock-on
     iglaLock(dt);
     if (hit('Digit4')) placeClaymore();

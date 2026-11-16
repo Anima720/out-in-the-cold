@@ -1,11 +1,13 @@
 // Part 4 assault vehicles: troop trucks, SUVs and snowmobiles charge the radar-station yard and unload soldiers.
-// Every vehicle follows a fixed spline to its own parking spot (routes checked offline against the station colliders,
-// rocks, trees and the other parking spots). Passengers are Raiders from the start: seated (Human.sit), `update`
+// Every vehicle follows its own lane (a spline tracked by the rear axle, so the body swings like a real vehicle) to its own
+// parking spot; the nine lanes are pairwise disjoint and clear of colliders, rocks and trees (checked offline), so no two
+// vehicles can ever pass through each other. The Juggernauts (three) walk in on foot down the centre of the road.
+// Passengers are Raiders from the start: seated (Human.sit), `update`
 // overridden on the instance, `h.noCrowd` set. On arrival they dismount on a script — truck: the tailgate drops, they
 // stand, walk to the rear and jump down one by one; SUV: the doors swing open and they step out on both sides;
 // snowmobile: both riders hop off — and are then handed back to the normal Raider AI.
 // A vehicle destroyed before its troops are out kills everybody still aboard.
-// part5.js call sites: assaultEvents(P5), sendJuggTruck(), updateAssault(dt, P5), clearAssault().
+// part5.js call sites: assaultEvents(P5), sendJuggernauts(), updateAssault(dt, P5), clearAssault().
 import { G, THREE, rr, clamp, damp, lerp, smooth, angDiff } from './core.js';
 import { J } from './humans.js';
 import { explodeAt, sledMesh } from './vehicles.js';
@@ -15,12 +17,12 @@ import { HUD } from './hud.js';
 import { ground5 } from './station.js';
 import { Builder } from './geom.js';
 import { M } from './mats.js';
-import { Raider } from './raider.js';
+import { Raider, walk } from './raider.js';
 
 const _e = new THREE.Vector3(), _d = new THREE.Vector3(), _a = new THREE.Vector3(), _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3();
 const _inv = new THREE.Matrix4(), _lo = new THREE.Vector3(), _ld = new THREE.Vector3();
 const HP = Math.PI / 2, TF = 1.7; // TF: truck bed floor (local y)
-const A = { veh: [], q: [], gap: 0, t: 0, jugg: null, thOn: false, th: new THREE.Vector3() };
+const A = { veh: [], q: [], gap: 0, t: 0, juggs: [], jq: [], jt: 0, near: false, thOn: false, thLab: '', th: new THREE.Vector3() };
 
 let MT = null;
 function mats() {
@@ -120,40 +122,41 @@ function suvMesh() {
 // ---------- kinds, seats, routes ----------
 // seat: [x, y, z (pelvis, local), facing (yaw offset), driver]
 const KIND = {
-  truck: { hp: 1500, v: 11, brake: 3, hl: 2.2, r: 6, box: [-1.25, 1.25, 0.2, 3.45, -4.3, 3.62], boom: [2.4, 9], snd: ['train', 0.5, 0.7],
+  truck: { hp: 1500, v: 11, brake: 3, hl: 2.2, hw: 1.1, ax: 1.5, r: 6, box: [-1.25, 1.25, 0.2, 3.45, -4.3, 3.62], boom: [2.4, 9], snd: ['train', 0.5, 0.7],
     seats: [[0.9, 2.2, 2.75, HP], [-0.9, 2.2, 2.75, -HP], [0.9, 2.2, 1.65, HP], [-0.9, 2.2, 1.65, -HP], [0.9, 2.2, 0.55, HP], [-0.9, 2.2, 0.55, -HP]] },
-  suv: { hp: 650, v: 13, brake: 4.5, hl: 1.5, r: 3.4, box: [-1.0, 1.0, 0.2, 1.9, -2.5, 2.42], boom: [1.9, 7.5], snd: ['train', 0.4, 1.2], bars: [[-0.58, 1.12, -0.6], [-0.26, 1.12, -0.6]],
+  suv: { hp: 650, v: 13, brake: 4.5, hl: 1.5, hw: 0.85, ax: 1.5, r: 3.4, box: [-1.0, 1.0, 0.2, 1.9, -2.5, 2.42], boom: [1.9, 7.5], snd: ['train', 0.4, 1.2], bars: [[-0.58, 1.12, -0.6], [-0.26, 1.12, -0.6]],
     seats: [[-0.42, 0.88, -0.08, 0, 1], [0.42, 0.88, -0.08, 0], [-0.42, 0.88, 0.86, 0], [0.42, 0.88, 0.86, 0]] },
-  sled: { hp: 240, v: 17, brake: 6, hl: 1.0, r: 2.4, box: [-0.6, 0.6, 0.2, 1.3, -1.6, 1.4], boom: [1.4, 6], snd: ['sled', 0.8, 1.1], bars: [[-0.3, 1.06, -0.36], [0.3, 1.06, -0.36]],
+  sled: { hp: 240, v: 17, brake: 6, hl: 1.0, hw: 0.4, ax: 0.5, r: 2.4, box: [-0.6, 0.6, 0.2, 1.3, -1.6, 1.4], boom: [1.4, 6], snd: ['sled', 0.8, 1.1], bars: [[-0.3, 1.06, -0.36], [0.3, 1.06, -0.36]],
     seats: [[0, 0.98, 0.14, 0, 1], [0, 1.05, 0.78, 0]] },
 };
-// trucks and SUVs come down the road and through the north gate; snowmobiles flank through the NW and E breaches.
-// The last segment of every truck/SUV route is axis-aligned (exact colliders); parking spots never overlap a later route.
-const ROAD = [[6, -172], [5.5, -120], [4.5, -80], [2.5, -52], [1.5, -38]];
-const ROAD2 = [[6, -172], [5.5, -120], [4.5, -80], [3, -52], [2.6, -40], [2, -35], [0.6, -31.4], [-2.6, -28.7]];
-const NWC = [[-20.5, -155], [-20.5, -140], [-20, -125], [-17, -112], [-15.8, -100], [-16.4, -90], [-15.5, -83], [-16.6, -75], [-19.5, -62], [-21.2, -44], [-20.6, -34], [-20.5, -29]];
-const EC = [[150, 8], [105, -3], [62, -5], [40, -4.6], [30, -4.5]];
+// Nine pairwise-disjoint lanes (points = rear-axle track; the last segment is the parking heading, axis-aligned for exact
+// colliders): the two trucks split the 10 m north gate, the SUVs use the W, E and NW breaches, the snowmobiles the SW, W2,
+// SE and NE-east breaches. Verified offline (swept footprints + 0.25 m vs each other, colliders, rocks and the tree RNG).
+const RW = [[2.5, -172], [2.2, -120], [1.6, -80], [-0.4, -52], [-2.0, -38], [-2.8, -32]];
+const RE = [[8.5, -172], [8.2, -120], [7.4, -80], [5.6, -52], [4.0, -38], [2.8, -32]];
+const NWC = [[-20.5, -155], [-20.5, -140], [-20, -125], [-17, -112], [-15.8, -100], [-16.3, -90], [-16.0, -83], [-16.7, -76], [-19.5, -62], [-21, -44], [-20.5, -37], [-20.5, -30]];
 const ROUTES = {
-  suvW: { kind: 'suv', road: 1, pts: [...ROAD2, [-10, -28.4], [-14.5, -28], [-18.3, -25.6], [-20, -22], [-20, -17.5]] },
-  truckW: { kind: 'truck', road: 1, pts: [...ROAD, [1, -32], [-0.6, -27.5], [-4, -24.2], [-8, -23], [-13, -23]] },
-  sledNW1: { kind: 'sled', pts: [...NWC, [-22.5, -24.5], [-24, -19]] },
-  sledE1: { kind: 'sled', pts: [...EC, [25, -3.5], [21, 0.5], [19.5, 3.5]] },
-  suvE: { kind: 'suv', road: 1, pts: [...ROAD, [1.5, -32], [2.8, -27.8], [6.5, -25], [14, -24.7], [19.5, -22.5], [21.5, -19], [21.5, -15]] },
-  truckE: { kind: 'truck', road: 1, pts: [...ROAD, [1.5, -32], [2.6, -27.8], [6, -24.8], [9, -24], [13, -24]] },
-  truckJ: { kind: 'truck', road: 1, pts: [...ROAD, [0.5, -32], [0, -27], [0, -21.5]], jpath: [[2.4, -26.3], [2.0, -17], [0.6, -12.5]] },
-  suvNW: { kind: 'suv', road: 1, pts: [...ROAD2, [-12, -28.4], [-18, -28.2], [-21, -27.6], [-26, -27.6]] },
-  sledNW2: { kind: 'sled', pts: [...NWC, [-21.8, -25.6], [-26, -21], [-27, -15.5], [-26.5, -8.5]] },
-  sledE2: { kind: 'sled', pts: [[150, 6], [105, 1], [62, -4], [40, -4.4], [30, -4.5], [26.5, -6.5], [26, -11], [26, -18]] },
+  truckW: { kind: 'truck', pts: [...RW, [-2.9, -27.4], [-4.5, -24.2], [-7.5, -23], [-11.5, -23]] },
+  truckE: { kind: 'truck', pts: [...RE, [2.9, -27.7], [4.9, -25.4], [8.5, -24.5], [11.5, -24.5]] },
+  suvW: { kind: 'suv', pts: [[-158, -16], [-110, -13.5], [-60, -12.6], [-38, -12.5], [-30, -12.5], [-26.8, -12.6], [-23.6, -13.4], [-22.5, -15], [-22.5, -16.5]] },
+  suvE: { kind: 'suv', pts: [[150, 8], [105, -3], [62, -5], [40, -4.6], [30, -4.5], [25.5, -5.2], [22.2, -8], [21.5, -10], [21.5, -11.5]] },
+  suvNW: { kind: 'suv', pts: [...NWC, [-20.7, -26.8], [-22.6, -25.4], [-24.5, -25.4]] },
+  sledSW: { kind: 'sled', pts: [[-158, 2], [-110, 4.5], [-60, 4.5], [-40, 4.5], [-30, 4.5], [-26, 4.5]] },
+  sledSE: { kind: 'sled', pts: [[152, 18], [110, 17.5], [70, 17.5], [48, 17.4], [38, 15.8], [30, 15.5], [25, 15.5]] },
+  sledW2: { kind: 'sled', pts: [[-158, 30], [-110, 29], [-60, 28.5], [-40, 27], [-33, 22], [-30, 19.5], [-26, 19.5]] },
+  sledNE: { kind: 'sled', pts: [[152, -30], [110, -28], [70, -27.6], [40, -27.5], [30, -27.5], [25, -27.5]] },
 };
+// the Juggernauts' walk-in: down the strip between the two truck lanes, through the middle of the gate
+const JPATH = [[5, -84], [2.6, -52], [0.8, -38], [0, -31], [0, -26.5]];
 
 // ---------- vehicle ----------
 class Charger {
   constructor(rid, o = {}) {
     const R = this.R = ROUTES[rid], kind = R.kind, k = this.k = KIND[kind];
-    this.isSled = true; this.kind = kind; this.rid = rid; this.road = !!R.road;
+    this.isSled = true; this.kind = kind; this.rid = rid;
     this.curve = new THREE.CatmullRomCurve3(R.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
     this.L = this.curve.getLength(); this.s = 0; this.vmax = o.speed || k.v; this.v = this.vmax * 0.85;
-    this.pos = new THREE.Vector3(); this.tan = new THREE.Vector3(0, 0, -1); this.yaw = 0; this.pitch = 0; this.bob = rr(0, 6);
+    this.pos = new THREE.Vector3(); this.tan = new THREE.Vector3(0, 0, -1); this.yaw = 0; this.pitch = 0; this.roll = 0; this.bob = rr(0, 6);
     this.hp = k.hp; this.dead = false; this.arrived = false; this.removed = false; this.at = 0; this.col = []; this.pax = [];
     this.driver = null; this.gunner = null; this.toast = o.toast || null;
     this.group = kind === 'truck' ? truckMesh() : kind === 'suv' ? suvMesh() : sledMesh(); G.scene.add(this.group);
@@ -171,17 +174,18 @@ class Charger {
     c.getPoint(t, _a); c.getPoint(Math.min(1, t + 2e-4), _c1); c.getPoint(Math.max(0, t - 2e-4), _c2);
     this.tan.subVectors(_c1, _c2).setY(0); if (this.tan.lengthSq() > 1e-12) this.tan.normalize();
     this.yaw = Math.atan2(-this.tan.x, -this.tan.z);
-    this.pos.x = _a.x; this.pos.z = _a.z; this.ground(dt);
+    const ax = this.k.ax; this.pos.x = _a.x - Math.sin(this.yaw) * ax; this.pos.z = _a.z - Math.cos(this.yaw) * ax; this.ground(dt); // body ahead of the tracked rear axle
   }
   ground(dt) {
-    const hl = this.k.hl, sy = Math.sin(this.yaw) * hl, cy = Math.cos(this.yaw) * hl;
-    const fy = ground5(this.pos.x - sy, this.pos.z - cy), by = ground5(this.pos.x + sy, this.pos.z + cy), pt = Math.atan2(fy - by, 2 * hl);
-    this.pos.y = (fy + by) / 2; this.pitch = dt > 0 ? damp(this.pitch, pt, 6, dt) : pt;
+    const hl = this.k.hl, hw = this.k.hw, sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    const fy = ground5(this.pos.x - sy * hl, this.pos.z - cy * hl), by = ground5(this.pos.x + sy * hl, this.pos.z + cy * hl), pt = Math.atan2(fy - by, 2 * hl);
+    const ry = ground5(this.pos.x + cy * hw, this.pos.z - sy * hw), ly = ground5(this.pos.x - cy * hw, this.pos.z + sy * hw), rl = Math.atan2(ry - ly, 2 * hw);
+    this.pos.y = (fy + by + ry + ly) / 4; this.pitch = dt > 0 ? damp(this.pitch, pt, 6, dt) : pt; this.roll = dt > 0 ? damp(this.roll, rl, 6, dt) : rl;
     if (this.kind === 'sled' && dt > 0 && !this.arrived) this.pos.y += Math.abs(Math.sin((this.bob += dt * 6.3))) * 0.05;
   }
   place() {
     const g = this.group;
-    g.position.copy(this.pos); g.rotation.set(this.pitch, this.yaw, 0, 'YXZ'); g.updateMatrixWorld(true);
+    g.position.copy(this.pos); g.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ'); g.updateMatrixWorld(true);
     const m = g.matrixWorld, B = this.k.bars;
     for (let i = 0; i < this.pax.length; i++) {
       const r = this.pax[i], d = r.ride, h = r.h;
@@ -227,8 +231,8 @@ class Charger {
   arrive() {
     this.arrived = true; this.v = 0; this.at = 0;
     const p = this.R.pts, n = p.length;
-    this.pos.x = p[n - 1][0]; this.pos.z = p[n - 1][1];
-    this.yaw = Math.atan2(-(p[n - 1][0] - p[n - 2][0]), -(p[n - 1][1] - p[n - 2][1])); this.ground(0);
+    this.yaw = Math.atan2(-(p[n - 1][0] - p[n - 2][0]), -(p[n - 1][1] - p[n - 2][1]));
+    this.pos.x = p[n - 1][0] - Math.sin(this.yaw) * this.k.ax; this.pos.z = p[n - 1][1] - Math.cos(this.yaw) * this.k.ax; this.ground(0);
     this.place();
     this.snd.setPos(this.pos); this.snd.setVol(this.k.snd[1] * 0.3); this.snd.setRate(this.k.snd[2] * 0.5);
     if (this.kind !== 'sled') this.footprint(false);
@@ -330,7 +334,6 @@ function addPax(v, seat, ord, jugg, door) {
   if (v.doors) v.doors[door].t0 = go - 0.22;
   r.update = (dt) => paxStep(r, dt);
   if (v.kind === 'sled' && r.ride.drv) { v.driver = h; const od = h.onDeath; h.onDeath = (p) => { od(p); if (!v.dead && !v.arrived) v.wreck(); }; }
-  if (jugg) A.jugg = r;
   v.pax.push(r);
   return r;
 }
@@ -406,24 +409,41 @@ function handover(r) {
   d.st = 'done'; delete r.update;
   h.noCrowd = false; h.sit = null; h.vel.set(0, 0, 0); h.crouchT = 0; h.grounded = true; h.pos.y = ground5(h.pos.x, h.pos.z);
   r.active = true; r.t = rr(0.2, 0.6); r.losT = 0; r.hiddenT = 0; r.chk = 1; r.lastD = 1e9; r.detour = 0;
-  if (r.jugg) { const jp = d.v.R.jpath; r.path = jp ? jp.map(([x, z]) => ({ x, z })) : []; r.repathT = jp ? 9 : 0; r.state = 'pause'; }
-  else { r.tier = 2; r.pickNext(); }
+  r.tier = 2; r.pickNext();
   if (d.drv && d.v.driver === h) d.v.driver = null;
 }
+
+// ---------- Juggernauts: three, on foot, staggered; scripted walk-in until the gate (or until close to the player) ----------
+function spawnJugg() {
+  const r = new Raider(rr(4.4, 5.6), -104, { jugg: true });
+  r.walkIn = 0; r.update = (dt) => juggWalk(r, dt);
+  A.juggs.push(r);
+}
+function juggWalk(r, dt) {
+  const h = r.h; if (!h.alive) return;
+  const w = JPATH[r.walkIn];
+  if (walk(r, h, w[0], w[1], 2.3, dt)) r.walkIn++;
+  if (Math.abs(h.vel.x) + Math.abs(h.vel.z) > 0.3) { h.aim.set(h.vel.x, -0.1, h.vel.z).normalize(); turnTo(h, Math.atan2(-h.vel.x, -h.vel.z), 3, dt); }
+  h.crouchT = 0; h.aimTarget = 0.45;
+  r.stepT = (r.stepT ?? 0) - dt * Math.hypot(h.vel.x, h.vel.z);
+  if (r.stepT <= 0) { r.stepT = 1.0; play('thud', { pos: h.pos, vol: 0.4, ref: 7, rate: 0.65 }); }
+  if (!A.near && h.pos.z > -46) { A.near = true; G.p5JuggNear?.(); }
+  if (r.walkIn >= JPATH.length || h.pos.distanceToSquared(P.pos) < 30 * 30) { delete r.update; r.state = 'pause'; r.t = 0.3; r.repathT = 0; } // normal Juggernaut AI from here
+}
+const JLAB = ['', '重装兵', '重装兵 ×2', '重装兵 ×3'];
 
 // ---------- scheduling ----------
 function send(rid, troops, o = {}) { return new Charger(rid, { troops, ...o }); }
 function aliveN() { let n = 0; for (const e of G.enemies) if (e.h.alive) n++; return n; }
-function roadBusy() { for (const v of A.veh) if (v.road && !v.arrived && !v.dead && v.s < 40) return true; return false; }
-// [P5 flag, upload %, extra condition, spawn, uses the road]
+// [P5 flag, upload %, extra condition, spawn]
 const EV = [
-  ['as_suv1', 20, null, () => send('suvW', 3, { toast: '敌军越野车冲进了大门！' }), 1],
-  ['as_truck1', 28, null, () => send('truckW', 5, { toast: '敌军卡车正从大门冲进来！' }), 1],
-  ['as_sleds1', 42, null, () => { send('sledNW1', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledE1', 2); }, 0],
-  ['as_suv2', 50, null, () => send('suvE', 2, { toast: '又一辆越野车冲进来了！' }), 1],
-  ['as_truck2', 60, (P5) => P5.dishDone, () => send('truckE', 4, { toast: '敌军卡车正从大门冲进来！' }), 1],
-  ['as_suv3', 0, (P5) => P5.hindIn && A.t - (P5.as_hindT ?? (P5.as_hindT = A.t)) > 8, () => send('suvNW', 3, { toast: '敌军越野车冲进了大门！' }), 1],
-  ['as_sleds2', 0, (P5) => P5.ph === 'igla', () => { send('sledNW2', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledE2', 2); }, 0],
+  ['as_suv1', 20, null, () => send('suvW', 3, { toast: '敌军越野车从西侧缺口冲进来了！' })],
+  ['as_truck1', 28, null, () => send('truckW', 5, { toast: '敌军卡车正从大门冲进来！' })],
+  ['as_sleds1', 42, null, () => { send('sledSW', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledSE', 2); }],
+  ['as_suv2', 50, null, () => send('suvE', 2, { toast: '又一辆越野车从东侧冲进来了！' })],
+  ['as_truck2', 60, (P5) => P5.dishDone, () => send('truckE', 4, { toast: '敌军卡车正从大门冲进来！' })],
+  ['as_suv3', 0, (P5) => P5.hindIn && A.t - (P5.as_hindT ?? (P5.as_hindT = A.t)) > 8, () => send('suvNW', 3, { toast: '敌军越野车从西北缺口冲进来了！' })],
+  ['as_sleds2', 0, (P5) => P5.ph === 'igla', () => { send('sledW2', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledNE', 2); }],
 ];
 
 // ---------- hooks called from part5.js ----------
@@ -435,25 +455,29 @@ export function assaultEvents(P5) {
     if (!P5[e[0]] && P5.up >= e[1] && (!e[2] || e[2](P5))) { P5[e[0]] = true; A.q.push(e); }
   }
 }
-// the Juggernaut arrives in the back of a truck (called once at ~70% upload; not queued: the lines play right away)
-export function sendJuggTruck() { if (G.lvl === 5) send('truckJ', 3, { jugg: true, speed: 9 }); }
+// ~70% upload: three Juggernauts walk in from the north, ~13 s apart (not queued: the story beat plays right away)
+export function sendJuggernauts() { if (G.lvl !== 5) return; A.jq.push(0, 13, 26); A.jt = 0; A.near = false; }
+export const JUGG_COUNT = 3;
 // called every frame while Part 4 runs
 export function updateAssault(dt, P5) {
   A.t += dt;
-  // hold queued arrivals while the yard is crowded (> 16 alive) and keep road vehicles apart
-  if (A.q.length && (A.gap -= dt) <= 0 && aliveN() <= 16 && !(A.q[0][4] && roadBusy())) { A.q.shift()[3](); A.gap = 3; }
-  // Juggernaut threat marker (live position above his head) while he lives
-  const j = A.jugg;
-  if (j && j.h.alive && !j.h.removed) {
-    A.th.copy(j.h.j[J.Hc]); if (A.th.lengthSq() < 1e-6) A.th.copy(j.h.pos); A.th.y += 0.55;
-    if (!A.thOn) { A.thOn = true; HUD.setThreat?.(A.th, '重装兵'); }
-  } else if (A.thOn || j) { A.thOn = false; A.jugg = null; HUD.setThreat?.(null); }
+  // hold queued arrivals while the yard is crowded (> 16 alive); every vehicle has its own lane, so no road lock is needed
+  if (A.q.length && (A.gap -= dt) <= 0 && aliveN() <= 16) { A.q.shift()[3](); A.gap = 3; }
+  if (A.jq.length) { A.jt += dt; while (A.jq.length && A.jt >= A.jq[0]) { A.jq.shift(); spawnJugg(); } }
+  // threat marker on the nearest living Juggernaut (live position above his head), label counts the living ones
+  let best = null, bd = 1e18, n = 0;
+  for (const r of A.juggs) { const h = r.h; if (!h.alive || h.removed) continue; n++; const d = h.pos.distanceToSquared(P.pos); if (d < bd) { bd = d; best = r; } }
+  if (best) {
+    A.th.copy(best.h.j[J.Hc]); if (A.th.lengthSq() < 1e-6) A.th.copy(best.h.pos); A.th.y += 0.55;
+    const lab = JLAB[Math.min(n, 3)];
+    if (!A.thOn || A.thLab !== lab) { A.thOn = true; A.thLab = lab; HUD.setThreat?.(A.th, lab); }
+  } else if (A.thOn) { A.thOn = false; A.thLab = ''; HUD.setThreat?.(null); }
 }
 // called whenever Part 4 is reset/left (checkpoint restart, level change) and when the finale clears the battlefield:
 // vehicles still on the way are removed with whoever is aboard; parked vehicles and wrecks stay (clearVehicles takes them)
 export function clearAssault() {
   for (let i = A.veh.length - 1; i >= 0; i--) { const v = A.veh[i]; if (!v.arrived && !v.dead) v.remove(); }
-  A.veh.length = 0; A.q.length = 0; A.gap = 0; A.jugg = null; A.thOn = false;
+  A.veh.length = 0; A.q.length = 0; A.gap = 0; A.juggs.length = 0; A.jq.length = 0; A.near = false; A.thOn = false; A.thLab = '';
   HUD.setThreat?.(null);
 }
-if (typeof window !== 'undefined') window.__assault = () => ({ A, ROUTES, KIND, send, aliveN, Raider });
+if (typeof window !== 'undefined') window.__assault = () => ({ A, ROUTES, KIND, JPATH, send, aliveN, Raider, spawnJugg });

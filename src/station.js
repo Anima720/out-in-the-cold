@@ -224,7 +224,7 @@ export function buildStation() {
     solid(cx - w / 2, 0, cz - d / 2, cx + w / 2, 0.95, cz + d / 2, 'concrete', 0xa5a399);
     coverFor(cx, cz, 0.6, 2);
   };
-  barrier(3, -15); barrier(-3, -20); barrier(11, -21); barrier(-17, -8, 1); barrier(17, -4, 1); barrier(-7, -26); barrier(7.5, -27);
+  barrier(3, -15); barrier(-3.5, -17); barrier(11, -21); barrier(-17, -8, 1); barrier(17, -4, 1); barrier(-7, -26); barrier(7.5, -27);
   for (const [cx, cz] of [[-6, -12], [8, -17]]) { solid(cx - 0.6, 0, cz - 0.6, cx + 0.6, 1.2, cz + 0.6, 'crate', 0xffffff, 'wood'); B.boxC(cx + 0.1, 1.6, cz, 0.8, 0.8, 0.8, 'crate', 0xffffff, 0, 0.3, 0); coverFor(cx, cz, 0.6, 2); }
   for (let i = 0; i < 5; i++) solid(11 + (i % 3) * 0.75, 0, -10.5 + Math.floor(i / 3) * 0.75, 11.65 + (i % 3) * 0.75, 1.1, -9.85 + Math.floor(i / 3) * 0.75, 'paint', [0x6a3a2a, 0x3f5a4a, 0x6a5a3a][i % 3], 'metal');
   coverFor(11.8, -10, 1.2, 2);
@@ -234,7 +234,8 @@ export function buildStation() {
   coverFor(6.6, -31.2, 1.1, 1);
   // --- perimeter fence (gate north x -4..4, south gap x -3..3, breaches)
   const FX0 = -30, FX1 = 30, FZ0 = -30, FZ1 = 26;
-  const gaps = { n: [[-4, 4], [-22, -19]], s: [[-3, 3]], w: [[-14, -11]], e: [[-6, -3]] };
+  // gate x -5..5 (two truck lanes); breaches: NW, W, E as before + SW, W2, SE and NE-east (snowmobile lanes, assault.js)
+  const gaps = { n: [[-5, 5], [-22, -19]], s: [[-3, 3]], w: [[-14, -11], [3, 6], [18, 21]], e: [[-29, -26], [-6, -3], [14, 17]] };
   const fenceRun = (ax, az, bx, bz, side) => {
     const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 3), dx = (bx - ax) / L, dz = (bz - az) / L;
     for (let i = 0; i <= n; i++) {
@@ -264,7 +265,7 @@ export function buildStation() {
   fenceRun(FX0, FZ0, FX1, FZ0, 'n'); fenceRun(FX0, FZ1, FX1, FZ1, 's'); fenceRun(FX0, FZ0, FX0, FZ1, 'w'); fenceRun(FX1, FZ0, FX1, FZ1, 'e');
   S.entries = [{ x: 0, z: -31 }, { x: -20.5, z: -31 }, { x: -31, z: -12.5 }, { x: 31, z: -4.5 }];
   // open gate leaves
-  for (const sx of [-1, 1]) B.boxC(sx * 4.6, 1.2, -31.6, 0.08, 2.2, 3.0, 'steel', 0x4e5458, 0, sx * 0.3, 0);
+  for (const sx of [-1, 1]) B.boxC(sx * 5.15, 1.2, -31.55, 0.08, 2.2, 3.0, 'steel', 0x4e5458, 0, sx * 0.12, 0);
   // --- outside cover: rocks + concrete blocks along the approach
   const rockAt = (x, z, s) => {
     const y = ground5(x, z);
