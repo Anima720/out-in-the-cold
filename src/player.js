@@ -2,6 +2,7 @@ import { G, THREE, clamp, damp, lerp, smooth, fwdYaw, rightYaw, dirFromYawPitch,
 import { input, key, hit } from './input.js';
 import { moveChar, findLedge, GRAV } from './physics.js';
 import { WP, fireWeapon, fireDShK, startReload, updateViewmodel, switchTo, startThrow, startMelee, curDef, busy, resetWeapons } from './weapon.js';
+import { angDiff } from './core.js';
 import { J } from './humans.js';
 import { throwNade } from './grenade.js';
 import { T, GUN_PIVOT, DECK } from './train.js';
@@ -22,6 +23,7 @@ export function resetPlayer(pos, yaw = 0) {
   P.pos.copy(pos); P.vel.set(0, 0, 0); P.yaw = yaw; P.pitch = 0; P.health = 100; P.alive = true;
   P.mounted = false; P.mantle = null; P.recoilP = P.recoilY = 0; P.shake = 0; P.crouched = false;
   P.grounded = false; P.onTrain = false; P.carryZ = 0; P.slide = false; P.roll = 0; P.deadT = 0; P.lockLook = false;
+  P.downed = null; P.shield = false; P.noCrowd = false;
   P.enabled = true; P.prone = false; P.getUp = false; P.autoLook = null; P.scriptMove = null; P.lunge = 0; P.meleeTarget = null; P.jumped = false; P.landed = false; P.wasOnTrain = false; P.canMount = false; P.canDismount = true; P.camY = pos.y;
   WP.hidden = false; resetWeapons();
   if (T.dshk) T.dshk.gloves.visible = false;
@@ -29,8 +31,8 @@ export function resetPlayer(pos, yaw = 0) {
 
 P.recoil = (p, y) => { P.pitch += p * 0.45; P.recoilP += p * 0.55; P.yaw += y; };
 P.addShake = (s) => { P.shake = Math.min(1.5, P.shake + s); };
-P.damage = (amt, from) => {
-  if (!P.alive || P.god || G.state !== 'play') return;
+P.damage = (amt, from, force) => {
+  if (!P.alive || P.god || G.state !== 'play' || (P.shield && !force)) return;
   if (P.health < 35) amt *= 0.55; // COD-style grace when nearly dead
   P.health -= amt; P.lastHit = G.t;
   P.addShake(0.12);
@@ -98,6 +100,7 @@ export function updatePlayer(dt) {
     WP.hidden = true; updateViewmodel(dt, P);
     return;
   }
+  if (P.downed) return updateDowned(dt, cam);
   const active = P.enabled && G.state === 'play' && !G.paused;
   const ads = active && input.rmb && !P.sprinting && !busy() && !P.mounted;
   // ---- look
@@ -263,4 +266,69 @@ export function updatePlayer(dt) {
   P.fovKick = damp(P.fovKick, 0, 4, dt);
   if (Math.abs(cam.fov - fovT) > 0.01) { cam.fov = damp(cam.fov, fovT, 16, dt); cam.updateProjectionMatrix(); }
   updateViewmodel(dt, P);
+}
+
+// ---------- wounded on the floor (Part 4 finale) ----------
+// P.downed = { eye, sens, yawC, yawR, pmin, pmax, crawl, gun, vmDrop, sag, sway, speed } — set by finale.js.
+// Lying/crawling: low camera with slow sway, limited look, forward-only crawl in pulses, optional forced pistol.
+export function updateDowned(dt, cam) {
+  const d = P.downed, active = P.enabled && G.state === 'play' && !G.paused;
+  if (!P.lockLook && active) {
+    const s = 0.0021 * input.sens * (d.sens ?? 0.4);
+    P.yaw -= input.mdx * s; P.pitch -= input.mdy * s; P.lookDX = input.mdx; P.lookDY = input.mdy;
+  }
+  if (P.autoLook) {
+    const a = P.autoLook;
+    _w.subVectors(a.target, P.eye).normalize();
+    const ty = Math.atan2(-_w.x, -_w.z), tp = Math.asin(clamp(_w.y, -1, 1));
+    P.yaw += angDiff(P.yaw, ty) * (1 - Math.exp(-a.rate * dt)); P.pitch = damp(P.pitch, tp, a.rate, dt);
+  }
+  if (d.yawR !== undefined && d.yawC !== undefined) { const dy = angDiff(d.yawC, P.yaw); if (Math.abs(dy) > d.yawR) P.yaw = d.yawC + Math.sign(dy) * d.yawR; }
+  P.pitch = clamp(P.pitch, d.pmin ?? -0.6, d.pmax ?? 0.9);
+  P.recoilP = damp(P.recoilP, 0, 9, dt); P.recoilY = damp(P.recoilY, 0, 9, dt);
+  P.shake = damp(P.shake, 0, 4, dt);
+  // crawl: W only, pulses of ~0.45 m/s average, a smear of blood behind each pull
+  let v = 0;
+  d.pulse = d.pulse || 0;
+  if (d.crawl && active && key('KeyW')) {
+    const ph0 = d.pulse; d.pulse += dt / 1.15;
+    const u = d.pulse % 1; v = (d.speed ?? 0.45) * (1 - Math.cos(u * Math.PI * 2));
+    if (Math.floor(ph0) !== Math.floor(d.pulse) || ph0 === 0) {
+      d.pulses = (d.pulses || 0) + 1;
+      if (G.fx.bloodPool) G.fx.bloodPool(P.pos.clone(), 0.12);
+      play('rustle', { vol: 0.35, rev: 0, rate: 0.7 }); if (d.pulses % 2) play('breath', { vol: 0.5, rev: 0, noSlow: true });
+    }
+  } else if (d.pulse % 1 > 0.02) { d.pulse = Math.min(Math.ceil(d.pulse), d.pulse + dt / 1.15); }
+  const f = fwdYaw(P.yaw, _f);
+  P.vel.x = f.x * v; P.vel.z = f.z * v; P.h = 0.6;
+  moveChar(P, dt, true);
+  P.h = 1.75;
+  P.moving = false; P.sprinting = false; P.crouched = false;
+  const u = d.pulse % 1, crawlK = d.crawl ? 1 : 0;
+  const sw = d.sway ?? 1, t = G.real;
+  const bob = -Math.abs(Math.sin(u * Math.PI)) * 0.06 * crawlK;
+  const eye = lerp(d.eye ?? 0.35, 0.16, d.sag || 0);
+  cam.position.set(P.pos.x, P.pos.y + eye + bob + Math.sin(t * 0.7) * 0.015 * sw, P.pos.z);
+  const sh = P.shake * P.shake;
+  if (sh > 0.0005) cam.position.add(_w.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).multiplyScalar(sh * 0.06));
+  const roll = Math.sin(t * 0.43) * 0.03 * sw + Math.sin(u * Math.PI * 2) * 0.05 * crawlK + (d.sag || 0) * 0.42;
+  cam.rotation.set(P.pitch + P.recoilP + Math.sin(t * 0.61) * 0.012 * sw - (d.sag || 0) * 0.35, P.yaw + P.recoilY + Math.sin(t * 0.37) * 0.015 * sw, roll);
+  P.eye.copy(cam.position); P.chest.copy(P.pos).setY(P.pos.y + 0.25);
+  // weapon: pistol only, raised/lowered by vmDrop, no switching
+  const ads = active && d.gun && input.rmb && !busy();
+  WP.adsT = damp(WP.adsT, ads ? 1 : 0, 14, dt); WP.sprintT = 0;
+  WP.hidden = !d.gun && !(d.vmDrop < 1);
+  if (d.gun && active && (d.vmDrop ?? 0) < 0.3) {
+    if (input.lmbPressed && WP.cool <= 0 && !busy()) { if (WP.ammo > 0) fireWeapon(P); else { play('dry', { vol: 0.6 }); startReload(); } }
+    if (hit('KeyR')) startReload();
+  }
+  const fovT = lerp(72, curDef().adsFov || 54, WP.adsT);
+  if (Math.abs(cam.fov - fovT) > 0.01) { cam.fov = damp(cam.fov, fovT, 16, dt); cam.updateProjectionMatrix(); }
+  P.bobAmt = 0; P.lookDX *= 0.4; P.lookDY *= 0.4;
+  updateViewmodel(dt, P);
+  if (WP.m && !WP.hidden) {
+    const k = d.vmDrop || 0, g = WP.m.g;
+    g.position.y -= k * 0.42 - Math.sin(t * 0.9) * 0.006; g.position.x += Math.sin(t * 0.55) * 0.008 + k * 0.05;
+    g.rotation.x -= k * 0.9; g.rotation.z += Math.sin(t * 0.5) * 0.02 + k * 0.3;
+  }
 }

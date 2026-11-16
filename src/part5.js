@@ -1,4 +1,4 @@
-// Part 5 "最后阵地" (radar-station last stand) and Part 6 (ending).
+// Part 4 "最后阵地" (radar-station last stand); the finale (checkpoint 7) lives in finale.js.
 import { G, THREE, rr, ri, clamp, damp, lerp, pick, yawOf, angDiff, reseed } from './core.js';
 import { input, hit, key } from './input.js';
 import { Human, J, clearHumans } from './humans.js';
@@ -7,11 +7,11 @@ import { TOK, requestToken, releaseToken, shootAtPlayer, shootAt, Mate } from '.
 import { Hind, explodeAt, clearVehicles } from './vehicles.js';
 import { clearFX } from './fx.js';
 import { clearNades, throwNade, lobAt, NADES } from './grenade.js';
-import { P, resetPlayer } from './player.js';
+import { P, resetPlayer, dismount } from './player.js';
 import { play, loop, musicMode, muffle, stopAllLoops, A } from './audio.js';
 import { HUD } from './hud.js';
 import { D, LINES, say, after, afterReal } from './director.js';
-import { S, buildStation, stationColliders, setPower, updateStation, ground5, hideStation } from './station.js';
+import { S, buildStation, stationColliders, setPower, updateStation, ground5, hideStation, setDoor, setUplink } from './station.js';
 import { T, GUN_PIVOT } from './train.js';
 import { supportAt } from './physics.js';
 import { fireRocket, sledMesh } from './vehicles.js';
@@ -21,46 +21,33 @@ import { M } from './mats.js';
 const GUN0 = GUN_PIVOT.clone();
 import { W } from './world.js';
 import { assaultEvents, sendJuggTruck, updateAssault, clearAssault } from './assault.js';
+import { startFinale, startWake, updateFinale, finaleCleanup } from './finale.js';
 import { WP, giveIgla, resetWeapons, giveWeapon, WDEF } from './weapon.js';
 
 Object.assign(LINES, {
-  P5_SAND_01: ['SANDMAN', "Sokolov. On your feet. We can't stay here.", '索科洛夫，起来。不能待在这儿。'],
   P5_GRIN_01: ['GRINCH', "Tell me that's the radar station. Tell me it's not another train.", '告诉我那是雷达站。别又是一列火车。'],
-  P5_SAND_02: ['SANDMAN', 'Old Soviet early-warning site. If that dish still works, we can push the intel out.', '苏联时期的预警站。只要那口天线还能用，就能把情报发出去。'],
-  P5_SOKO_01: ['索科洛夫', 'The generator is downstairs. I can start it.', '发电机在楼下，我能启动它。'],
+  P5_TRUCK_00: ['TRUCK', 'Old Soviet early-warning site. Dish on the roof looks intact.', '苏联时期的预警站。楼顶那口天线看着还完整。'],
+  P5_SAND_02: ['SANDMAN', 'If it still talks, Price gets his intel. Move.', '只要它还能用，情报就能送到 Price 手上。走。'],
+  P5_TRUCK_06: ['TRUCK', "Generator's on the west wall, boss. Somebody's gotta wake it up.", '发电机在西墙外，头儿。得有人去把它弄醒。'],
   P5_TRUCK_01: ['TRUCK', 'Contacts on the ridge! They followed our tracks!', '山脊上有敌人！他们顺着脚印追来了！'],
-  P5_SAND_03: ['SANDMAN', 'Grinch, get that uplink running. Everyone else, hold this building!', 'Grinch，把上行链路弄好。其他人，守住这栋楼！'],
+  P5_SAND_03: ['SANDMAN', 'Grinch, get that uplink running. Truck, on the sandbags. We hold this building!', 'Grinch，把上行链路弄起来。Truck，守沙袋。守住这栋楼！'],
   P5_GRIN_02: ['GRINCH', "Uplink's live. Upload's slow — this thing's older than my dad.", '链路通了。上传很慢——这玩意儿比我爸岁数还大。'],
+  P5_KRAS_01: ['克拉辛', 'Американцы. Вам некуда идти. Верните то, что взяли, — и умрёте быстро.', '美国人，你们无路可走了。把拿走的东西交出来——可以让你们死得痛快点。', true],
   P5_GRIN_03: ['GRINCH', 'Twenty-five percent!', '百分之二十五！'],
   P5_GRIN_04: ['GRINCH', "Fifty percent! Keep 'em off me!", '百分之五十！别让他们靠近我！'],
   P5_GRIN_05: ['GRINCH', 'The dish took a hit! We lost the signal!', '天线被打中了！信号断了！'],
-  P5_SAND_04: ['SANDMAN', 'Sokolov, get to the roof and realign that dish! Go!', '索科洛夫，上楼顶，把天线重新对准！快去！'],
-  P5_SOKO_02: ['索科洛夫', 'Dish is aligned. Try it now!', '天线对好了，再试试！'],
+  P5_TRUCK_07: ['TRUCK', "Sandman, roof! Somebody's gotta realign that dish!", 'Sandman，上楼顶！得有人把天线重新对准！'],
+  P5_SAND_09: ['SANDMAN', 'Dish is aligned. Try it now!', '天线对好了，再试试！'],
   P5_GRIN_06: ['GRINCH', "Signal's back! Seventy-five… come on, come on…", '信号回来了！百分之七十五……快点，快点……'],
   P5_TRUCK_02: ['TRUCK', 'Juggernaut! Coming through the gate!', '重装兵！从大门冲进来了！'],
-  P5_SAND_05: ['SANDMAN', "Focus fire! Hit him with everything you've got!", '集中火力！把所有家伙都往他身上招呼！'],
+  P5_SAND_05: ['SANDMAN', 'Focus fire! Hit him with everything!', '集中火力！所有家伙都往他身上招呼！'],
   P5_GRIN_07: ['GRINCH', "He's down! Big boy's down!", '他倒了！大块头倒了！'],
   P5_TRUCK_03: ['TRUCK', "That Hind's back!", '那架雌鹿又回来了！'],
-  P5_TRUCK_04: ['TRUCK', "I'm hit… I'm hit. I'm okay. Keep shooting.", '我中弹了……我中弹了。我没事，继续打。'],
-  P5_SAND_06: ['SANDMAN', 'Truck! Stay with me, big man. Stay with me.', 'Truck！撑住，大块头。撑住。'],
-  P5_TRUCK_05: ['TRUCK', "Sandman… it's been an honor.", 'Sandman……很荣幸。'],
-  P5_SAND_07: ['SANDMAN', "…Truck's down.", '……Truck 牺牲了。'],
-  P5_SOKO_03: ['索科洛夫', 'There is an Igla in the armory.', '军械库里有一具针式导弹。'],
-  P5_SAND_08: ['SANDMAN', 'Then use it. Bring that bird down!', '那就用它。把那鸟给我打下来！'],
-  P5_SOKO_04: ['索科洛夫', 'Target locked.', '目标锁定。'],
+  P5_GRIN_10: ['GRINCH', 'Truck! TRUCK!', 'Truck！TRUCK！'],
+  P5_SAND_07: ['SANDMAN', "…He's gone. Stay on that uplink, Grinch.", '……他走了。盯住上行链路，Grinch。'],
+  P5_GRIN_11: ['GRINCH', 'Igla in the armory, boss! Kill that son of a bitch!', '军械库里有针式导弹，头儿！把那狗娘养的打下来！'],
   P5_GRIN_08: ['GRINCH', "It's down! It's down!", '打下来了！打下来了！'],
-  P5_GRIN_09: ['GRINCH', "One hundred percent. It's out. It's out, Sandman.", '百分之百。发出去了。发出去了，Sandman。'],
-  P5_KRAS_01: ['克拉辛', 'Соколов. Ты выбрал американцев. Тогда умри вместе с ними.', '索科洛夫。你选了美国人。那就跟他们一起死吧。', true],
-  P6_SAND_01: ['SANDMAN', 'Price, this is Sandman. Tell me you got the package.', 'Price，我是 Sandman。告诉我你收到包裹了。'],
-  P6_PRICE_01: ['PRICE', 'Got it. "Oasis"… Makarov\'s in Dubai.', '收到了。“绿洲”……马卡洛夫在迪拜。', true],
-  P6_SAND_02: ['SANDMAN', 'Then go get him.', '那就去抓他。'],
-  P6_PRICE_02: ['PRICE', "Hold on, Sandman. I'll send a bird for you.", '撑住，Sandman。我派飞机去接你们。', true],
-  P6_SAND_03: ['SANDMAN', "Negative. Weather's closing in, and so are they. Finish it, Price.", '不用了。暴风雪要来了，他们也是。把这事了结，Price。'],
-  P6_PRICE_03: ['PRICE', '…Understood. Good luck, mate.', '……明白。祝你好运，伙计。', true],
-  P6_SAND_04: ['SANDMAN', 'Metal 0-1… out.', 'Metal 0-1……完毕。'],
-  P6_GRIN_01: ['GRINCH', 'So… what now?', '那……现在怎么办？'],
-  P6_SAND_05: ['SANDMAN', 'Now we walk.', '现在，走。'],
-  P6_SOKO_01: ['索科洛夫', 'Moscow is four thousand kilometers.', '离莫斯科四千公里。'],
+  P5_GRIN_12: ['GRINCH', 'Ninety… ninety-five… almost there!', '九十……九十五……就差一点了！'],
 });
 
 const _o = new THREE.Vector3(), _t = new THREE.Vector3(), _e = new THREE.Vector3(), _d = new THREE.Vector3();
@@ -270,7 +257,7 @@ class StationHind extends Hind {
     this.pos.set(-140, 60, -260); this.vel.set(30, 0, 30);
     this.state = 'in5'; this.orbitA = -2.2; this.atkT = 6;
   }
-  hurt(dmg) { if (this.crashing) return false; return super.hurt(dmg); }
+  hurt(dmg) { if (this.crashing || !(D.p5 && D.p5.truckHit)) return false; return super.hurt(dmg); } // story: it survives until its gun run
   crash() {
     if (this.crashing) return;
     this.crashing = true; this.spin = 0; this.vel.multiplyScalar(0.5);
@@ -306,15 +293,16 @@ class StationHind extends Hind {
         this.wp.set(lerp(-60, 60, u), 22, -40);
         this.faceTarget.set(4, 0, -6.5);
         this.gunT -= dt;
+        const sweep = lerp(-9, 11, (u - 0.2) / 0.65); // the rounds walk along the sandbag line toward Truck
         if (this.gunT <= 0 && u > 0.2 && u < 0.85) {
-          this.gunT = 0.07;
-          const tgt = _t.set(rr(1, 7), rr(0, 1.2), rr(-8, -5.5));
+          this.gunT = 0.06;
+          const tgt = _t.set(sweep + rr(-1.2, 1.2), rr(0, 1.2), rr(-8, -5.6));
           this.nose(_e);
           G.fx.tracer(_e, tgt, { width: 0.05, speed: 500, len: 5 });
           G.fx.impact(tgt, _d.set(0, 1, 0), 'soft');
           if (Math.random() < 0.3) play('dshk_far', { pos: _e, vol: 1.0, ref: 25, rev: 0.4 });
         }
-        if (u > 0.55 && !this.hitTruck) { this.hitTruck = true; if (G.p5TruckHit) G.p5TruckHit(); }
+        if (sweep > 4.7 && !this.hitTruck) { this.hitTruck = true; if (G.p5TruckHit) G.p5TruckHit(); }
         if (u >= 1) { this.state = 'orbit'; this.atkT = 6; }
         break;
       }
@@ -442,25 +430,48 @@ export function mateCustom(m) {
 export function goMate(m, pts, next, speed) { m.path = pts.map(([x, z]) => ({ x, z })); m.next = next; m.p5 = 'walk'; m.walkSpeed = speed; m.chk = 1; m.lastD = 1e9; }
 
 const POSTS = {
-  SANDMAN: { pts: [[-1, 30], [0, 22], [0, 8], [0, 4], [0.2, -4.15]], yaw: 0 },
   GRINCH: { pts: [[-1.5, 30], [-0.6, 22], [-0.3, 8], [0, 4], [-0.6, 0.5], [-5.7, -2.2]], yaw: Math.PI / 2 },
   TRUCK: { pts: [[1.2, 30], [1, 22], [11, 12], [11.2, -5.9], [5.1, -6.3]], yaw: 0 },
 };
 
 function makeMates5() {
-  const s = new Mate('SANDMAN', 'head_sand', [0, 0]);
   const t = new Mate('TRUCK', 'head_truck', [0, 0]);
   const g = new Mate('GRINCH', 'head_grinch', [0, 0]);
-  for (const m of [s, t, g]) { prep(m.h); m.custom = mateCustom(m); m.p5 = 'idle'; m.cs = 'crouch'; m.ct = rr(0.5, 2); }
-  D.sand = s; D.truck = t; D.grinch = g;
-  return [s, t, g];
+  for (const m of [t, g]) { prep(m.h); m.custom = mateCustom(m); m.p5 = 'idle'; m.cs = 'crouch'; m.ct = rr(0.5, 2); }
+  D.truck = t; D.grinch = g; D.sand = null;
+  return [t, g];
 }
+// Truck's death: the Hind's gun run throws him back against the north wall behind his post; a posed corpse, not a ragdoll
+export const TRUCK_WALL = new THREE.Vector3(6.3, 0, -5.13);
+export function blood(kind, pos, a, b) { // b's decals when present (guarded)
+  if (kind === 'pool') G.fx.bloodPool?.(pos, a); else G.fx.bloodSplat?.(pos, a, b);
+}
+function killTruck(tr, instant) {
+  const h = tr.h;
+  tr.custom = () => {}; tr.p5 = 'dead';
+  h.invuln = false; h.noWeapon = false; h.sit = null; h.vel.set(0, 0, 0); h.flinch = 1;
+  h.slump = { base: TRUCK_WALL.clone(), yaw: 0, side: 1, t: instant ? 9 : 0, dur: 0.38 };
+  if (instant) h.pos.set(6.3, 0, -5.4);
+  h.alive = false; h.rag = null; h.deadT = 0;
+  const decals = () => {
+    blood('splat', new THREE.Vector3(6.3, 0.8, -5.0), new THREE.Vector3(0, 0, -1), 0.75);
+    blood('splat', new THREE.Vector3(6.32, 0.45, -5.0), new THREE.Vector3(0, 0, -1), 0.6);
+    blood('pool', new THREE.Vector3(6.3, 0, -5.45), 0.65);
+  };
+  if (instant) { decals(); return; }
+  const c = h.j[J.Ne].clone();
+  for (let i = 0; i < 4; i++) G.fx.impact(c.clone().add(_o.set(rr(-0.15, 0.15), rr(-0.3, 0.1), rr(-0.1, 0.1))), _d.set(rr(-0.4, 0.4), 0.3, 1).normalize(), 'flesh');
+  for (let i = 0; i < 14; i++) G.fx.alpha.spawn(c.x, c.y, c.z, rr(-1.5, 1.5), rr(0, 2.5), rr(0.5, 3), { life: rr(0.4, 0.8), size: 0.1, grow: 3, c: [0.42, 0.04, 0.03], alpha: 0.85, grav: 6, drag: 2 });
+  play('flesh', { pos: c, vol: 1.0, ref: 4 }); play('thud', { pos: TRUCK_WALL, vol: 0.9, ref: 4 });
+  after(0.4, decals);
+}
+
 export function placeMate(m, x, z, y) { m.h.pos.set(x, y ?? (G.groundFn || ground5)(x, z), z); m.h.vel.set(0, 0, 0); }
 function toPost(m, instant) {
   const p = POSTS[m.name];
   m.yaw0 = p.yaw;
   const next = m.name === 'GRINCH' ? 'console' : 'defend';
-  if (instant) { const [x, z] = p.pts[p.pts.length - 1]; placeMate(m, x, z, m.name === 'TRUCK' ? 0 : 0.15); m.h.yaw = p.yaw; m.p5 = next; }
+  if (instant) { const [x, z] = p.pts[p.pts.length - 1]; placeMate(m, x, z, m.name === 'TRUCK' ? 0 : 0.15); m.h.yaw = p.yaw; m.p5 = next; m.h.firstPose = true; }
   else goMate(m, p.pts, next);
 }
 
@@ -469,7 +480,8 @@ export function clear5() {
   clearHumans(); clearVehicles(); clearFX(); clearNades();
   for (const r of Q.missiles) G.scene.remove(r.mesh);
   Q.missiles.length = 0; Q.wreck = null;
-  clearAssault();
+  clearAssault(); finaleCleanup();
+  setDoor(1.62); setUplink(S.powered ? 'up' : 'off', 0);
   for (const c of CLAY) G.scene.remove(c.mesh); CLAY.length = 0;
   if (P.mounted) { P.mounted = false; WP.hidden = false; if (T.dshk) T.dshk.gloves.visible = false; }
   G.enemies.length = 0; G.mates.length = 0; TOK.n = 0;
@@ -513,7 +525,7 @@ G.startPart5 = (k, cont) => {
   G.state = 'play'; G.paused = false;
   const P5 = (D.p5 = { ph: '', up: 0, wave: 0, spawnT: 0, kills: 0 });
   WP.clay = 0;
-  const [s, t, g] = makeMates5();
+  const [t, g] = makeMates5();
   resetWeapons();
   Q.lockT = 0; Q.hold = 0;
   if (T.dshk) { T.dshk.yaw.rotation.y = 0; T.dshk.pitch.rotation.x = 0; }
@@ -523,19 +535,26 @@ G.startPart5 = (k, cont) => {
     setPower(false); S.dish.off = 0;
     resetPlayer(new THREE.Vector3(-3, ground5(-3, 44), 44), 0);
     P.crouched = true; P.pitch = -0.25;
-    placeMate(s, -1.5, 40.5); placeMate(t, -4.6, 42.2); placeMate(g, -1.8, 45.8);
-    for (const m of [s, t, g]) m.h.yaw = 0;
+    placeMate(t, -4.6, 42.2); placeMate(g, -1.8, 45.8);
+    for (const m of [t, g]) m.h.yaw = 0;
     P5.ph = 'approach';
     HUD.fade(1, 0); setTimeout(() => HUD.fade(0, 3), 50);
-    after(1.2, () => HUD.locCard(['最后阵地', '西伯利亚 · 废弃预警雷达站 · 07:40', '维克多·索科洛夫 中尉 · 联邦警卫局（FSO）', '“弃于寒冬” · 第四部分']));
+    after(1.2, () => HUD.locCard(['最后阵地', '西伯利亚 · 废弃预警雷达站 · 07:40', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第四部分']));
     musicMode('p5calm');
-    if (!cont) say('P5_SAND_01', 1.0);
-    say('P5_GRIN_01', cont ? 1.5 : 4.5); say('P5_SAND_02', cont ? 6 : 9);
-    after(2.5, () => { for (const m of [s, t, g]) toPost(m); });
+    say('P5_GRIN_01', cont ? 1.5 : 2.5); say('P5_TRUCK_00', 0.5); say('P5_SAND_02', 0.5);
+    after(5.5, () => { for (const m of [t, g]) toPost(m); });
     after(3.0, () => { HUD.objective('前往雷达站'); HUD.setMarker(new THREE.Vector3(0, 1.4, 5.3), ''); });
+  } else if (k === 7) { // finale: wounded on the ops-room floor (finale.js)
+    setPower(true); S.dish.off = 0;
+    for (const m of [t, g]) toPost(m, true);
+    killTruck(t, true);
+    P5.ph = 'finale'; P5.up = 99; P5.hindDown = true; P5.truckDead = true;
+    D.ck = 7; G.saveCk?.(7);
+    A.genLoop = loop('train', { pos: S.genPos.clone().setY(1), vol: 0.22, ref: 4, rate: 0.55 });
+    startWake(P5, g);
   } else {
     setPower(true); S.dish.off = 0;
-    for (const m of [s, t, g]) toPost(m, true);
+    for (const m of [t, g]) toPost(m, true);
     resetPlayer(new THREE.Vector3(-2.5, 0.15, -2.5), 0);
     WP.clay = 3; P.canMount = true;
     P5.ph = 'defend';
@@ -547,13 +566,13 @@ G.startPart5 = (k, cont) => {
       spawnWave(5);
     } else { // k === 6: Truck is gone; get the Igla
       P5.up = 92; P5.wave = 9; P5.rate = 0.35; P5.dishDone = true; P5.dishHit = true; P5.krasDone = true; P5.l25 = P5.l50 = true; P5.juggSpawned = P5.juggDone = true; P5.hindIn = P5.truckHit = P5.t5 = P5.truckDead = true;
-      t.h.alive = false; t.h.hidden = true; t.custom = () => {};
+      killTruck(t, true);
       new StationHind(); G.hind.pos.set(-60, 35, -80);
       enterIgla(true);
     }
     A.genLoop = loop('train', { pos: S.genPos.clone().setY(1), vol: 0.22, ref: 4, rate: 0.55 });
   }
-  HUD.show(true);
+  if (k !== 7) HUD.show(true);
 };
 
 function startDefend() {
@@ -615,7 +634,7 @@ function fireAtDish(from) {
     onBoom: () => {
       S.dish.off = 0.95; P5.stall = true; P5.ph = 'dish';
       for (let i = 0; i < 24; i++) G.fx.add.spawn(tgt.x, tgt.y, tgt.z, rr(-6, 6), rr(1, 7), rr(-6, 6), { life: rr(0.3, 0.8), size: 0.06, c: [1, 0.75, 0.35], grav: 12, drag: 0.5 });
-      say('P5_GRIN_05', 0.4); say('P5_SAND_04', 0.6);
+      say('P5_GRIN_05', 0.4); say('P5_TRUCK_07', 0.4);
       after(1.5, () => { HUD.objective('上楼顶校正卫星天线'); HUD.setMarker(S.panelPos.clone().setY(S.panelPos.y + 1.2), ''); });
       if (G.bark) G.bark('RU_07', from, true);
     } });
@@ -624,8 +643,7 @@ function fireAtDish(from) {
 function enterIgla(fromCk) {
   const P5 = D.p5;
   P5.ph = 'igla';
-  if (!fromCk) { say('P5_SOKO_03', 0.8); say('P5_SAND_08', 0.4); }
-  after(fromCk ? 0.5 : 4.5, () => { HUD.objective('去军械库拿针式导弹'); HUD.setMarker(S.iglaPos.clone().setY(1.6), ''); });
+  after(fromCk ? 0.5 : 1.0, () => { HUD.objective('去军械库拿针式导弹'); HUD.setMarker(S.iglaPos.clone().setY(1.6), ''); });
   if (fromCk) { musicMode('p5final'); HUD.objective('去军械库拿针式导弹'); HUD.setMarker(S.iglaPos.clone().setY(1.6), ''); D.ck = 6; }
 }
 
@@ -636,15 +654,14 @@ G.p5JuggDown = () => {
 };
 
 G.p5TruckHit = () => {
-  const P5 = D.p5, tr = D.truck, sd = D.sand;
-  if (!tr || P5.truckHit) return;
-  P5.truckHit = true;
-  tr.p5 = 'wounded'; tr.h.sit = { seat: S.truckSeat.clone() }; tr.h.yaw = Math.PI; tr.h.pos.set(S.truckSeat.x, 0, S.truckSeat.z + 0.1);
-  tr.h.flinch = 1;
-  G.fx.impact(tr.h.j[J.Ne].clone(), _d.set(0, 0, 1), 'flesh');
-  say('P5_TRUCK_04', 0.3);
-  after(2.2, () => { goMate(sd, [[0, 4], [0.3, 6.2], [10.8, 5.6], [10.8, -5.9], [3.2, -5.6]], 'kneel', 5.5); sd.look = S.truckSeat; say('P5_SAND_06', 0.2); });
-  P5.truckLineAt = D.t;
+  const P5 = D.p5, tr = D.truck;
+  if (!tr || !P5 || P5.truckHit) return;
+  P5.truckHit = P5.truckDead = true;
+  killTruck(tr, false);
+  musicMode('p5loss');
+  say('P5_GRIN_10', 0.5); say('P5_SAND_07', 0.8); say('P5_GRIN_11', 0.5);
+  after(7, () => { if (P5.ph === 'hind') { enterIgla(false); D.ck = 6; G.saveCk?.(6); } });
+  after(14, () => { if (P5.ph === 'igla' && !P5.hindDown) musicMode('p5final'); });
 };
 
 G.p5HindDown = () => {
@@ -653,7 +670,7 @@ G.p5HindDown = () => {
   say('P5_GRIN_08', 1.2);
   musicMode('p5final');
   HUD.setLock(null);
-  after(2, () => { P5.rate = 3.5; HUD.objective('等待上传完成'); HUD.setMarker(null); });
+  after(2, () => { P5.rate = 1.1; HUD.objective('守住雷达站，等待上传完成'); HUD.setMarker(null); });
 };
 
 G.onLaunch = (from, dir) => {
@@ -720,7 +737,7 @@ G.updatePart5 = (dt, rdt) => {
     if (Math.random() < 0.5) G.fx.smoke(Q.wreck.pos, { size: 2, grow: 5, life: 5, color: 0x1a1918, alpha: 0.55, vy: 2.5, wind: 1 });
     if (Math.random() < 0.6) G.fx.add.spawn(Q.wreck.pos.x + rr(-1.5, 1.5), Q.wreck.pos.y + rr(0, 1), Q.wreck.pos.z + rr(-1.5, 1.5), 0, rr(1, 3), 0, { life: 0.4, size: 1.2, c: [1, 0.5, 0.15], alpha: 1 });
   }
-  if (P5.ph === 'ending') return updateEnding(dt);
+  if (P5.ph === 'finale') return updateFinale(dt, rdt, P5);
   let prompt = null, holdK = null;
   const near = (p, r) => p && Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < r && Math.abs(P.pos.y - p.y) < 1.6;
   const holdF = (sec) => {
@@ -733,7 +750,7 @@ G.updatePart5 = (dt, rdt) => {
   if (P5.ph === 'approach') {
     if (IN_BLDG(P.pos.x, P.pos.z) || Math.hypot(P.pos.x, P.pos.z - 5) < 4 || D.t > 40) {
       P5.ph = 'gen';
-      say('P5_SOKO_01', 0.3);
+      say('P5_TRUCK_06', 0.3);
       after(1.0, () => { HUD.objective('启动发电机'); HUD.setMarker(S.genPos.clone().setY(1.5), ''); });
     }
   } else if (P5.ph === 'gen') {
@@ -753,10 +770,11 @@ G.updatePart5 = (dt, rdt) => {
   } else if (P5.ph === 'defend' || P5.ph === 'dish' || P5.ph === 'hind' || P5.ph === 'igla') {
     // upload progress
     if (!P5.stall) {
-      const cap = P5.hindDown ? 100 : P5.juggDone || P5.ph !== 'defend' ? 95 : 70;
+      const cap = P5.hindDown ? 99 : P5.juggDone || P5.ph !== 'defend' ? 95 : 70;
       P5.up = Math.min(cap, P5.up + P5.rate * dt);
     }
     HUD.setUpload(P5.up, P5.stall);
+    setUplink('up', P5.up);
     // milestone lines + waves
     if (!P5.krasDone && P5.up > 10) { P5.krasDone = true; say('P5_KRAS_01', 0.5); }
     if (!P5.l25 && P5.up >= 25) { P5.l25 = true; say('P5_GRIN_03'); }
@@ -777,7 +795,7 @@ G.updatePart5 = (dt, rdt) => {
         if (holdF(2.0)) {
           P5.ph = 'defend'; P5.stall = false; P5.dishDone = true; P5.rate = 0.55; S.dish.off = 0;
           play('ui', { vol: 0.6, rev: 0 });
-          say('P5_SOKO_02', 0.1); say('P5_GRIN_06', 0.4);
+          say('P5_SAND_09', 0.1); say('P5_GRIN_06', 0.4);
           HUD.objective('守住雷达站，直到情报上传完毕'); HUD.setMarker(null);
           D.ck = 5; if (G.saveCk) G.saveCk(5); HUD.locCard(['检查点', '天线已校正']);
           P5.up = Math.max(P5.up, 56);
@@ -801,20 +819,6 @@ G.updatePart5 = (dt, rdt) => {
       say('P5_TRUCK_03', 4.0);
       after(14, () => { if (G.hind && !G.hind.crashing) { G.hind.state = 'strafe5'; G.hind.stT = 0; } });
       spawnWave(6);
-    }
-    // Truck's last lines, then the Igla
-    if (P5.truckHit && !P5.t5 && D.sand && D.sand.p5 !== 'kneel' && D.t - P5.truckLineAt > 14) { placeMate(D.sand, 3.2, -5.6, 0); D.sand.p5 = 'kneel'; }
-    if (P5.truckHit && !P5.truckDead && D.sand && D.sand.p5 === 'kneel' && !P5.t5) {
-      P5.t5 = true; say('P5_TRUCK_05', 0.6);
-    }
-    if (P5.t5 && !P5.truckDead && !D.q.length && !D.cur) {
-      P5.truckDead = true;
-      const tr = D.truck; tr.h.invuln = false; tr.h.sit = null; tr.h.die(_d.set(0, -0.2, 1), J.P, 1.2);
-      musicMode('p5loss');
-      say('P5_SAND_07', 1.2);
-      after(9, () => { if (D.sand) { goMate(D.sand, [[10.8, -5.9], [10.8, 5.6], [0.3, 6.2], [0, 4], [0.2, -4.15]], 'defend', 4.5); D.sand.yaw0 = 0; } });
-      after(3.5, () => { enterIgla(false); D.ck = 6; if (G.saveCk) G.saveCk(6); });
-      after(10, () => { if (P5.ph === 'igla' && !P5.hindDown) musicMode('p5final'); });
     }
     if (P5.ph === 'igla') {
       if (!WP.hasIgla && near(S.iglaPos, 1.8)) {
@@ -846,13 +850,14 @@ G.updatePart5 = (dt, rdt) => {
     if (!P5.clayTip && WP.clay > 0 && P5.ph === 'defend') { P5.clayTip = D.t; }
     if (P5.clayTip && D.t - P5.clayTip < 6) prompt = prompt || '按 <kbd>4</kbd> 在脚下布设阔剑地雷（敌人靠近自动引爆）';
     if (near(S.iglaPos, 1.8) && P5.ph !== 'igla' && (WP.clay || 0) < 3) { prompt = prompt || '按 <kbd>F</kbd> 拿取阔剑地雷'; if (hit('KeyF')) { WP.clay = 3; play('magin', { vol: 0.5, rev: 0 }); } }
-    // upload complete -> ending
-    if (P5.up >= 100 && !P5.done) {
-      P5.done = true;
-      HUD.setUpload(100, false);
-      say('P5_GRIN_09', 1.0);
-      for (const e of G.enemies) if (e.h.alive) { e.maxTier = -1; }
-      afterReal(7.5, startEnding);
+    // the upload climbs to 99% and stalls -> finale (RPG at the player)
+    if (P5.hindDown && !P5.l90 && P5.up >= 92) { P5.l90 = true; say('P5_GRIN_12'); }
+    if (P5.hindDown && P5.up >= 99 && !P5.fin) {
+      P5.fin = true;
+      if (P.mounted) dismount();
+      HUD.setHold(null); HUD.setPrompt(null); HUD.setLock(null); Q.hold = 0;
+      startFinale(P5, { IN_BLDG, clearBattle });
+      return;
     }
   }
   // death of the player handled by director's onPlayerDeath (fail screen)
@@ -873,68 +878,22 @@ function iglaLock(dt) {
     Q.lockBeep -= dt;
     const locked = Q.lockT >= 1.6;
     if (Q.lockBeep <= 0) { Q.lockBeep = locked ? 0.09 : 0.28; play('lock', { vol: locked ? 0.5 : 0.35, rev: 0, rate: locked ? 1.4 : 1 }); }
-    if (locked && !D.p5.lockSaid) { D.p5.lockSaid = true; say('P5_SOKO_04'); }
     HUD.setLock(locked ? 'locked' : 'seek', h.pos);
   } else { Q.lockT = Math.max(0, Q.lockT - dt * 2); HUD.setLock(Q.lockT > 0 ? 'seek' : null, h.pos); }
 }
 
-// ---------- Part 6: ending ----------
-function startEnding() {
-  const P5 = D.p5;
-  P5.ph = 'ending'; P5.e = { t: 0, step: 0 };
-  HUD.fade(1, 2.0, '#000');
-  HUD.objective(null); HUD.setMarker(null); HUD.setPrompt(null); HUD.setUpload(null); HUD.setLock(null);
-  musicMode('silence');
-  afterReal(2.4, () => {
-    // aftermath tableau inside the ops room
-    for (const e of G.enemies) if (e.h.alive) { e.h.hidden = true; e.h.alive = false; }
-    clearNades(); if (G.hind) G.hind.remove();
-    resetPlayer(new THREE.Vector3(0.6, 0.15, 0.4), Math.PI * 0.32);
-    WP.hidden = true; P.enabled = false;
-    P.crouched = true; P.pitch = -0.08;
-    const s = D.sand, g = D.grinch;
-    if (s) { s.custom = mateCustom(s); s.p5 = 'sitTalk'; s.h.sit = { seat: new THREE.Vector3(-4.7, 0.72, -2.9) }; s.h.pos.set(-4.7, 0.15, -2.9); s.h.yaw = -2.4; }
-    if (g) { g.p5 = 'idle'; g.h.noWeapon = false; placeMate(g, -2.2, -3.9, 0.15); g.yaw0 = 0.15; g.h.yaw = 0.15; }
-    P.autoLook = { target: new THREE.Vector3(-4.7, 1.2, -2.9), rate: 1.6 };
-    W.fogTarget = 0.016;
-    HUD.fade(0, 2.5);
-    musicMode('p6end');
-    say('P6_SAND_01', 1.5); say('P6_PRICE_01', 0.6); say('P6_SAND_02', 0.5); say('P6_PRICE_02', 0.6); say('P6_SAND_03', 0.6); say('P6_PRICE_03', 1.0); say('P6_SAND_04', 1.2);
-    P5.e.step = 1;
-  });
+// clear the battlefield when the screen goes black after the RPG (nothing may hurt the player any more)
+function clearBattle() {
+  for (const e of G.enemies) e.h.remove();
+  G.enemies.length = 0; TOK.n = 0;
+  clearAssault(); clearNades();
+  for (const r of Q.missiles) G.scene.remove(r.mesh); Q.missiles.length = 0;
+  for (const c of CLAY) G.scene.remove(c.mesh); CLAY.length = 0;
+  if (G.hind && !G.hind.crashing) G.hind.remove();
+  G.rockets && (G.rockets.length = 0);
+  D.timers.length = 0;
 }
-G.onLine = (id) => {
-  const P5 = D.p5; if (!P5 || P5.ph !== 'ending') return;
-  if (id === 'P6_SAND_04') { say('P6_GRIN_01', 2.2); say('P6_SAND_05', 0.8); }
-  if (id === 'P6_SAND_05') {
-    after(1.2, () => {
-      const s = D.sand, g = D.grinch;
-      if (s) { s.h.sit = null; s.h.noWeapon = false; goMate(s, [[-2, -1], [0, 3], [0, 8], [-1, 20], [-2, 40]], 'idle', 1.8); }
-      if (g) after(1.0, () => goMate(g, [[-1, 0], [0, 3], [0.6, 8], [0.5, 20], [0, 40]], 'idle', 1.8));
-      P.autoLook = { target: new THREE.Vector3(0, 1.2, 8), rate: 1.2 };
-      after(4.5, () => { P.crouched = false; P5.e.walk = 1; });
-    });
-  }
-};
-function updateEnding(dt) {
-  const e = D.p5.e; e.t += dt;
-  HUD.setPrompt(null);
-  if (e.walk === 1) {
-    P.scriptMove = { x: 0, z: 3.2, speed: 1.4 };
-    if (Math.hypot(P.pos.x, P.pos.z - 3.2) < 0.6) e.walk = 2;
-  } else if (e.walk === 2) {
-    P.scriptMove = { x: 0, z: 24, speed: 1.4 };
-    P.autoLook = { target: new THREE.Vector3(-1, 1.3, 60), rate: 1.0 };
-    W.fogTarget = 0.045;
-    if (!e.said) { e.said = 1; say('P6_SOKO_01', 2.5); }
-    if (P.pos.z > 12 && !e.fade) {
-      e.fade = 1;
-      HUD.fade(1, 4.0, '#e9edf0');
-      afterReal(4.5, () => { HUD.fade(1, 1.2, '#000'); HUD.say(null); });
-      afterReal(6.0, () => { G.onEpilogueDone = finalCard; G.playEpilogue(); });
-    }
-  }
-}
+G.p5FinalCard = () => finalCard();
 function finalCard() {
   G.state = 'end';
   stopAllLoops(); A.genLoop = null;

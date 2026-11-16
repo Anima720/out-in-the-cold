@@ -125,6 +125,14 @@ function buildBuffers() {
       d[i] = s * (0.6 + 0.4 * Math.abs(Math.sin(TAU * 2.3 * t + c))) + lp * 2.2;
     }
   }, 2, 0.55);
+  // finale: laboured breath (inhale, catch, exhale), tinnitus, door kick, heavy heartbeat
+  B.breath = mk(1.7, (d, n) => { let lp = 0, bp = 0; for (let i = 0; i < n; i++) { const t = i / SR, inh = t < 0.55, f = inh ? 1300 + t * 900 : 650; const a = lpA(f); lp += a * (rnd() - lp); bp += a * 0.4 * (lp - bp);
+    const e = inh ? Math.sin(Math.PI * t / 0.55) ** 1.5 : t > 0.72 ? Math.sin(Math.PI * Math.min(1, (t - 0.72) / 0.9)) * 1.15 : 0; d[i] = (lp - bp * 0.6) * e + (t > 0.72 ? Math.sin(TAU * 105 * t) * 0.05 * e * (0.6 + 0.4 * Math.sin(TAU * 7 * t)) : 0); } }, 1, 0.6);
+  B.tinnitus = mk(6.0, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; d[i] = (Math.sin(TAU * 3150 * t) + 0.35 * Math.sin(TAU * 3195 * t)) * Math.min(1, t / 0.08) * Math.exp(-t / 2.6); } }, 1, 0.3);
+  B.doorkick = mk(1.0, (d, n) => { let lp = 0; const a = lpA(900); for (let i = 0; i < n; i++) { const t = i / SR, x = rnd(); lp += a * (x - lp);
+    const t2 = t - 0.16; d[i] = Math.sin(TAU * 62 * t) * Math.exp(-t / 0.09) * 1.6 + lp * Math.exp(-t / 0.05) * 1.4 + x * Math.exp(-t / 0.008)
+      + (t2 > 0 ? (Math.sin(TAU * 740 * t2) * 0.3 + Math.sin(TAU * 1310 * t2) * 0.2) * Math.exp(-t2 / 0.25) + lp * Math.exp(-t2 / 0.06) : 0); } }, 1);
+  B.heart2 = mk(0.7, (d, n) => { for (let i = 0; i < n; i++) { const t = i / SR; const e = Math.exp(-t / 0.06) * Math.min(1, t / 0.006) + (t > 0.22 ? Math.exp(-(t - 0.22) / 0.07) * 0.75 : 0); d[i] = (Math.sin(TAU * 48 * t) + 0.4 * Math.sin(TAU * 96 * t)) * e; } });
   B.lp_noise = mk(1.0, (d, n) => noiseShape(d, n, 3000, () => 1));
 }
 

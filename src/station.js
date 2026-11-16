@@ -130,7 +130,7 @@ export function buildStation() {
   solid(2.2, 0.15, 1.2, 4.4, 0.95, 2.6, 'wood', 0x7a6248, 'wood');
   solid(-5.2, 0.15, -4.4, -3.9, 1.05, -3.6, 'crate', 0xffffff, 'wood');
   solid(3.9, 0.15, -4.4, 5.3, 0.95, -3.5, 'crate', 0xffffff, 'wood');
-  B.boxC(-4.7, 0.4, -2.9, 0.55, 0.5, 0.55, 'crate', 0xffffff);                       // stool crate (visual only)
+  B.boxC(-5.9, 0.4, 2.4, 0.55, 0.5, 0.55, 'crate', 0xffffff);                        // stool crate (visual only)
   solid(5.4, 0.15, 2.4, 7.5, 1.2, 4.5, 'steel', 0x575d55, 'metal');               // switchgear cabinet
   solid(-6.9, 0.15, 3.4, -5.6, 0.9, 4.5, 'crate', 0xffffff, 'wood');
   // weapon rack + ammo crate along the inner south wall
@@ -322,6 +322,38 @@ export function buildStation() {
   rb.cyl(0, -0.6, 0, 0.18, 0.22, 1.0, 'steel', 0x45484a);
   const radar = new THREE.Group(); radar.position.set(mx, MH + 0.6, mz); root.add(radar); rb.build(mats, radar);
   S.radar = radar;
+  // --- south door: two steel leaves hinged at the jambs, opening inward (open during the fight, closed for the finale)
+  const leaf = (sx) => {
+    const piv = new THREE.Group(); piv.position.set(sx * 1.0, 0.15, 4.72); root.add(piv);
+    const lb = new Builder(), cx = -sx * 0.5;
+    lb.boxC(cx, 1.1, 0, 0.98, 2.18, 0.05, 'paint', 0x4f5a4c);
+    lb.boxC(cx, 0.2, -0.03, 0.9, 0.3, 0.012, 'steel', 0x5c5f61);
+    for (const y of [0.55, 1.1, 1.65]) lb.boxC(cx, y, -0.028, 0.86, 0.04, 0.01, 'paint', 0x434c41);
+    lb.boxC(-sx * 0.88, 1.05, -0.05, 0.03, 0.16, 0.05, 'steel', 0x2a2c2e);
+    lb.boxC(-sx * 0.88, 1.05, 0.05, 0.03, 0.16, 0.05, 'steel', 0x2a2c2e);
+    lb.build(mats, piv);
+    return piv;
+  };
+  S.door = { l: leaf(-1), r: leaf(1), ang: 1.62, tgt: 1.62, vel: 0 };
+  // --- uplink operator panel on the front of the west console (screen + guarded transmit key), facing +x
+  {
+    const pg = new THREE.Group(); pg.position.set(-6.27, 0.15, -2.6); root.add(pg);
+    const pb = new Builder();
+    pb.boxC(0.03, 0.62, 0, 0.07, 0.52, 0.8, 'steel', 0x3b3f40);
+    pb.boxC(0.068, 0.36, 0.24, 0.02, 0.16, 0.2, 'steel', 0x222425);
+    pb.boxC(0.085, 0.36, 0.24, 0.02, 0.012, 0.16, 'paint', 0xc8b020);
+    pb.boxC(0.095, 0.44, 0.24, 0.05, 0.012, 0.14, 'paint', 0x8a1a14, 0, 0, -0.9); // flipped-up guard
+    pb.build(mats, pg);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.3), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    scr.position.set(0.068, 0.7, -0.05); scr.rotation.y = Math.PI / 2; pg.add(scr);
+    const key = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.04, 16), new THREE.MeshStandardMaterial({ color: 0x7a1010, emissive: 0xff2010, emissiveIntensity: 0.6, roughness: 0.4 }));
+    key.rotation.z = Math.PI / 2; key.position.set(0.095, 0.36, 0.24); pg.add(key);
+    S.uplink = { c, ctx: c.getContext('2d'), tex, key, state: '', pct: -1 };
+    S.keyPos = new THREE.Vector3(-6.17, 0.51, -2.36);
+    setUplink('off', 0);
+  }
   // interior light (enabled when powered)
   const pl = new THREE.PointLight(0xffd9a0, 0, 14, 1.6); pl.position.set(0, 3.4, 0); root.add(pl); S.lamp = pl;
 }
@@ -330,6 +362,33 @@ export function stationColliders() {
   for (const c of S.cols) { const b = addBox(c[0], c[1], c[2], c[3], c[4], c[5], c[6] || 'concrete'); if (c[7]) b.tag = c[7]; }
   for (const c of S.cover) c.used = null;
 }
+
+// uplink panel screen: 'off' | 'up' (live %) | 'wait' (99%, manual send) | 'done'
+export function setUplink(state, pct = 0) {
+  const u = S.uplink; if (!u) return;
+  pct = Math.floor(pct);
+  if (u.state === state && u.pct === pct) return;
+  u.state = state; u.pct = pct;
+  const x = u.ctx, W = 256, H = 128;
+  x.fillStyle = state === 'off' ? '#020302' : state === 'done' ? '#03160a' : '#0a0a04'; x.fillRect(0, 0, W, H);
+  if (state !== 'off') {
+    const col = state === 'done' ? '#62ff8a' : state === 'wait' ? '#ffb43a' : '#9fe8a8';
+    x.fillStyle = col; x.textAlign = 'center'; x.font = 'bold 22px monospace';
+    if (state === 'done') { x.font = 'bold 25px monospace'; x.fillText('ПЕРЕДАЧА', W / 2, 52); x.fillText('ЗАВЕРШЕНА', W / 2, 84); x.font = '15px monospace'; x.fillText('100% ▮▮▮▮▮▮▮▮▮▮', W / 2, 110); }
+    else {
+      x.fillText(`ПЕРЕДАЧА ${pct}%`, W / 2, 40);
+      x.strokeStyle = col; x.lineWidth = 2; x.strokeRect(24, 56, W - 48, 18); x.fillRect(28, 60, (W - 56) * pct / 100, 10);
+      x.font = '15px monospace';
+      if (state === 'wait') x.fillText('ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ', W / 2, 104); else x.fillText('КАНАЛ: СПУТНИК-3', W / 2, 104);
+    }
+  }
+  u.tex.needsUpdate = true;
+  u.key.material.emissive.setHex(state === 'done' ? 0x20ff40 : 0xff2010);
+  u.key.material.emissiveIntensity = state === 'off' ? 0.15 : state === 'wait' ? 1.4 : 0.6;
+}
+// door: ang 0 = closed, ~1.62 = open against nothing; kick() slams it open with a bounce
+export function setDoor(ang, instant = true) { const d = S.door; if (!d) return; d.tgt = ang; if (instant) { d.ang = ang; d.vel = 0; } }
+export function kickDoor() { const d = S.door; if (!d) return; d.tgt = 1.55; d.vel = 13; }
 
 export function setPower(on) {
   S.powered = on;
@@ -341,6 +400,12 @@ export function setPower(on) {
 export function updateStation(dt) {
   if (!S.built) return;
   if (S.powered) S.radar.rotation.y += dt * 1.1;
+  const dr = S.door;
+  if (dr) {
+    dr.vel += ((dr.tgt - dr.ang) * 60 - dr.vel * 7) * dt; dr.ang += dr.vel * dt;
+    if (dr.ang > 1.85) { dr.ang = 1.85; dr.vel *= -0.35; }
+    dr.l.rotation.y = dr.ang; dr.r.rotation.y = -dr.ang;
+  }
   const d = S.dish;
   const ty = d.aimYaw + d.off, te = d.aimEl - d.off * 0.6;
   d.yaw.rotation.y += (ty - d.yaw.rotation.y) * Math.min(1, dt * 3);
