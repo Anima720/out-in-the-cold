@@ -191,6 +191,26 @@ function buildSurface() {
   for (const [x, z, ry] of [[9, -22, 0.2], [-8, -60, -0.3], [8, -84, 0.1]]) { truckLike(B, x, z, ry); CV.cols.push([x - 1.8, 0, z - 3.6, x + 1.8, 2.5, z + 3.6, 'metal']); cover(x - 2.4, z, 0); cover(x + 2.4, z, 0); }
   for (const [x, z] of [[-4, -40], [5, -66], [-5, -102], [4, -115], [-20, -55], [22, -70]]) { solid(x - 1.1, 0, z - 0.35, x + 1.1, 1.0, z + 0.35, 'concrete', 0xa09d94, 'concrete'); cover(x, z - 0.9, 0); cover(x, z + 0.9, 1); }
   for (const [x, z] of [[-9, -18], [12, -36], [-2, -88], [11, -110]]) { solid(x - 0.7, 0, z - 0.7, x + 0.7, 1.4, z + 0.7, 'crate', 0xffffff, 'wood'); cover(x, z - 1.3, 0); }
+  // v7: more cover between the hoist house and the yard (the player and the yard squads both use it) + the spots
+  // the door squad runs to (coverHH, tier 0 only) when it storms the hoist house after the ride up
+  CV.coverHH = [];
+  const bags = (x, z, len, rows, alongZ) => {
+    const n = Math.round(len / 0.5);
+    for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) {
+      const u = -len / 2 + (i + 0.5 + (r % 2) * 0.25) * (len / n); if (Math.abs(u) > len / 2) continue;
+      B.capsule(alongZ ? x : x + u, 0.13 + r * 0.24, alongZ ? z + u : z, 0.13, 0.36, 'cloth', 0xa39a78, Math.PI / 2, alongZ ? 0 : Math.PI / 2, 0, 1.15, 1.0);
+    }
+    B.box(alongZ ? x - 0.2 : x - len / 2, rows * 0.24 + 0.02, alongZ ? z - len / 2 : z - 0.2, alongZ ? x + 0.2 : x + len / 2, rows * 0.24 + 0.08, alongZ ? z + len / 2 : z + 0.2, 'snow', 0xffffff);
+    CV.cols.push(alongZ ? [x - 0.3, 0, z - len / 2, x + 0.3, rows * 0.24 + 0.05, z + len / 2, 'soft'] : [x - len / 2, 0, z - 0.3, x + len / 2, rows * 0.24 + 0.05, z + 0.3, 'soft']);
+  };
+  bags(-4.6, -11.6, 2.8, 4, false); cover(-4.6, -12.5, 0, CV.coverHH); cover(-4.6, -10.6, 1);
+  solid(4.1, 0, -13.2, 5.5, 1.4, -11.8, 'crate', 0xffffff, 'wood'); solid(4.4, 1.4, -13.0, 5.3, 2.2, -12.1, 'crate', 0xffffff, 'wood'); B.boxC(4.8, 2.25, -12.55, 0.85, 0.08, 0.85, 'snow', 0xffffff);
+  cover(4.8, -13.9, 0, CV.coverHH); cover(4.8, -11.1, 1);
+  solid(-0.5, 0, -17.85, 1.7, 1.0, -17.15, 'concrete', 0xa09d94, 'concrete'); B.boxC(0.6, 1.04, -17.5, 2.1, 0.06, 0.6, 'snow', 0xffffff);
+  cover(0.6, -18.5, 0, CV.coverHH); cover(0.6, -16.5, 1);
+  bags(11, -31, 2.4, 3, true); cover(11.9, -31, 0); cover(10.1, -31, 1);
+  bags(-7, -93, 3.0, 3, false); cover(-7, -93.9, 0); cover(-7, -92.1, 1);
+  solid(14.3, 0, -112.7, 15.7, 1.4, -111.3, 'crate', 0xffffff, 'wood'); cover(15, -113.4, 0); cover(15, -110.6, 1);
   // conveyor gantry
   for (let z = -16; z > -112; z -= 12) for (const sx of [-1, 1]) solid(-26 + sx * 1.2 - 0.15, 0, z - 0.15, -26 + sx * 1.2 + 0.15, 6.2, z + 0.15, 'steel', 0x6a5a3a, 'metal');
   B.box(-27.8, 6.2, -116, -24.2, 7.6, -10, 'paint', 0x7a6a4a);
@@ -477,21 +497,31 @@ function updateSurface(dt) {
       squad([[-9, -30], [10, -40], [-4, -48], [14, -60], [-12, -70], [3, -74]], CV.coverS, 1);
       new Raider(16, -95, { cover: CV.coverS, maxTier: 1, rpg: true });
       musicMode('p2fight');
-      goMate(D.truck, [[0.8, 3], [1.8, -5], [4.6, -8.4]], 'defend', 3.5); goMate(D.grinch, [[-0.6, 3], [-4.5, -5.0]], 'defend', 3.5);
+      C.topT = C.t;
+      // the door squad storms in from the yard, one after another (they stop at the cover right outside the door)
+      [[-7, -31], [7, -33], [1, -37]].forEach(([x, z], i) => after(2.0 + i * 2.6, () => { if (G.lvl === 3) new Raider(x, z, { cover: CV.coverHH, maxTier: 0 }); }));
+      after(13, () => { if (G.lvl === 3 && alive() < 9) squad([[-22, -104], [19, -108], [-6, -122]], CV.coverS, 1); });
+      goMate(D.truck, [[0.8, 3], [2.0, -3.2], [3.9, -5.0]], 'defend', 3.5); goMate(D.grinch, [[-0.6, 3], [-2.0, -3.2], [-3.9, -5.0]], 'defend', 3.5);
       for (const m of [D.truck, D.grinch]) m.yaw0 = 0;
     }
   }
   if (C.gateOpen && CV.gate.position.y < 2.6) CV.gate.position.y = Math.min(2.6, CV.gate.position.y + dt * 1.6);
-  if (C.ph === 'top' && C.t > 22 && !C.btr) {
-    C.btr = new BTR([[2, -130], [0, -90], [3, -55], [0, -28]]);
+  if (C.ph === 'top' && C.t - C.topT > 14 && !C.btr) {
+    C.btr = new BTR([[2, -130], [0, -90], [3, -55], [0, -28]]); C.btrT = C.t; C.reinf = 0;
     say('P2_TRUCK_02', 2.0); say('P2_GRIN_02', 0.4);
     after(4, () => { HUD.objective('用 RPG 摧毁 BTR'); HUD.setMarker(CV.rpgPos.clone().setY(1.2), 'RPG'); });
+  }
+  // reinforcements arrive from the flanks while the BTR is still alive (staggered, capped)
+  if (C.btr && !C.btr.dead && C.reinf < 3 && C.t - C.btrT > 7 + C.reinf * 11 && alive() < 8) {
+    const side = C.reinf % 2 ? 1 : -1, z0 = -70 - C.reinf * 14;
+    [[side * 34, z0], [side * 37, z0 - 5], [side * 33, z0 + 6]].forEach(([x, z], i) => after(i * 1.3, () => { if (G.lvl === 3) new Raider(x, z, { cover: CV.coverS, maxTier: 1 }); }));
+    C.reinf++;
   }
   if (C.btr && !C.btr.dead && WP.launch !== 'rpg' && Math.hypot(P.pos.x - CV.rpgPos.x, P.pos.z - CV.rpgPos.z) < 1.3) {
     prompt = '按 <kbd>F</kbd> 拿取 РПГ-7';
     if (hit('KeyF')) { giveWeapon('rpg', 1, 4); play('magin', { vol: 0.6, rev: 0 }); HUD.setMarker(null); HUD.toast('按 3 切换 RPG，直接瞄准 BTR 发射'); }
   }
-  if (C.btrDown && !C.wave2) { C.wave2 = true; squad([[-14, -112], [12, -120], [-2, -128]], CV.coverS, 1); }
+  if (C.btrDown && !C.wave2) { C.wave2 = true; squad([[-14, -112], [12, -120], [-2, -128]], CV.coverS, 1); after(4, () => { if (G.lvl === 3) squad([[-30, -128], [28, -132]], CV.coverS, 1); }); }
   if (C.btrDown && !C.go && C.t - C.btrDownT > 3) {
     C.go = true; say('P2_SAND_03', 0.3);
     HUD.objective('赶往铁路货场'); HUD.setMarker(new THREE.Vector3(0, 1.5, -138), '货场');

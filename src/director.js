@@ -31,6 +31,9 @@ export const LINES = {
   SAND_06: ['SANDMAN', 'Everybody — JUMP!', '所有人——跳！'],
   TRUCK_06: ['TRUCK', 'Sandman… Sandman! On your feet, boss.', 'Sandman……Sandman！站起来，头儿。'],
   KRAS_01: ['克拉辛', 'Американцы на поезде. Остановить состав. Любой ценой.', '美国人在火车上。把车拦下来，不惜一切代价。', true],
+  TRUCK_07: ['TRUCK', 'More sleds — both sides!', '又来一批雪地摩托——两边都有！'],
+  GRIN_06: ['GRINCH', 'Got sleds coming up the left!', '左边又上来几辆雪地摩托！', true],
+  TRUCK_08: ['TRUCK', 'Right side! Swing it around!', '右边！把枪转过去！'],
 };
 
 export const D = { phase: '', t: 0, rt: 0, ck: 0, q: [], cur: null, f: {}, timers: [], slow: null };
@@ -141,6 +144,7 @@ function enterCars(fromCk) {
   say('SAND_02', fromCk ? 0.6 : 1.0);
   musicMode('fight');
   for (const m of G.mates) { if (!m.arc && m.h.pos.y > 1.0) m.mode = 'follow'; }
+  for (const e of G.enemies) if (e.kind === 'gunner' && e.h.alive) { e.wake(); e.t = 1.2; } // the DShK opens up as soon as we are aboard
 }
 
 // teammates still on the ground sprint alongside and jump onto the rear car
@@ -185,7 +189,26 @@ function enterTurret(fromCk, quiet) {
     say('KRAS_01', 7);
     say('SAND_05', 11);
   } else new Hind();
-  D.sledT = fromCk ? 4 : 6; D.sledSide = 1;
+  D.sledT = fromCk ? 4 : 6; D.sledSide = 1; D.wave = 0;
+}
+
+// DShK section: snowmobiles arrive in waves on BOTH sides (some come up from ahead), staggered so they don't stack
+const WAVES = [[2, 1], [1, 2], [2, 2], [2, 2], [3, 2], [2, 3]];
+function sledWave() {
+  const w = WAVES[Math.min(D.wave, WAVES.length - 1)], first = D.wave % 2 ? 1 : -1;
+  let k = 0;
+  for (const side of [first, -first]) {
+    const n = w[side === first ? 0 : 1], offs = [rr(-8, -5), rr(1, 4), rr(8, 11)];
+    for (let i = 0; i < n; i++, k++) {
+      const ahead = D.wave > 0 && i === 1;
+      after(k * 0.9, () => {
+        if (D.phase !== 'turret' && D.phase !== 'bridge') return;
+        new Sled(side, ahead ? rr(-175, -160) : rr(95, 125), { offs: offs[i], lane: i === 2 ? 11.5 : i ? 9.5 : 7.8, noGunner: i === 2 && Math.random() < 0.5 });
+      });
+    }
+  }
+  if (D.wave > 0 && !D.cur && D.q.length === 0) say(D.wave === 1 ? 'GRIN_06' : D.wave === 2 ? 'TRUCK_08' : 'TRUCK_07', 1.5);
+  D.wave++;
 }
 
 function enterBridge() {
@@ -339,7 +362,7 @@ export function updateDirector(dt, rdt) {
     D.turretT += dt;
     D.sledT -= dt;
     const live = G.sleds.filter((s) => !s.dead).length;
-    if (D.sledT <= 0 && live < 3) { D.sledT = rr(6, 9); D.sledSide *= -1; new Sled(D.sledSide, rr(95, 120), { offs: rr(-9, 7) }); }
+    if ((D.sledT <= 0 && live < 5) || (live === 0 && D.sledT < 8)) { D.sledT = rr(13, 16); sledWave(); }
     if (!P.mounted && P.canMount && P.pos.distanceTo(GUN_PIVOT) < 2.6) prompt = '按 <kbd>F</kbd> 使用 DShK 机枪';
     const h = G.hind;
     if (h && ((h.hp / h.maxHp < 0.45 && D.turretT > 32) || D.turretT > 75)) enterBridge();

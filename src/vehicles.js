@@ -110,9 +110,9 @@ export function sledMesh() {
 export class Sled {
   constructor(side, z, o = {}) {
     this.isSled = true; this.side = side; this.t = 0; this.phase = rr(0, 6);
-    this.pos = new THREE.Vector3(side * rr(8, 12), 0, z); this.vel = new THREE.Vector3(0, 0, -13);
+    this.pos = new THREE.Vector3(side * rr(8, 12) * ((o.lane ?? 7.8) / 7.8), 0, z); this.vel = new THREE.Vector3(0, 0, z < 0 ? 4 : -13);
     this.yaw = 0; this.pitch = 0; this.roll = 0; this.hp = 260; this.dead = false; this.deadT = 0;
-    this.offs = o.offs ?? rr(-5, 5); this.fireT = rr(1.5, 3); this.burst = 0; this.hasTok = false;
+    this.offs = o.offs ?? rr(-5, 5); this.fireT = rr(1.5, 3); this.burst = 0; this.hasTok = false; this.lane = o.lane ?? 7.8;
     this.group = sledMesh(); G.scene.add(this.group);
     this.driver = new Human('ru'); this.driver.sit = { seat: new THREE.Vector3(), driver: true, barL: new THREE.Vector3(), barR: new THREE.Vector3() }; this.driver.hp = 60;
     this.gunner = o.noGunner ? null : new Human('ru');
@@ -189,7 +189,7 @@ export class Sled {
     if (!this.dead) {
       const desZ = clamp(P.pos.z + this.offs, -78, 50);
       this.vel.z = damp(this.vel.z, clamp((desZ - this.pos.z) * 0.7, -15, 9), 1.1, dt);
-      const desX = this.side * (7.8 + 2.4 * Math.sin(this.t * 0.45 + this.phase));
+      const desX = this.side * (this.lane + 2.4 * Math.sin(this.t * 0.45 + this.phase));
       this.vel.x = damp(this.vel.x, (desX - this.pos.x) * 1.2, 2, dt);
       this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
       const gx = this.vel.x, gz = this.vel.z - G.v;
