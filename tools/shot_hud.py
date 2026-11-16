@@ -37,6 +37,7 @@ async def main():
             await pg.wait_for_timeout(1600)
             print("layout", w, h, json.dumps(await ev(MEASURE)), flush=True)
             await shot(pg, f"hud_layout_{w}.png"); await ev("window.__freeze=false")
+        print("upload label", await ev("(()=>{ const H=__G.hud; H.setUpload(99, false, '99% · 等待手动发送'); const a = H.uplB.textContent; H.setUpload(42, true); return [a, H.uplB.textContent]; })()"))
         print("errors", await ev("window.__errors.slice(0,3)"))
     finally:
         print("\n".join(logs[-6:]))

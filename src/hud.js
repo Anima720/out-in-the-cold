@@ -207,14 +207,15 @@ function updateThreat() {
   const cam = G.camera, W = innerWidth, H = innerHeight;
   _v.copy(th.pos).project(cam);
   const behind = _v.z > 1;
-  let x = _v.x, y = _v.y;
-  if (behind) { x = -x; y = -y; }
-  const off = behind || Math.abs(x) > 0.94 || Math.abs(y) > 0.9;
-  if (off) { const k = Math.max(Math.abs(x) / 0.94, Math.abs(y) / 0.86, 1e-3); x /= k; y /= k; if (behind && Math.abs(y) < 0.86 && Math.abs(x) < 0.93) { const k2 = 0.93 / Math.max(Math.abs(x), 1e-3); x *= k2; y *= k2; } }
-  const sx = (x * 0.5 + 0.5) * W, sy = (-y * 0.5 + 0.5) * H;
+  let dx = _v.x * W / 2, dy = -_v.y * H / 2;           // px from screen centre (y down)
+  if (behind) { dx = -dx; dy = -dy; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) dy = 1; }
+  const hx = W / 2 - 78, hy = H / 2 - 70;
+  const off = behind || Math.abs(dx) > hx || Math.abs(dy) > hy;
+  if (off) { const k = Math.min(hx / Math.max(Math.abs(dx), 1e-3), hy / Math.max(Math.abs(dy), 1e-3)); dx *= k; dy *= k; }
+  const sx = W / 2 + dx, sy = H / 2 + dy;
   HUD.threat.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
   HUD.threat.classList.add('on'); HUD.threat.classList.toggle('off', off);
-  if (off) HUD.thA.style.transform = `rotate(${Math.atan2(x, y).toFixed(3)}rad)`;
+  if (off) HUD.thA.style.transform = `rotate(${Math.atan2(dx, -dy).toFixed(3)}rad)`;
   const d = Math.round(cam.position.distanceTo(th.pos));
   if (d !== th.d) { th.d = d; HUD.thS.textContent = `${th.label ? th.label + ' ' : ''}${d}米`; }
 }

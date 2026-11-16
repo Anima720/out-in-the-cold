@@ -50,7 +50,7 @@ export function initBlood() {
   geo.setAttribute('aB', aB);
   const tex = atlas();
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0, transparent: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, envMapIntensity: 1.4 });
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, envMapIntensity: 0.6 });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.bloodMap = { value: tex };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aB; varying vec4 vB; varying vec2 vBUv;')
@@ -64,7 +64,7 @@ export function initBlood() {
         bInner = smoothstep(thr + 0.03, thr + 0.32, bt.r);
         vec3 bc = mix(vec3(0.045, 0.002, 0.002), vec3(0.10, 0.005, 0.004), bInner) * (0.88 + 0.25 * bt.g);
         diffuseColor = vec4(bc, ba * vB.y);`)
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.55, 0.14, bInner);');
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.6, 0.24, bInner);');
   };
   const m = new THREE.InstancedMesh(geo, mat, N);
   m.frustumCulled = false; m.receiveShadow = true; m.renderOrder = 1; m.count = N;
