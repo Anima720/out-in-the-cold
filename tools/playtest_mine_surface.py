@@ -13,10 +13,11 @@ async def main():
         await pg.goto(DIST + "?q=low&god=1")
         await pg.wait_for_function("window.__ready", timeout=300000)
         ev=pg.evaluate
-        S = "JSON.stringify({lvl:__G.lvl, ck:__D.ck, ph:__D.cv&&__D.cv.ph, st:__G.state, P:__P.pos.toArray().map(v=>+v.toFixed(1)), en:__G.enemies.filter(e=>e.h.alive).length, mates:__G.mates.map(m=>[m.name[0],m.p5,+m.h.pos.x.toFixed(1),+m.h.pos.z.toFixed(1)]), veh:__G.sleds.map(s=>[s.kind,s.dead,+s.pos.z.toFixed(0)]), la:__WP.launch, err:window.__errors.slice(0,3), cur:__D.cur&&__D.cur.id})"
+        S = "JSON.stringify({lvl:__G.lvl, ck:__D.ck, ph:__D.cv&&__D.cv.ph, st:__G.state, P:__P.pos.toArray().map(v=>+v.toFixed(1)), en:__G.enemies.filter(e=>e.h.alive).length, mates:__G.mates.map(m=>[m.name[0],m.p5,+m.h.pos.x.toFixed(1),+m.h.pos.z.toFixed(1)]), sand:!!__D.sand, wp:__WP.prim, veh:__G.sleds.map(s=>[s.kind,s.dead,+s.pos.z.toFixed(0)]), la:__WP.launch, err:window.__errors.slice(0,3), cur:__D.cur&&__D.cur.id})"
         async def shot(n):
             await ev("window.__freeze=true"); await pg.wait_for_timeout(300); await pg.screenshot(path=f"shots/m_{n}.png", timeout=200000); await ev("window.__freeze=false")
         await ev("__begin(10)"); await ev("__sim(3)"); await shot("wake")
+        print('wake', await ev("JSON.stringify({kneel:__G.mates.filter(m=>m.p5==='kneel').map(m=>m.name), n:__G.mates.length, sand:!!__D.sand, wp:__WP.prim})"))
         await ev("__sim(8)"); print('adv', await ev(S))
         await ev("__P.pos.set(0,0,-24); __P.yaw=0; __sim(3)"); print('encA', await ev(S)); await shot("encA")
         await ev("__sim(6)"); print('encA2', await ev(S))
@@ -34,6 +35,8 @@ async def main():
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); const c=__G.camera.position; const d=t.pos.clone().setY(t.pos.y+1.5).sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y);})(); __sim(0.05); __input.lmb=true; __input.lmbPressed=true; __sim(0.05); __input.lmb=false; __sim(4)")
         print('hit2', await ev(S))
         await ev("__killAll(); __sim(6); __P.pos.set(0,0,-129); __sim(4)"); print('end', await ev(S))
+        r = json.loads(await ev("JSON.stringify({lvl:__G.lvl, ph:__D.phase, ck:__D.ck, n:__G.mates.length, err:window.__errors.length})"))
+        print('handoff', r, 'RESULT', 'PASS' if r['lvl']==2 and r['ck']==0 and r['n']==2 and r['err']==0 else 'FAIL')
         print("\n".join(logs))
         await b.close()
 asyncio.run(main())
