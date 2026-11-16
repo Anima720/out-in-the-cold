@@ -18,23 +18,24 @@ import { Raider, mateCustom, goMate, placeMate, prep, clear5 } from './part5.js'
 import { hideStation } from './station.js';
 
 Object.assign(LINES, {
-  P1_SAND_01: ['SANDMAN', 'Sokolov. Sokolov! You with us?', '索科洛夫。索科洛夫！还清醒吗？'],
-  P1_GRIN_01: ['GRINCH', "Whole mountain came down. Bird's gone — they got the President's daughter out.", '整座山都塌了。直升机走了——总统的女儿救出去了。'],
-  P1_SAND_02: ['SANDMAN', 'Then we find our own way out. Truck, take point.', '那我们自己找路出去。Truck，打头。'],
+  P1_TRUCK_00: ['TRUCK', 'Sandman. Sandman! You with us, boss?', 'Sandman。Sandman！头儿，还清醒吗？'],
+  P1_GRIN_01: ['GRINCH', "Whole mountain came down. Price got the President out — bird's long gone.", '整座山都塌了。Price 把总统带出去了——直升机早飞了。'],
+  P1_SAND_02: ['SANDMAN', 'Then we walk out. Truck, take point.', '那就自己走出去。Truck，打头。'],
   P1_TRUCK_01: ['TRUCK', 'Lights ahead. Not ours.', '前面有灯光。不是我们的人。'],
-  P1_SAND_03: ['SANDMAN', "Makarov's people. Weapons free.", '马卡洛夫的人。自由开火。'],
-  P1_GRIN_02: ['GRINCH', 'Office on the right. They were moving something out of here in a hurry.', '右边有间办公室。他们急着把什么东西运出去。'],
-  P1_SOKO_01: ['索科洛夫', 'Shipping manifests… one word, over and over: Оазис.', '运输清单……同一个词反复出现：「绿洲」。'],
-  P1_SAND_04: ['SANDMAN', 'Oasis. Take it. Price will want that.', '绿洲。带上它，Price 会需要的。'],
-  P1_TRUCK_02: ['TRUCK', 'Cage elevator, north end. Still has power.', '北头有罐笼，还通着电。'],
+  P1_SAND_03: ['SANDMAN', "Makarov's men. Weapons free.", '马卡洛夫的人。自由开火。'],
+  P1_GRIN_02: ['GRINCH', 'Office on the right. They were hauling something out of here in a hurry.', '右边有间办公室。他们急着把什么东西运出去。'],
+  P1_GRIN_03: ['GRINCH', 'Flight manifests, wire transfers… all pointing at one word. "Oasis."', '航班清单、转账记录……全指向同一个词：「绿洲」。'],
+  P1_SAND_04: ['SANDMAN', "That's where Makarov's running. Price needs this.", '马卡洛夫就是往那儿跑的。得让 Price 知道。'],
+  P1_TRUCK_02: ['TRUCK', 'Cage elevator, north end. Still got power.', '北头有罐笼，还通着电。'],
   P1_SAND_05: ['SANDMAN', "Everybody in. We're going up.", '全员进笼。我们上去。'],
   P2_GRIN_01: ['GRINCH', 'Anybody else think elevator music would help?', '有人觉得这时候放点电梯音乐会好点吗？'],
-  P2_SAND_01: ['SANDMAN', "Rail yard's three hundred meters north. That ore train is our ride out.", '铁路货场在北边三百米。那列运矿车就是我们出去的车。'],
+  P2_TRUCK_03: ['TRUCK', 'Radios are fried. No comms, no extraction.', '电台全烧了。联系不上，也没人来接。'],
+  P2_SAND_01: ['SANDMAN', 'Ore train in the rail yard runs north, past the old radar station. That dish can reach Price.', '货场那列运矿车往北开，会经过旧雷达站。那口天线能联系上 Price。'],
   P2_TRUCK_01: ['TRUCK', "Top's hot. Get ready.", '上面有人。准备好。'],
   P2_TRUCK_02: ['TRUCK', 'BTR! Get off the road!', 'BTR！离开路面！'],
-  P2_SAND_02: ['SANDMAN', "Sokolov — there's an RPG in the hoist house. Take that thing out!", '索科洛夫——提升机房里有 RPG，把那铁家伙干掉！'],
+  P2_GRIN_02: ['GRINCH', 'Sandman — RPGs in the hoist house! Kill that thing!', 'Sandman——提升机房里有 RPG！干掉那铁家伙！'],
   P2_GRIN_03: ['GRINCH', 'Scratch one BTR!', 'BTR 报销了！'],
-  P2_SAND_03: ['SANDMAN', 'Rail yard. Go, go, go!', '去货场。快，快，快！'],
+  P2_SAND_03: ['SANDMAN', 'Rail yard. Move, move!', '去货场。快，快！'],
 });
 
 const CV = { root: {}, lights: [], look: null, flash: null, cover: [], cols: [], lvl: 0 };
@@ -325,10 +326,10 @@ G.leaveCave = () => {
 function colliders() { for (const c of CV.cols) addBox(c[0], c[1], c[2], c[3], c[4], c[5], c[6] || 'rock'); for (const l of [CV.coverMine, CV.coverB, CV.coverS]) if (l) for (const c of l) c.used = null; }
 
 function makeMates() {
-  const s = new Mate('SANDMAN', 'head_sand', [0, 0]), t = new Mate('TRUCK', 'head_truck', [0, 0]), g = new Mate('GRINCH', 'head_grinch', [0, 0]);
-  for (const m of [s, t, g]) { prep(m.h); m.custom = mateCustom(m); m.p5 = 'idle'; m.cs = 'crouch'; m.ct = rr(0.5, 2); m.yaw0 = 0; }
-  D.sand = s; D.truck = t; D.grinch = g;
-  return [s, t, g];
+  const t = new Mate('TRUCK', 'head_truck', [0, 0]), g = new Mate('GRINCH', 'head_grinch', [0, 0]);
+  for (const m of [t, g]) { prep(m.h); m.custom = mateCustom(m); m.p5 = 'idle'; m.cs = 'crouch'; m.ct = rr(0.5, 2); m.yaw0 = 0; }
+  D.truck = t; D.grinch = g;
+  return [t, g];
 }
 const alive = () => G.enemies.filter((e) => e.h.alive).length;
 function squad(list, cover, maxTier = 1, o = {}) { for (const [x, z] of list) new Raider(x, z, { cover, maxTier, ...o }); }
@@ -343,41 +344,41 @@ G.startCave = (k, cont) => {
   D.ck = k; D.t = 0; D.rt = 0; D.phase = 'cave';
   G.state = 'play'; G.paused = false;
   const C = (D.cv = { ph: '', t: 0 });
-  const [s, t, g] = makeMates();
+  const [t, g] = makeMates();
   resetWeapons();
   if (!G.stats || (!cont && k === 10)) G.stats = { shots: 0, hits: 0, kills: 0, deaths: G.stats ? G.stats.deaths || 0 : 0, t0: G.real };
   HUD.fade(1, 0); setTimeout(() => HUD.fade(0, k === 10 ? 4 : 1.5), 50);
   if (k === 10) {
     resetPlayer(new THREE.Vector3(-0.5, 0, -2.5), 0);
     P.prone = true; P.getUp = true; P.pitch = 0.5;
-    placeMate(s, 1.2, -4); placeMate(t, -1.6, -6.5); placeMate(g, 0.8, -7.2);
-    s.h.crouchT = 1; s.p5 = 'kneel'; s.look = new THREE.Vector3(-0.5, 0, -2.5);
+    placeMate(t, 0.9, -3.9); placeMate(g, -1.2, -6.8);
+    t.h.crouchT = 1; t.p5 = 'kneel'; t.look = new THREE.Vector3(-0.5, 0, -2.5);
     C.ph = 'wake';
     musicMode('p1dark');
-    after(1.0, () => HUD.locCard(['坍塌', '西伯利亚 · 钻石矿 · 地下 430 米', '维克多·索科洛夫 中尉 · 联邦警卫局（FSO）', '“弃于寒冬” · 第一部分']));
-    say('P1_SAND_01', 1.5); say('P1_GRIN_01', 0.6); say('P1_SAND_02', 0.4);
+    after(1.0, () => HUD.locCard(['坍塌', '西伯利亚 · 钻石矿 · 地下 430 米', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第一部分']));
+    say('P1_TRUCK_00', 1.5); say('P1_GRIN_01', 0.6); say('P1_SAND_02', 0.4);
     after(3.0, () => { P.prone = false; P.crouched = true; });
     after(4.5, () => { P.crouched = false; });
     after(9.0, () => {
-      C.ph = 'adv1'; HUD.objective('跟上 Sandman，找到出路');
-      goMate(t, [[1.5, -14], [2.4, -27.6]], 'defend', 3.2); goMate(s, [[-1.6, -16], [-1.2, -33.4]], 'defend', 3); goMate(g, [[0, -18], [2.6, -24.8]], 'defend', 3);
+      C.ph = 'adv1'; HUD.objective('带队找到出路');
+      goMate(t, [[1.5, -14], [2.4, -27.6]], 'defend', 3.2); goMate(g, [[-1.6, -16], [-1.2, -33.4]], 'defend', 3);
     });
   } else if (k === 11) {
     resetPlayer(new THREE.Vector3(1.5, 0, -64), 0);
-    placeMate(s, -1.5, -66); placeMate(t, 2.6, -70); placeMate(g, -0.5, -72);
+    placeMate(t, 2.6, -70); placeMate(g, -1.5, -66);
     C.ph = 'tocage'; C.intel = true;
     musicMode('p1dark');
     toCavern(true);
   } else { // 20: the cage ride up
     resetPlayer(new THREE.Vector3(0.6, 0, 6.6), 0);
-    placeMate(s, -0.8, 5.4); placeMate(t, 0.9, 5.2); placeMate(g, -0.6, 7.2);
-    for (const m of [s, t, g]) { m.h.yaw = 0; m.yaw0 = 0; }
+    placeMate(t, 0.9, 5.2); placeMate(g, -0.8, 5.6);
+    for (const m of [t, g]) { m.h.yaw = 0; m.yaw0 = 0; }
     C.ph = 'ride'; C.rideT = 0; CV.shaft.visible = true; CV.root.surf.visible = false;
     setLook({ fog: 0x0b0907, bg: 0x040302, density: 0.05, sun: 0, hemi: [0x7a6a58, 0x1a1410, 0.2], exp: 1.15, env: 0.12, sky: false, snow: false });
     lights([[0, 2.6, 6.2, 0xffd9a0, 5, 8]]);
     musicMode('p2ride');
-    after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '维克多·索科洛夫 中尉 · 联邦警卫局（FSO）', '“弃于寒冬” · 第二部分']));
-    say('P2_GRIN_01', 3); say('P2_SAND_01', 1); say('P2_TRUCK_01', 2);
+    after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第二部分']));
+    say('P2_GRIN_01', 3); say('P2_TRUCK_03', 0.8); say('P2_SAND_01', 0.8); say('P2_TRUCK_01', 1.6);
     C.rideSnd = loop('train', { vol: 0.25, rate: 0.5 });
     C.gateBox = addBox(-1.9, 0, 4.5, 1.9, 3, 4.65, 'metal');
   }
@@ -388,7 +389,7 @@ function toCavern(fromCk) {
   const C = D.cv;
   C.ph = 'tocage';
   HUD.objective('前往北面的罐笼'); HUD.setMarker(new THREE.Vector3(0, 1.6, -121.5), '');
-  goMate(D.truck, [[2.5, -80], [2.8, -97.5]], 'defend', 3.4); goMate(D.sand, [[-1.5, -78], [-2.8, -96.8]], 'defend', 3.2); goMate(D.grinch, [[0, -76], [0, -93.4]], 'defend', 3);
+  goMate(D.truck, [[2.5, -80], [2.8, -97.5]], 'defend', 3.4); goMate(D.grinch, [[-1.5, -78], [-2.8, -96.8]], 'defend', 3.2);
   if (fromCk) HUD.locCard(['检查点', '情报已取得']);
 }
 
@@ -407,7 +408,7 @@ function updateMine(dt) {
   }
   if (C.ph === 'fightA' && C.t > 6 && alive() === 0) {
     C.ph = 'office';
-    goMate(D.sand, [[-1.8, -56]], 'defend', 3); goMate(D.truck, [[2.6, -54.5]], 'defend', 3); goMate(D.grinch, [[-0.4, -58.5]], 'defend', 3);
+    goMate(D.truck, [[2.6, -54.5]], 'defend', 3); goMate(D.grinch, [[-1.8, -56]], 'defend', 3);
     say('P1_GRIN_02', 1.5);
     after(2.5, () => { HUD.objective('搜查右侧的办公室'); HUD.setMarker(CV.laptop.clone().setY(1.2), ''); musicMode('p1dark'); });
   }
@@ -418,7 +419,7 @@ function updateMine(dt) {
     if (C.hold >= 1.6) {
       C.hold = 0; C.intel = true; play('magin', { vol: 0.6, rev: 0 });
       HUD.setMarker(null); HUD.bigCard('ОАЗИС', '「绿洲」—— 情报已取得', 3.5);
-      say('P1_SOKO_01', 0.8); say('P1_SAND_04', 0.4); say('P1_TRUCK_02', 0.6);
+      say('P1_GRIN_03', 0.8); say('P1_SAND_04', 0.4); say('P1_TRUCK_02', 0.6);
       D.ck = 11; if (G.saveCk) G.saveCk(11);
       after(4, () => toCavern(false));
     }
@@ -433,8 +434,8 @@ function updateMine(dt) {
   if (C.ph === 'fightB' && C.t > 3 && alive() === 0 && !C.cageCall) {
     C.cageCall = true; C.ph = 'board';
     say('P1_SAND_05', 0.6);
-    goMate(D.sand, [[0, -112], [-0.8, -121.0]], 'idle', 3.4); goMate(D.truck, [[1, -113], [0.9, -122.2]], 'idle', 3.4); goMate(D.grinch, [[-1, -114], [-0.7, -122.4]], 'idle', 3.4);
-    for (const m of [D.sand, D.truck, D.grinch]) m.yaw0 = Math.PI;
+    goMate(D.truck, [[1, -113], [0.9, -122.2]], 'idle', 3.4); goMate(D.grinch, [[-1, -114], [-0.8, -121.0]], 'idle', 3.4);
+    for (const m of [D.truck, D.grinch]) m.yaw0 = Math.PI;
     HUD.objective('进入罐笼'); HUD.setMarker(new THREE.Vector3(0, 1.6, -121.5), '');
   }
   if (C.ph === 'board' && Math.abs(P.pos.x) < 1.5 && P.pos.z < -120 && P.pos.z > -123.2 && !C.done) {
@@ -469,15 +470,14 @@ function updateSurface(dt) {
       squad([[-9, -30], [10, -40], [-4, -48], [14, -60], [-12, -70], [3, -74]], CV.coverS, 1);
       new Raider(16, -95, { cover: CV.coverS, maxTier: 1, rpg: true });
       musicMode('p2fight');
-      for (const m of [D.sand, D.truck, D.grinch]) m.yaw0 = Math.PI;
-      goMate(D.sand, [[-0.6, 3], [-4.5, -5.0]], 'defend', 3.5); goMate(D.truck, [[0.8, 3], [1.8, -5], [4.6, -8.4]], 'defend', 3.5); goMate(D.grinch, [[-0.2, 4], [-1.5, -3.5]], 'defend', 3.5);
-      for (const m of [D.sand, D.truck, D.grinch]) m.yaw0 = 0;
+      goMate(D.truck, [[0.8, 3], [1.8, -5], [4.6, -8.4]], 'defend', 3.5); goMate(D.grinch, [[-0.6, 3], [-4.5, -5.0]], 'defend', 3.5);
+      for (const m of [D.truck, D.grinch]) m.yaw0 = 0;
     }
   }
   if (C.gateOpen && CV.gate.position.y < 2.6) CV.gate.position.y = Math.min(2.6, CV.gate.position.y + dt * 1.6);
   if (C.ph === 'top' && C.t > 22 && !C.btr) {
     C.btr = new BTR([[2, -130], [0, -90], [3, -55], [0, -28]]);
-    say('P2_TRUCK_02', 2.0); say('P2_SAND_02', 0.4);
+    say('P2_TRUCK_02', 2.0); say('P2_GRIN_02', 0.4);
     after(4, () => { HUD.objective('用 RPG 摧毁 BTR'); HUD.setMarker(CV.rpgPos.clone().setY(1.2), 'RPG'); });
   }
   if (C.btr && !C.btr.dead && WP.launch !== 'rpg' && Math.hypot(P.pos.x - CV.rpgPos.x, P.pos.z - CV.rpgPos.z) < 1.3) {
@@ -488,7 +488,7 @@ function updateSurface(dt) {
   if (C.btrDown && !C.go && C.t - C.btrDownT > 3) {
     C.go = true; say('P2_SAND_03', 0.3);
     HUD.objective('赶往铁路货场'); HUD.setMarker(new THREE.Vector3(0, 1.5, -138), '货场');
-    goMate(D.sand, [[-3, -60], [-2, -132]], 'defend', 5.5); goMate(D.truck, [[3, -60], [3, -132]], 'defend', 5.5); goMate(D.grinch, [[0, -60], [0, -130]], 'defend', 5.5);
+    goMate(D.truck, [[3, -60], [3, -132]], 'defend', 5.5); goMate(D.grinch, [[-3, -60], [-2, -132]], 'defend', 5.5);
   }
   if (C.go && P.pos.z < -128 && !C.done) {
     C.done = true; HUD.objective(null); HUD.setMarker(null);

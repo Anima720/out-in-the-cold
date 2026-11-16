@@ -16,21 +16,21 @@ import { HUD } from './hud.js';
 export const LINES = {
   SAND_01: ['SANDMAN', "Train's pulling out! Move, move, move!", '列车要开了！快，快，快！'],
   GRIN_01: ['GRINCH', 'You want us to catch a train? In this?', '你要我们追火车？就这天气？'],
-  TRUCK_01: ['TRUCK', 'Sokolov, jump! Davai!', '索科洛夫，跳！快！'],
+  TRUCK_01: ['TRUCK', "I'm on! Sandman, come on!", '我上来了！Sandman，快！'],
   SAND_02: ['SANDMAN', 'Clear these cars. Push to the engine.', '清掉这些车厢，推进到车头。'],
   GRIN_02: ['GRINCH', 'Snowmobiles, left side!', '左侧，雪地摩托！'],
   TRUCK_02: ['TRUCK', "More on the right! They're trying to board!", '右边还有！他们想爬上车！'],
   SAND_03: ['SANDMAN', 'Grinch, take the engine. Truck, with me.', 'Grinch，去控制车头。Truck，跟我来。'],
   GRIN_03: ['GRINCH', "Engine's mine. Anybody know how to drive a Russian train?", '车头拿下了。谁会开俄国火车？', true],
-  SOKO_01: ['索科洛夫', 'Push the lever forward. All the way.', '把操纵杆推到底。'],
-  SAND_04: ['SANDMAN', 'Sokolov, get on that gun!', '索科洛夫，上那挺机枪！'],
+  GRIN_05: ['GRINCH', 'Big lever, all the way forward. How hard can it be?', '大操纵杆，推到底。能有多难？', true],
+  TRUCK_05: ['TRUCK', 'Sandman, get on that DShK!', 'Sandman，上那挺 DShK！'],
   TRUCK_03: ['TRUCK', "Hind! Twelve o'clock high!", '雌鹿直升机！正前方高空！'],
   SAND_05: ['SANDMAN', 'Light it up! Keep it off the engine!', '打它！别让它靠近车头！'],
   GRIN_04: ['GRINCH', 'Uh, guys? Bridge coming up.', '呃，各位？前面是桥。', true],
   TRUCK_04: ['TRUCK', "It's lining up on the bridge—", '它对准桥了——'],
   SAND_06: ['SANDMAN', 'Everybody — JUMP!', '所有人——跳！'],
-  SAND_07: ['SANDMAN', 'Sokolov... Sokolov! On your feet!', '索科洛夫……索科洛夫！站起来！'],
-  KRAS_01: ['克拉辛', 'Взорвите мост.', '炸掉那座桥。', true],
+  TRUCK_06: ['TRUCK', 'Sandman… Sandman! On your feet, boss.', 'Sandman……Sandman！站起来，头儿。'],
+  KRAS_01: ['克拉辛', 'Американцы на поезде. Остановить состав. Любой ценой.', '美国人在火车上。把车拦下来，不惜一切代价。', true],
 };
 
 export const D = { phase: '', t: 0, rt: 0, ck: 0, q: [], cur: null, f: {}, timers: [], slow: null };
@@ -81,11 +81,10 @@ function clearAll() {
 }
 
 function makeMates() {
-  const s = new Mate('SANDMAN', 'head_sand', [-0.12, -3]);
-  const t = new Mate('TRUCK', 'head_truck', [0.12, 3]);
-  const g = new Mate('GRINCH', 'head_grinch', [0, 6]);
-  D.sand = s; D.truck = t; D.grinch = g;
-  return [s, t, g];
+  const t = new Mate('TRUCK', 'head_truck', [0.12, 2.5]);
+  const g = new Mate('GRINCH', 'head_grinch', [-0.12, 5]);
+  D.truck = t; D.grinch = g;
+  return [t, g];
 }
 
 export function startCheckpoint(k) {
@@ -96,17 +95,17 @@ export function startCheckpoint(k) {
   clearAll();
   D.ck = k; D.t = 0; D.rt = 0;
   G.state = 'play'; G.paused = false;
-  const [s, t, g] = makeMates();
+  const [t, g] = makeMates();
   if (k === 0) {
     G.v = 1.2; G.vTarget = 5.2; G.vRate = 0.25;
     resetPlayer(new THREE.Vector3(3.3, 0, 47), 0);
-    s.place(2.5, 37.5); t.place(4.1, 40); g.place(4.9, 43);
-    for (const m of [s, t, g]) { m.mode = 'run'; m.speed = 0; }
+    t.place(2.5, 37.5); g.place(4.1, 40);
+    for (const m of [t, g]) { m.mode = 'run'; m.speed = 0; }
     spawnTrainEnemies(999);
     setInvWalls(false);
     D.phase = 'board';
     HUD.fade(1, 0); setTimeout(() => HUD.fade(0, 2.5), 50);
-    after(1.0, () => HUD.locCard(['铁马', '西伯利亚 · 钻石矿运矿支线 · 06:12', '维克多·索科洛夫 中尉 · 联邦警卫局（FSO）', '“弃于寒冬” · 第三部分']));
+    after(1.0, () => HUD.locCard(['铁马', '西伯利亚 · 钻石矿运矿支线 · 06:12', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第三部分']));
     musicMode('intro');
     say('SAND_01', 0.8); say('GRIN_01', 3.6);
     after(1.4, () => { HUD.objective('追上列车'); HUD.setMarker(new THREE.Vector3(0.8, DECK + 0.6, 31.5), ''); });
@@ -115,15 +114,15 @@ export function startCheckpoint(k) {
   } else if (k === 1) {
     G.v = 10; G.vTarget = 13; G.vRate = 0.8;
     resetPlayer(new THREE.Vector3(0, DECK, 27.5), 0);
-    s.place(-0.12, 24); t.place(0.12, 29.5); g.place(0, 31);
-    for (const m of [s, t, g]) m.mode = 'follow';
+    t.place(0.12, 29.5); g.place(0, 31);
+    for (const m of [t, g]) m.mode = 'follow';
     spawnTrainEnemies(999);
     enterCars(true);
   } else {
     G.v = 22; G.vTarget = 22;
     resetPlayer(new THREE.Vector3(0, DECK, -44), 0);
-    s.place(-0.9, -41.5); t.place(0.9, -40.2);
-    s.mode = t.mode = 'hold'; g.h.hidden = true; g.mode = 'cab';
+    t.place(0.9, -40.2);
+    t.mode = 'hold'; g.h.hidden = true; g.mode = 'cab';
     setInvWalls(true);
     T.dshk.yaw.rotation.y = 0;
     P.canMount = true; mount();
@@ -145,9 +144,9 @@ function enterCars(fromCk) {
 }
 
 // teammates still on the ground sprint alongside and jump onto the rear car
-const SLOTS = [[2.0, 29.0, 2.0], [2.0, 30.2, 4.5], [2.0, 31.2, 6.5]];
+const SLOTS = [[2.0, 29.0, 2.0], [2.0, 30.6, 4.5]];
 function mateBoard() {
-  [D.sand, D.truck, D.grinch].forEach((m, i) => {
+  [D.truck, D.grinch].forEach((m, i) => {
     if (!m || m.arc || m.h.hidden) return;
     if ((m.mode === 'follow' || m.mode === 'hold') && m.h.pos.y < 1.0) m.mode = 'run'; // safety: never fight from under the train
     if (m.mode !== 'run') return;
@@ -155,7 +154,7 @@ function mateBoard() {
     if (D.phase === 'board' && D.t < start) { m.speed = 0; return; }
     m.speed = D.phase === 'board' ? 3.4 : 6; m.target.set(x, 0, z);
     if (Math.hypot(m.h.pos.x - x, m.h.pos.z - z) < 0.8) {
-      m.mode = 'jump'; m.jumpTo([-0.2, 0.5, 0.1][i], DECK, z - 2.5, 0.5, 0.7);
+      m.mode = 'jump'; m.jumpTo([0.4, -0.2][i], DECK, z - 2.5, 0.5, 0.7);
       m.onArcDone = () => { m.mode = 'follow'; if (m === D.truck && D.phase === 'board') say('TRUCK_01', 0.3); };
     }
   });
@@ -171,7 +170,7 @@ function enterClear() {
   after(9, () => { // don't keep the player waiting: if Grinch is still far, he is already in the cab
     const g = D.grinch; if (g && !g.h.hidden && g.mode === 'cab' && !g.arc) { g.h.pos.set(0.85, DECK, -50.7); g.target.copy(g.h.pos); }
   });
-  D.sand.offs = [-0.9, 0]; D.truck.offs = [0.9, 1.5];
+  D.truck.offs = [0.9, 1.5];
 }
 
 function enterTurret(fromCk, quiet) {
@@ -179,8 +178,7 @@ function enterTurret(fromCk, quiet) {
   P.canDismount = true;
   HUD.objective('击退追兵，打下雌鹿直升机'); HUD.setMarker(null);
   musicMode('turret');
-  for (const m of [D.sand, D.truck]) { m.mode = 'hold'; }
-  D.sand.target.set(-0.9, 0, -41.6); D.truck.target.set(0.95, 0, -40.0);
+  D.truck.mode = 'hold'; D.truck.target.set(0.95, 0, -40.0);
   if (!quiet) {
     say('TRUCK_03', 1.0);
     after(2.0, () => { new Hind(); });
@@ -283,7 +281,7 @@ function endSequence() {
   HUD.fade(1, 1.8, '#000');
   HUD.objective(null); HUD.setMarker(null);
   muffle(600, 0.4);
-  afterReal(2.2, () => { say('SAND_07', 0); musicMode('end'); });
+  afterReal(2.2, () => { say('TRUCK_06', 0); musicMode('end'); });
   afterReal(7.0, () => { if (G.startPart5) G.startPart5(4, true); });
 }
 
@@ -326,13 +324,13 @@ export function updateDirector(dt, rdt) {
       const g = D.grinch;
       if (g.mode === 'cab' && !g.h.hidden && !g.arc && g.h.pos.z < -49.5 && Math.hypot(g.h.pos.x - g.target.x, g.h.pos.z - g.target.z) < 0.6) {
         g.h.hidden = true; play('bolt', { pos: CAB_DOOR, vol: 0.5 });
-        say('GRIN_03', 0.5); say('SOKO_01', 0.9);
+        say('GRIN_03', 0.5); say('GRIN_05', 0.9);
         D.f.leverAt = D.rt + 5.2;
       }
       if (D.f.leverAt && D.rt > D.f.leverAt) {
         D.f.leverAt = 0; G.vTarget = 22; G.vRate = 1.3;
         play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 1.2, ref: 30 });
-        say('SAND_04', 1.2);
+        say('TRUCK_05', 1.2);
         after(2.0, () => { D.phase = 'gunready'; P.canMount = true; HUD.objective('使用 DShK 机枪'); HUD.setMarker(GUN_PIVOT.clone().setY(GUN_PIVOT.y + 0.4), ''); });
       }
     }

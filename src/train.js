@@ -258,7 +258,7 @@ export function buildDShK() {
   b.build(m, pitch);
   // gloves for the player (shown when mounted)
   const gb = new Builder();
-  for (const sx of [-0.09, 0.09]) { gb.boxC(sx, -0.02, 0.49, 0.08, 0.11, 0.1, 'cloth', 0x2b2d30); gb.boxC(sx, -0.05, 0.6, 0.11, 0.12, 0.22, 'cloth', 0x55606c); }
+  for (const sx of [-0.09, 0.09]) { gb.boxC(sx, -0.02, 0.49, 0.08, 0.11, 0.1, 'cloth', 0x9a8a68); gb.boxC(sx, -0.05, 0.6, 0.11, 0.12, 0.22, 'cloth', 0x55606c); }
   const gloves = new THREE.Group(); gb.build(m, gloves, { cast: false }); gloves.visible = false; pitch.add(gloves);
   G.scene.add(yaw);
   T.dshk = { yaw, pitch, gloves, muzzleLocal: new THREE.Vector3(0, 0, -1.25), eyeLocal: new THREE.Vector3(0, 0.2, 0.92) };

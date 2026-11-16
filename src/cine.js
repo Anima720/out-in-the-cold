@@ -6,8 +6,7 @@ import { W } from './world.js';
 import { Human, J, clearHumans } from './humans.js';
 import { HUD } from './hud.js';
 import { musicMode, playVO, A, loop, stopAllLoops, muffle } from './audio.js';
-import { S } from './station.js';
-import { ground5 } from './station.js';
+import { S, ground5, buildStation } from './station.js';
 import { input, hit } from './input.js';
 import { WP } from './weapon.js';
 
@@ -41,6 +40,7 @@ export function restoreLook() {
   setLook({ fog: s.fog, bot: s.bot, top: s.top, density: s.fogT, sunDir: s.sunDir, sun: [s.sunC, s.sunI], hemi: [s.hemiS, s.hemiG, s.hemiI], exp: s.exp, env: s.env, snow: true });
   for (const o of C.objs) G.scene.remove(o);
   C.objs.length = 0;
+  if (C.heliSnd) { C.heliSnd.stop(); C.heliSnd = null; } C.heli = null; W.sky.visible = true;
   HUD.root.classList.remove('letterbox'); HUD.credits.classList.remove('on');
   C.on = false;
 }
@@ -119,19 +119,36 @@ function buildSUV() {
   return g;
 }
 
-// ---------- post-credits: night road ----------
-function buildRoadScene() {
-  const g = new THREE.Group();
-  const b = new Builder();
-  // a battered UAZ van with headlights
-  b.boxC(0, 1.1, 0, 2.0, 1.4, 4.4, 'paint', 0x5d6a4a, 0, 0, 0, 0.12);
-  b.boxC(0, 1.6, -1.6, 1.9, 0.6, 1.0, 'glass', 0x10161b);
-  for (const [x, z] of [[-0.95, -1.4], [0.95, -1.4], [-0.95, 1.4], [0.95, 1.4]]) b.cyl(x, 0.42, z, 0.42, 0.42, 0.3, 'dark', 0x1a1a1a, 0, 0, Math.PI / 2, 14);
-  for (const x of [-0.65, 0.65]) b.cyl(x, 0.95, -2.22, 0.12, 0.12, 0.05, 'light', 0, Math.PI / 2, 0, 0, 12);
-  b.build({ ...M, glass: new THREE.MeshStandardMaterial({ color: 0x10161b, roughness: 0.1, metalness: 0.8 }), light: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff3d0, emissiveIntensity: 8 }) }, g);
-  const spot = new THREE.SpotLight(0xfff0d0, 60, 70, 0.5, 0.6, 1.6); spot.position.set(0, 1.0, -2.3); spot.target.position.set(0, 0, -30); g.add(spot, spot.target);
-  G.scene.add(g); C.objs.push(g);
-  return g;
+// ---------- post-credits: Nikolai's searchlight over the radar station ----------
+function buildHeli() {
+  const g = new THREE.Group(), b = new Builder(), K = 0x1b1e20;
+  b.boxC(0, 0, 0, 2.4, 2.3, 7.5, 'dark', K, 0, 0, 0, 0.6);                 // cabin
+  b.boxC(0, -0.3, -4.3, 1.9, 1.4, 1.8, 'dark', K, 0.25, 0, 0, 0.5);         // nose
+  b.boxC(0, 1.45, -0.6, 1.4, 0.7, 3.2, 'dark', K, 0, 0, 0, 0.2);            // engine housing
+  b.cyl(0, 0.55, 7.6, 0.55, 0.25, 8.5, 'dark', K, Math.PI / 2, 0, 0, 10);  // tail boom
+  b.boxC(0, 1.4, 11.6, 0.2, 2.2, 1.3, 'dark', K, -0.3, 0, 0, 0.05);         // fin
+  b.cyl(0, 2.0, -0.6, 0.18, 0.18, 0.7, 'dark', K);                          // mast
+  for (const sx of [-1, 1]) b.boxC(sx * 1.6, -0.6, 0.5, 0.9, 0.5, 2.4, 'dark', K, 0, 0, 0, 0.2); // fuel tanks
+  for (const sx of [-1, 1]) b.boxC(sx * 1.0, -1.45, -1.4, 0.1, 0.6, 0.1, 'dark', K);
+  b.build(M, g);
+  const blade = new THREE.MeshStandardMaterial({ color: 0x111314, roughness: 0.7, transparent: true, opacity: 0.55, depthWrite: false });
+  const rotor = new THREE.Group(); rotor.position.set(0, 2.4, -0.6); g.add(rotor);
+  for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.05, 10.5).translate(0, 0, 5.25), blade); m.rotation.y = k * Math.PI * 0.4; rotor.add(m); }
+  const tail = new THREE.Group(); tail.position.set(0.25, 1.4, 11.9); g.add(tail);
+  for (let k = 0; k < 3; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.7, 0.18), blade); m.rotation.x = k * Math.PI / 3; tail.add(m); }
+  const lamp = (c, x, y, z, r = 0.11) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(6) })); m.position.set(x, y, z); g.add(m); return m; };
+  lamp(0xff2010, -1.25, 0.2, -2.5); lamp(0x20ff40, 1.25, 0.2, -2.5);       // steady port/starboard
+  const beacon = lamp(0xff1a0a, 0, 1.95, 2.2, 0.16), tailW = lamp(0xffffff, 0, 1.2, 12.3, 0.09);
+  const bl = new THREE.PointLight(0xff2010, 0, 14, 1.6); bl.position.set(0, 2.3, 2.2); g.add(bl);
+  // searchlight under the nose: a real spotlight plus a soft additive cone so the beam reads through the snow
+  const spot = new THREE.SpotLight(0xe8f0ff, 900, 0, 0.13, 0.45, 1.2); spot.position.set(0, -1.1, -4.6); g.add(spot); G.scene.add(spot.target);
+  const cg = new THREE.ConeGeometry(Math.tan(0.13), 1, 28, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI / 2);
+  const col = []; const pa = cg.attributes.position; for (let i = 0; i < pa.count; i++) { const k = 0.16 * (1 - pa.getZ(i)) ** 1.4; col.push(k, k * 1.05, k * 1.15); }
+  cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  G.scene.add(cone);
+  G.scene.add(g); C.objs.push(g, cone, spot.target);
+  return { g, rotor, tail, beacon, tailW, bl, spot, cone };
 }
 
 // ---------- credits ----------
@@ -140,9 +157,8 @@ const CREDITS = `
 <p style="letter-spacing:.5em">OUT IN THE COLD</p>
 <p><em>一部《使命召唤：现代战争 3》非官方同人战役</em></p>
 <h3>主演</h3>
-<p>维克多·索科洛夫 中尉 <em>你</em></p>
-<p>Sandman <em>Metal 0-1</em></p><p>Truck</p><p>Grinch</p>
-<p>John Price 上尉</p><p>克拉辛 上校</p>
+<p>Sandman <em>Metal 0-1 · 你</em></p><p>Truck <em>Metal 0-2</em></p><p>Grinch <em>Metal 0-3</em></p>
+<p>John Price 上尉</p><p>尤里</p><p>克拉辛 上校</p><p>尼古拉</p>
 <h3>剧本 · 关卡构思</h3><p>玩家本人</p>
 <h3>程序 · 模型 · 特效 · 音效</h3><p>Claude <em>Anthropic</em></p>
 <h3>配音</h3><p>AI 合成原创声音 <em>ElevenLabs</em></p>
@@ -157,8 +173,8 @@ const CREDITS = `
 // ---------- line helper (subtitles + optional VO) ----------
 const LN = {
   E_PRICE_01: ['PRICE', "This one's for Metal.", '这一枪，替 Metal 打。'],
-  E_NIKO_01: ['NIKOLAI', 'You look cold, my friends. Need a lift?', '朋友们，看着挺冷啊。要搭车吗？'],
-  E_GRIN_01: ['GRINCH', '…Took you long enough.', '……你可来得真够慢的。'],
+  E_NIKO_01: ['NIKOLAI', 'Price, I am over the station. Three bodies…', 'Price，我到雷达站上空了。三具遗体……', true],
+  E_NIKO_02: ['NIKOLAI', '…No. Wait. One heat signature. Faint.', '……不，等等。有一个热源。很微弱。', true],
 };
 function line(id) {
   const L = LN[id]; const vo = playVO(id, !!L[3]);
@@ -177,12 +193,12 @@ const SHOTS = [
   { t: 38.5, fn: () => HUD.fade(1, 1.4) },
   { t: 40.5, fn: () => { HUD.bigCard('弃于寒冬', 'OUT IN THE COLD', 4.5); } },
   { t: 46, fn: () => { HUD.credits.classList.add('on'); C.rollT0 = C.t; } },
-  { t: 176, fn: () => { HUD.credits.classList.remove('on'); setRoad(); HUD.fade(0, 3); musicMode('silence'); } },
-  { t: 184, fn: () => line('E_NIKO_01') },
-  { t: 189.5, fn: () => line('E_GRIN_01') },
-  { t: 193.5, fn: () => HUD.fade(1, 2.5) },
-  { t: 196.5, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
-  { t: 201, fn: () => finish() },
+  { t: 176, fn: () => { HUD.credits.classList.remove('on'); setNight(); HUD.fade(0, 2.5); musicMode('silence'); } },
+  { t: 180, fn: () => line('E_NIKO_01') },
+  { t: 185.2, fn: () => line('E_NIKO_02') },
+  { t: 190.6, fn: () => { HUD.fade(1, 0.01, '#000'); HUD.say(null); C.lineEnd = 0; if (C.heliSnd) { C.heliSnd.stop(); C.heliSnd = null; } if (A.windLoop) A.windLoop.setVol(0); } },
+  { t: 193, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
+  { t: 198, fn: () => finish() },
 ];
 
 function setDubai() {
@@ -198,15 +214,14 @@ function setDubai() {
   C.humans = [pr, yu];
   if (A.windLoop) A.windLoop.setVol(0.05);
 }
-function setRoad() {
+function setNight() {
   for (const o of C.objs) G.scene.remove(o); C.objs.length = 0; clearHumans(); C.car = null; C.humans = null;
-  if (S.root) S.root.visible = true;
-  setLook({ fog: 0x0b1018, top: 0x05080d, bot: 0x0b1018, density: 0.022, sunDir: new THREE.Vector3(-0.3, 0.6, 0.4), sun: [0x8fa6d6, 0.25], hemi: [0x5a6a86, 0x101418, 0.35], exp: 1.0, env: 0.25, snow: true });
-  const van = buildRoadScene(); C.van = van;
-  van.position.set(-4, ground5(-4, 230), 230);
-  const mk = (head, x, z) => { const h = new Human('us', { head }); h.pos.set(x, ground5(x, z), z); h.yaw = Math.PI; return h; };
-  C.walkers = [mk('head_sand', -5.2, 150), mk('head_grinch', -3.6, 151.2), mk('head_soko', -4.5, 152.5)];
-  if (A.windLoop) A.windLoop.setVol(0.35);
+  if (!S.built) buildStation();
+  S.root.visible = true;
+  setLook({ fog: 0x070a0f, top: 0x020305, bot: 0x070a0f, density: 0.03, sunDir: new THREE.Vector3(-0.3, 0.6, 0.4), sun: [0x7d8fb8, 0.08], hemi: [0x3a4658, 0x07090c, 0.22], exp: 1.0, env: 0.12, snow: true });
+  W.sky.visible = false; C.heli = buildHeli();
+  C.heliSnd = loop('heli', { pos: C.heli.g.position, vol: 0.9, ref: 30, rev: 0.3 });
+  if (A.windLoop) A.windLoop.setVol(0.45);
 }
 function finish() {
   G.state = 'end';
@@ -218,7 +233,7 @@ function finish() {
 
 export function playEpilogue() {
   saveLook();
-  C.t = 0; C.on = true; C.shot = 0; C.lineEnd = 0; C.rollT0 = null; C.car = null; C.humans = null; C.van = null; C.walkers = null;
+  C.t = 0; C.on = true; C.shot = 0; C.lineEnd = 0; C.rollT0 = null; C.car = null; C.humans = null; C.heli = null; C.heliSnd = null;
   G.state = 'cine';
   HUD.show(false); HUD.root.classList.add('letterbox');
   HUD.objective(null); HUD.setPrompt(null); HUD.setUpload(null); HUD.say(null);
@@ -263,13 +278,29 @@ export function updateCine(rdt) {
     const u = smooth((t - 31) / 9);
     cam.position.set(lerp(30, 70, u), lerp(130, 215, u), lerp(-120, -290, u));
     cam.lookAt(_l.set(110, 250, -420));
-  } else if (t >= 176) { // night road: the van pulls up beside the walkers
-    const u = clamp((t - 176) / 9, 0, 1);
-    let gmax = -99; for (let z = 136; z <= 166; z += 1.5) gmax = Math.max(gmax, ground5(lerp(-0.8, -4.6, (z - 136) / 26), z));
-    cam.position.set(-0.8, gmax + 2.2, 136);
-    cam.lookAt(_l.set(-4.6, ground5(-4.6, 160) + 0.9, 162));
-    if (C.walkers) for (const h of C.walkers) { const sp = t < 186 ? 1.2 : 0; h.vel.set(0, 0, sp); h.pos.z += sp * rdt; h.pos.y = ground5(h.pos.x, h.pos.z); }
-    if (C.van) { const vz = lerp(230, 158, smooth(u)); C.van.position.set(-6.5, ground5(-6.5, vz), vz); C.van.rotation.y = 0; }
+  } else if (t >= 176 && C.heli) { // blizzard night: Nikolai's searchlight sweeps the roof and the dish
+    const H = C.heli, u = t - 176;
+    H.g.position.set(lerp(30, 18, smooth(u / 15)) + Math.sin(u * 0.7) * 0.6, 26 + Math.sin(u * 1.1) * 0.5, lerp(-34, -24, smooth(u / 15)));
+    H.g.rotation.set(0.08, 2.3 - u * 0.012, Math.sin(u * 0.9) * 0.03);
+    H.rotor.rotation.y += rdt * 24; H.tail.rotation.x += rdt * 60;
+    const on = (u % 1.1) < 0.12; H.beacon.visible = on; H.bl.intensity = on ? 40 : 0; H.tailW.visible = (u % 1.6) < 0.1;
+    if (C.heliSnd) C.heliSnd.setPos(H.g.position);
+    // sweep: across the roof from the stairs, over the dish, then it stops on a spot beside the dish
+    const k = smooth(clamp((u - 1) / 9, 0, 1));
+    _v.set(lerp(9, -2.2, k) + Math.sin(u * 1.7) * lerp(1.6, 0.2, k), 4.4, lerp(-4, 1.6, k) + Math.cos(u * 1.3) * lerp(2.2, 0.3, k));
+    if (u > 4.5 && u < 7.5) _v.lerp(_l.set(-3.5, 5.6, -0.5), Math.sin((u - 4.5) / 3 * Math.PI)); // lingers on the dish
+    H.g.updateMatrixWorld(true);
+    H.spot.target.position.copy(_v); H.spot.target.updateMatrixWorld();
+    H.spot.getWorldPosition(H.cone.position); H.cone.lookAt(_v); H.cone.scale.setScalar(H.cone.position.distanceTo(_v) * 1.05);
+    if (u < 8.5) { // wide from the snowfield south-west of the station
+      cam.position.set(lerp(-36, -32, u / 8.5), 11, lerp(40, 36, u / 8.5));
+      cam.lookAt(_l.set(lerp(4, 2, u / 8.5), 9, -6)); cam.fov = 46;
+    } else { // closer, slow push toward the roof and the dish under the beam
+      const w = (u - 8.5) / 6.5;
+      cam.position.set(lerp(-13, -11, w), lerp(9.5, 9, w), lerp(12, 10, w));
+      cam.lookAt(_l.set(-2.6, 5.0, 0.2)); cam.fov = 42;
+    }
+    cam.updateProjectionMatrix();
   }
   if (C.rollT0 !== null && HUD.credits.classList.contains('on')) {
     const roll = HUD.credits.querySelector('.roll');
