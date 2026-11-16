@@ -10,7 +10,7 @@ ONLY = sys.argv[1] if len(sys.argv) > 1 else ''
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME, args=["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--autoplay-policy=no-user-gesture-required"])
-        pg = await b.new_page(viewport={"width": 720, "height": 405})
+        pg = await b.new_page(viewport={"width": 640, "height": 360})
         logs = []; pg.on("pageerror", lambda e: logs.append("PAGEERR: " + str(e)[:500]))
         await pg.goto(DIST + "?q=medium&god=1")
         await pg.wait_for_function("window.__ready || window.__fatal", timeout=300000)
@@ -18,11 +18,12 @@ async def main():
         # stop the render loop between screenshots (software GL is slow); __sim still advances the game
         await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
           window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend=cb; return 0; } return raf(cb); }; })()""")
+        if ONLY == 'a': await ev("window.__rafHold=false; if(window.__pend){const c=window.__pend; window.__pend=null; window.__raf(c);}")
         async def shot(n):
             await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; if(window.__pend){const c=window.__pend; window.__pend=null; window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
             await pg.screenshot(path=f"shots/f_{n}.png", timeout=200000)
-            await ev("window.__rafHold=true")
+            if ONLY != 'a': await ev("window.__rafHold=true")
         async def st(tag):
             print(tag, await ev("JSON.stringify({ph:__fin.ph, t:+__fin.t.toFixed(2), st:__G.state, ck:__D.ck, ts:__G.timeScale, P:__P.pos.toArray().map(v=>+v.toFixed(2)), alive:__P.alive, sub:__D.cur&&__D.cur.id, err:window.__errors.slice(0,3)})"), flush=True)
         async def until(cond, step=0.1, maxt=40):
