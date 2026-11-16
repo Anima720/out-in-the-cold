@@ -21,6 +21,7 @@ import './part5.js';
 import { updatePickups, clearPickups } from './pickups.js';
 import { updateCine } from './cine.js';
 import './cave.js';
+import { updateCrowd } from './crowd.js';
 
 const params = Object.fromEntries(new URLSearchParams(location.search));
 G.params = params;
@@ -191,6 +192,7 @@ function tick(rdt, render) {
     updateAI(dt);
     updateVehicles(dt);
     updateNades(dt);
+    updateCrowd(dt);
     updateHumans(dt);
     updatePickups();
     updateFX(dt);
