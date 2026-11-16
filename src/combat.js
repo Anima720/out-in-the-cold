@@ -7,6 +7,7 @@ import { raycast, rayBoxes, los, supportAt } from './physics.js';
 import { play } from './audio.js';
 import { NADES } from './grenade.js';
 import { say, LINES, D } from './director.js';
+import { WDEF } from './weapon.js';
 
 // squad-level state; window.__ai for tests
 export const AI = {
@@ -128,7 +129,9 @@ export function rollLoadout(lvl = G.lvl) {
 export function setLoadout(e, key) {
   const h = e.h, w = WPN[key] || WPN.ak;
   e.wk = key; e.w = w;
-  h.gunKind = w.gk; h.dropWeapon = key; h.dropAtt = G.rollAtt?.(key) ?? null;
+  // drop = this gun, if the player's arsenal knows it (W adds every key; until then fall back to the AK)
+  const drop = WDEF[key] ? key : key === 'ak12' || key === 'smg' ? 'ak' : key;
+  h.gunKind = w.gk; h.dropWeapon = drop; h.dropAtt = G.rollAtt?.(drop) ?? null;
   if (w.heavy) h.hp = Math.max(h.hp, 130);
   AI.stats.loadouts[key] = (AI.stats.loadouts[key] || 0) + 1;
 }
@@ -201,7 +204,7 @@ export function tryDown(e, dir, part, o) {
   if (!e.canDown || e.downed || e.jugg || e.rpg || e.kind === 'gunner' || h.sit || h.grips || G.state !== 'play') return false;
   if (!o || !(o.bullet || o.point) || o.melee || part === 'head' || h.hp < -70) return false;
   let n = 0; for (const x of G.enemies) if (x.downed && x.h.alive) n++;
-  if (n >= 2 || Math.random() > DOWN_P) return false;
+  if (n >= 2 || Math.random() > (AI.forceDown ?? DOWN_P)) return false;
   // room to lie down: the body runs along the shot line (head away from the shooter); try a few angles
   const y0 = dir ? yawOf(_d.set(-dir.x, 0, -dir.z)) : h.yaw;
   const cands = G.lvl === 2 ? [Math.cos(y0) > 0 ? 0 : Math.PI] : [y0, y0 + 0.6, y0 - 0.6, y0 + 1.5, y0 - 1.5];

@@ -380,3 +380,4 @@ export function mateCustom(m) {
 export function goMate(m, pts, next, speed) { m.path = pts.map(([x, z]) => ({ x, z })); m.next = next; m.p5 = 'walk'; m.walkSpeed = speed; m.chk = 1; m.lastD = 1e9; m.home = null; }
 
 export function placeMate(m, x, z, y) { m.h.pos.set(x, y ?? (G.groundFn || ground5)(x, z), z); m.h.vel.set(0, 0, 0); m.home = null; }
+if (typeof window !== 'undefined') window.__Raider = Raider; // test hook (tools/test_ai.py)

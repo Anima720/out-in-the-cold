@@ -244,6 +244,11 @@ export class Mate {
   }
   // best visible target: exposed shooters first, then the nearest; downed men last (finish them when nothing else is up)
   pickTarget(fromEye) {
+    if (!fromEye) { // cached for a few frames (line-of-sight tests are the expensive part)
+      this.ptT = (this.ptT || 0) - (G.dt || 0.016);
+      if (this.ptT > 0 && (!this.tgtE || this.tgtE.h.alive)) return this.ptC;
+      this.ptT = 0.2;
+    }
     const eye = fromEye || this.h.j[J.Hc];
     let best = null, bd = 60, be = null;
     for (const e of G.enemies) {
@@ -265,7 +270,7 @@ export class Mate {
       else if (be.w && be.w.gk === 'dmr' && be.state === 'aim' && !AI.seen.dmr) { AI.seen.dmr = 1; callout(this, 'MC_SNIPER'); }
       else if (be.w && be.w.gk === 'shotgun' && be.state === 'rush' && !AI.seen.sg) { AI.seen.sg = 1; callout(this, 'MC_SHOTGUN'); }
     }
-    this.tgtE = be;
+    if (!fromEye) { this.tgtE = be; this.ptC = best; }
     return best;
   }
   fireAt(tgt, dt) {
