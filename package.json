@@ -1,0 +1,16 @@
+{
+  "name": "out-in-the-cold",
+  "version": "1.0.0",
+  "description": "弃于寒冬 · Call of Duty MW3 fan campaign in the browser (three.js)",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:vo": "WITH_VO=1 node build.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  },
+  "private": true
+}

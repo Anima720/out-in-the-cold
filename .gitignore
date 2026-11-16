@@ -1,0 +1,7 @@
+node_modules/
+dist/
+shots/
+tiema-demo.html
+__pycache__/
+*.pyc
+.DS_Store
