@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>铁马 · 使命召唤8 同人关卡小样</title>
+<title>弃于寒冬 · 使命召唤：现代战争 3 非官方同人战役</title>
 <style>
 :root { --ink:#0b0d0f; --bone:#ebe7dc; --dim:rgba(235,231,220,.66); --faint:rgba(235,231,220,.22); --signal:#ffb347; --alarm:#ff5a40; --line:rgba(235,231,220,.2);
   --f: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','Source Han Sans SC',system-ui,sans-serif; --sh: 0 0 2px rgba(0,0,0,.8),0 1px 6px rgba(0,0,0,.6); }
@@ -153,8 +153,13 @@ html,body { margin:0; height:100%; background:var(--ink); overflow:hidden; color
 .am-g .clay { margin-left:12px; color:var(--signal); }
 .toast { right:30px; bottom:150px; font-size:14px; letter-spacing:.14em; color:var(--signal); text-shadow:var(--sh); opacity:0; transform:translateY(6px); transition:opacity .25s, transform .25s; }
 .toast.on { opacity:1; transform:none; }
-.sub { background:none; text-shadow:0 1px 3px #000, 0 0 12px rgba(0,0,0,.8); font-size:21px; }
-.sub::before { content:''; position:absolute; inset:-6px -40px; z-index:-1; background:radial-gradient(ellipse at center, rgba(0,0,0,.45), rgba(0,0,0,0) 70%); }
+.sub { --c:#ebe7dc; text-align:left; padding:10px 18px 11px 16px; background:linear-gradient(90deg, rgba(10,13,16,.82), rgba(10,13,16,.66)); border:1px solid rgba(235,231,220,.14); border-left:3px solid var(--c); border-radius:3px; box-shadow:0 6px 24px rgba(0,0,0,.35); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); text-shadow:0 1px 2px rgba(0,0,0,.7); font-size:21px; transform:translateX(-50%) translateY(6px); transition:opacity .22s, transform .22s; }
+.sub.on { transform:translateX(-50%); }
+.sub .sp { display:flex; align-items:center; gap:8px; margin-bottom:3px; font-size:.68em; font-weight:700; letter-spacing:.18em; color:var(--c); }
+.sub .sp em { font-style:normal; font-weight:500; letter-spacing:.12em; padding:1px 6px 1px 18px; border:1px solid rgba(235,231,220,.25); border-radius:2px; color:var(--dim); position:relative; }
+.sub .sp em::before { content:''; position:absolute; left:6px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--c); box-shadow:0 0 6px var(--c); animation:radio 1.1s infinite; }
+@keyframes radio { 50% { opacity:.25; } }
+.sub .tx { display:block; line-height:1.55; color:#f3efe6; }
 .menu.title { align-items:stretch; }
 .m-title { display:flex; flex-direction:column; justify-content:center; max-width:760px; }
 .chapters { display:grid; grid-template-columns:repeat(2, minmax(200px, 1fr)); gap:10px; margin:6px 0 14px; }
@@ -207,7 +212,7 @@ html,body { margin:0; height:100%; background:var(--ink); overflow:hidden; color
 <body>
 <canvas id="view" tabindex="0"></canvas>
 <div id="ui"></div>
-<div id="boot"><b>铁马</b><span id="boot-msg">正在生成西伯利亚……</span></div>
+<div id="boot"><b>弃于寒冬</b><span id="boot-msg">正在生成西伯利亚……</span></div>
 <script>/*VO*/</script>
 <script>/*SCRIPT*/</script>
 </body>

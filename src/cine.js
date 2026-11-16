@@ -77,7 +77,18 @@ function buildDubai() {
   b.build({ city }, g);
   const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x9fd8ff, emissiveIntensity: 3.2 });
   const crown = new THREE.Mesh(new THREE.TorusGeometry(15, 0.8, 8, 40), glow); crown.rotation.x = Math.PI / 2; crown.position.set(hx - 17, 272, hz); g.add(crown);
-  const pad = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 1.2, 32), new THREE.MeshStandardMaterial({ color: 0x8c949a, roughness: 0.5, metalness: 0.4 })); pad.position.set(hx + 14, 262, hz + 8); g.add(pad);
+  // helipad cantilevered off the top floor's east face: deck + pad + two diagonal struts back into the facade, edge lights
+  const topX = hx - 21 * 0.8 + 46 * (1 - Math.pow(21 / 22, 2) * 0.45) / 2, padX = topX + 9.5, padY = 265;
+  const pb = new Builder();
+  pb.cyl(padX, padY, hz, 11, 11, 1.0, 'steel', 0x8c949a, 0, 0, 0, 40);
+  pb.boxC(topX + 1.2, padY - 0.1, hz, 4.8, 0.8, 9, 'steel', 0x7a8086);
+  for (const sz of [-4, 4]) { const a = Math.atan2(padX - topX - 2, 16); pb.cyl((topX + padX + 2) / 2, padY - 8.5, hz + sz, 0.35, 0.35, Math.hypot(padX - topX - 2, 16), 'steel', 0x5e646a, 0, 0, -a, 8); }
+  pb.build(M, g);
+  const padLit = new THREE.MeshStandardMaterial({ color: 0, emissive: 0x9fffc0, emissiveIntensity: 4 });
+  const lb2 = new Builder();
+  for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; lb2.boxC(padX + Math.cos(a) * 10.6, padY + 0.55, hz + Math.sin(a) * 10.6, 0.35, 0.12, 0.35, 'lit', 0); }
+  for (const [x0, z0, x1, z1] of [[-2.2, -3, -2.2, 3], [2.2, -3, 2.2, 3], [-2.2, 0, 2.2, 0]]) lb2.boxC(padX + (x0 + x1) / 2, padY + 0.52, hz + (z0 + z1) / 2, Math.abs(x1 - x0) + 0.6, 0.05, Math.abs(z1 - z0) + 0.6, 'mark', 0);
+  lb2.build({ lit: padLit, mark: new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.6 }) }, g);
   const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.2, 50, 8), glow); spire.position.set(hx - 17, 300, hz); g.add(spire);
   // rooftop where Price and Yuri watch
   const roof = new THREE.Mesh(new THREE.BoxGeometry(40, 80, 30), city); roof.position.set(-40, 40, -170); g.add(roof);
@@ -95,6 +106,32 @@ function buildDubai() {
     lb.boxC(60 + sx * 9.8, 9.9, z, 0.9, 0.08, 0.35, 'lamp', 0);
   }
   lb.build({ ...M, lamp: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffc27a, emissiveIntensity: 6 }) }, g);
+  // date palms on both verges and in the median planters
+  const pp = new Builder(), pr = mulberry32(7);
+  for (let z = 322; z > -390; z -= 16) for (const x of [60 - 16.5, 60 + 16.5, 60]) {
+    if (x === 60 && (Math.round(z / 16) & 1)) continue;
+    const zz = z + (pr() - 0.5) * 4, h = 7 + pr() * 4, lean = (pr() - 0.5) * 0.12;
+    pp.cyl(x, h / 2, zz, 0.2, 0.32, h, 'trunk', 0x6a5640, lean, 0, lean, 7);
+    if (x === 60) pp.boxC(x, 0.5, zz, 2.4, 0.5, 2.4, 'concrete', 0xb9ad98);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + pr(), L = 3 + pr() * 0.8; pp.boxC(x + Math.cos(a) * L * 0.45 + lean * h, h - 0.25, zz + Math.sin(a) * L * 0.45, L, 0.05, 0.55, 'frond', 0x3f5a2a, 0, -a, -0.38); }
+  }
+  pp.build({ ...M, trunk: new THREE.MeshStandardMaterial({ color: 0x6a5640, roughness: 0.95 }), frond: new THREE.MeshStandardMaterial({ color: 0x3b5228, roughness: 0.8, side: THREE.DoubleSide }) }, g);
+  // the hotel's lit vertical fins and podium
+  const fin = new Builder();
+  for (let k = 0; k < 22; k++) { const y = k * 12, sc = 1 - Math.pow(k / 22, 2) * 0.45, cx = hx - k * 0.8; for (let i = -3; i <= 3; i++) fin.boxC(cx + i * 46 * sc / 7, y + 6, hz + 15 * sc + 0.3, 0.35, 11.6, 0.5, 'fin', 0); }
+  fin.boxC(hx, 4, hz + 26, 70, 8, 22, 'concrete', 0xc8b89a);
+  fin.build({ ...M, fin: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffe2b0, emissiveIntensity: 2.2 }) }, g);
+  // traffic: a few cars on both carriageways (moved in updateCine)
+  C.traffic = [];
+  const tc = mulberry32(3);
+  for (let i = 0; i < 12; i++) {
+    const cb = new Builder(), cg = new THREE.Group(), out = i % 3 === 0; // every third car drives toward the camera
+    cb.boxC(0, 0.6, 0, 1.8, 0.6, 4.4, 'body', 0xffffff, 0, 0, 0, 0.1); cb.boxC(0, 1.1, 0.3, 1.6, 0.5, 2.2, 'body', 0xffffff, 0, 0, 0, 0.12);
+    for (const sx of [-1, 1]) { cb.boxC(sx * 0.6, 0.65, -2.21, 0.36, 0.12, 0.04, 'head', 0); cb.boxC(sx * 0.65, 0.68, 2.21, 0.3, 0.12, 0.04, 'tail', 0); }
+    cb.build({ body: new THREE.MeshStandardMaterial({ color: [0xd8d8d8, 0x1a1c20, 0x7a1d1d, 0xc9b28a][i % 4], roughness: 0.3, metalness: 0.7 }), head: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff2d8, emissiveIntensity: 6 }), tail: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2a1a, emissiveIntensity: 4 }) }, cg);
+    if (out) cg.rotation.y = Math.PI;
+    g.add(cg); C.traffic.push({ g: cg, x: out ? 60 + [3.5, 7.5][i % 2] : 60 - [3.5, 7.5][i % 2], z0: 330 - tc() * 720, v: out ? 26 + tc() * 6 : -(18 + tc() * 8) });
+  }
   G.scene.add(g); C.objs.push(g);
   return g;
 }
@@ -109,7 +146,8 @@ function buildSUV() {
   for (const [x, z] of [[-0.95, -1.55], [0.95, -1.55], [-0.95, 1.55], [0.95, 1.55]]) b.cyl(x, 0.42, z, 0.42, 0.42, 0.32, 'dark', 0x151515, 0, 0, Math.PI / 2, 16);
   for (const sx of [-1, 1]) { b.boxC(sx * 0.7, 0.95, -2.41, 0.42, 0.14, 0.04, 'head', 0); b.boxC(sx * 0.75, 0.95, 2.41, 0.32, 0.14, 0.04, 'tail', 0); }
   b.boxC(0, 0.95, -0.75, 1.7, 0.35, 0.5, 'dark', 0x202224);                                 // dashboard
-  b.cyl(-0.45, 1.22, -0.5, 0.17, 0.17, 0.03, 'dark', 0x111111, 1.1, 0, 0, 16);        // steering wheel
+  b.cyl(-0.45, 1.2, -0.12, 0.17, 0.17, 0.035, 'dark', 0x111111, 1.1, 0, 0, 18);       // steering wheel (driver reach)
+  b.cyl(-0.45, 1.1, -0.33, 0.035, 0.045, 0.46, 'dark', 0x1a1a1a, 1.1, 0, 0, 8);       // steering column into the dash
   for (const sx of [-1, 1]) b.boxC(sx * 0.45, 0.6, 0.35, 0.55, 0.15, 0.6, 'dark', 0x2a2420);
   b.build({ ...M, car: new THREE.MeshStandardMaterial({ color: 0x14171a, roughness: 0.22, metalness: 0.85, envMapIntensity: 1.5 }), head: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff2d8, emissiveIntensity: 7 }), tail: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2a1a, emissiveIntensity: 5 }) }, g);
   const glass = new THREE.MeshStandardMaterial({ color: 0x182028, roughness: 0.05, metalness: 0.7, transparent: true, opacity: 0.32, depthWrite: false });
@@ -157,24 +195,22 @@ const CREDITS = `
 <p style="letter-spacing:.5em">OUT IN THE COLD</p>
 <p><em>一部《使命召唤：现代战争 3》非官方同人战役</em></p>
 <h3>主演</h3>
-<p>Sandman <em>Metal 0-1 · 你</em></p><p>Truck <em>Metal 0-2</em></p><p>Grinch <em>Metal 0-3</em></p>
-<p>John Price 上尉</p><p>尤里</p><p>克拉辛 上校</p><p>尼古拉</p>
-<h3>剧本 · 关卡构思</h3><p>玩家本人</p>
+<p>沙人 <em>Metal 0-1</em></p><p>卡车 <em>Metal 0-2</em></p><p>格林奇 <em>Metal 0-3</em></p>
+<p>约翰·普莱斯 上尉</p><p>尤里</p><p>俄军高级将领</p><p>尼科莱</p>
+<h3>出品 · 剧本 · 关卡构思</h3><p>Anima720</p>
 <h3>程序 · 模型 · 特效 · 音效</h3><p>Claude <em>Anthropic</em></p>
-<h3>配音</h3><p>AI 合成原创声音 <em>ElevenLabs</em></p>
 <h3>战役配乐</h3><p>《Beneath the White Sky》 <em>Gemini 生成</em></p>
 <h3>片尾曲</h3><p>Hans Zimmer &amp; Lorne Balfe — Opening Credits <em>《使命召唤：现代战争 2》原声</em></p>
 <h3>技术参考</h3><p>three.js</p><p>wquguru / fable52-fps-repro <em>MIT</em></p>
 <h3>特别感谢</h3><p>Infinity Ward · Sledgehammer Games · Raven Software</p><p>以及所有在 2011 年冬天打通「Down the Rabbit Hole」的玩家</p>
-<h3>纪念</h3><p>Truck</p>
 <p class="fin">本作为粉丝自制、非商业、非官方作品。<br>《使命召唤》及相关角色版权归 Activision 所有。</p>
 <p class="fin" style="font-size:18px;color:var(--bone)">Metal 0-1，完毕。</p>`;
 
 // ---------- line helper (subtitles + optional VO) ----------
 const LN = {
   E_PRICE_01: ['PRICE', "This one's for Metal.", '这一枪，替 Metal 打。'],
-  E_NIKO_01: ['NIKOLAI', 'Price, I am over the station. Three bodies…', 'Price，我到雷达站上空了。三具遗体……', true],
-  E_NIKO_02: ['NIKOLAI', '…No. Wait. One heat signature. Faint.', '……不，等等。有一个热源。很微弱。', true],
+  E_NIKO_01: ['NIKOLAI', 'Price, I am over the station. Three bodies…', '普莱斯，我到雷达站上空了。三具遗体……', true],
+  E_NIKO_02: ['NIKOLAI', '…No. Wait. I have a signal. Faint.', '……不，等等。发现微弱信号。', true],
 };
 function line(id) {
   const L = LN[id]; const vo = playVO(id, !!L[3]);
@@ -183,22 +219,27 @@ function line(id) {
 }
 
 // ---------- timeline ----------
+const NIGHT = 41, BLACK = NIGHT + 12.2, ROLL = BLACK + 6.5, ROLL_LEN = 150;
 const SHOTS = [
   { t: 0, fn: () => { HUD.bigCard('三个月后', '', 3.6); } },
-  { t: 4.0, fn: () => { setDubai(); HUD.fade(0, 2.5); } },
+  { t: 4.0, fn: () => { setDubai(); HUD.fade(0, 2.5); musicMode('end'); } },
   { t: 6.5, fn: () => HUD.bigCard('迪拜', '阿拉伯联合酋长国', 5) },
   { t: 15, fn: () => HUD.hideBig() },
   { t: 26.5, fn: () => line('E_PRICE_01') },
   { t: 31.5, fn: () => HUD.bigCard('绿洲酒店', '马卡洛夫最后的落脚点', 5) },
   { t: 38.5, fn: () => HUD.fade(1, 1.4) },
-  { t: 40.5, fn: () => { HUD.bigCard('弃于寒冬', 'OUT IN THE COLD', 4.5); } },
-  { t: 46, fn: () => { HUD.credits.classList.add('on'); C.rollT0 = C.t; } },
-  { t: 176, fn: () => { HUD.credits.classList.remove('on'); setNight(); HUD.fade(0, 2.5); musicMode('silence'); } },
-  { t: 180, fn: () => line('E_NIKO_01') },
-  { t: 185.2, fn: () => line('E_NIKO_02') },
-  { t: 190.6, fn: () => { HUD.fade(1, 0.01, '#000'); HUD.say(null); C.lineEnd = 0; if (C.heliSnd) { C.heliSnd.stop(); C.heliSnd = null; } if (A.windLoop) A.windLoop.setVol(0); } },
-  { t: 193, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
-  { t: 198, fn: () => finish() },
+  // the same night, far north: Nikolai's searchlight over the radar station
+  { t: NIGHT, fn: () => { HUD.hideBig(); setNight(); HUD.fade(0, 2.5); musicMode('silence'); } },
+  { t: NIGHT + 4, fn: () => line('E_NIKO_01') },
+  { t: NIGHT + 9.2, fn: () => line('E_NIKO_02') },
+  // hard cut to black the moment he says it; the credits theme comes in on the black
+  { t: BLACK, fn: () => { HUD.fade(1, 0.01, '#000'); HUD.say(null); C.lineEnd = 0; if (C.heliSnd) { C.heliSnd.stop(); C.heliSnd = null; } if (A.windLoop) A.windLoop.setVol(0); clearNight(); } },
+  { t: BLACK + 1.4, fn: () => { musicMode('credits'); } },
+  { t: BLACK + 2.2, fn: () => { HUD.bigCard('弃于寒冬', 'OUT IN THE COLD', 4.0); } },
+  { t: ROLL, fn: () => { HUD.hideBig(); HUD.credits.classList.add('on'); C.rollT0 = C.t; } },
+  { t: ROLL + ROLL_LEN + 1, fn: () => { HUD.credits.classList.remove('on'); } },
+  { t: ROLL + ROLL_LEN + 2.5, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
+  { t: ROLL + ROLL_LEN + 9, fn: () => finish() },
 ];
 
 function setDubai() {
@@ -215,13 +256,17 @@ function setDubai() {
   if (A.windLoop) A.windLoop.setVol(0.05);
 }
 function setNight() {
-  for (const o of C.objs) G.scene.remove(o); C.objs.length = 0; clearHumans(); C.car = null; C.humans = null;
+  for (const o of C.objs) G.scene.remove(o); C.objs.length = 0; clearHumans(); C.car = null; C.humans = null; C.traffic = null;
   if (!S.built) buildStation();
   S.root.visible = true;
   setLook({ fog: 0x070a0f, top: 0x020305, bot: 0x070a0f, density: 0.03, sunDir: new THREE.Vector3(-0.3, 0.6, 0.4), sun: [0x7d8fb8, 0.08], hemi: [0x3a4658, 0x07090c, 0.22], exp: 1.0, env: 0.12, snow: true });
   W.sky.visible = false; C.heli = buildHeli();
   C.heliSnd = loop('heli', { pos: C.heli.g.position, vol: 0.9, ref: 30, rev: 0.3 });
   if (A.windLoop) A.windLoop.setVol(0.45);
+}
+function clearNight() {
+  for (const o of C.objs) G.scene.remove(o); C.objs.length = 0; C.heli = null; W.sky.visible = true;
+  if (S.root) S.root.visible = false;
 }
 function finish() {
   G.state = 'end';
@@ -247,7 +292,10 @@ G.playEpilogue = playEpilogue;
 export function updateCine(rdt) {
   if (!C.on) return;
   C.t += rdt;
-  if (hit('Space') && C.t > 2 && C.t < 170) { C.t = 175.5; C.shot = SHOTS.findIndex((s) => s.t >= 176); HUD.credits.classList.remove('on'); }
+  if (hit('Space') && C.t > 2) { // skip: Dubai -> the night scene; credits -> the end card
+    const to = C.t < NIGHT - 1 ? NIGHT - 0.5 : C.t > ROLL + 2 && C.t < ROLL + ROLL_LEN ? ROLL + ROLL_LEN + 0.5 : -1;
+    if (to > 0) { C.t = to; C.shot = SHOTS.findIndex((s) => s.t >= to); if (to < NIGHT) { HUD.fade(1, 0.01, '#000'); HUD.hideBig(); HUD.say(null); } }
+  }
   while (C.shot < SHOTS.length && C.t >= SHOTS[C.shot].t) SHOTS[C.shot++].fn();
   if (C.lineEnd && C.t > C.lineEnd) { HUD.say(null); C.lineEnd = 0; }
   const cam = G.camera, t = C.t;
@@ -258,7 +306,7 @@ export function updateCine(rdt) {
     const [pr, yu] = C.humans;
     pr.sit.seat.set(56.05, 1.18, carZ + 0.45); pr.pos.set(56.05, 0.45, carZ + 0.45); pr.yaw = 0;
     yu.sit.seat.set(56.95, 1.18, carZ + 0.45); yu.pos.set(56.95, 0.45, carZ + 0.45); yu.yaw = 0.1;
-    pr.grips.R.set(56.2, 1.58, carZ - 0.12); pr.grips.L.set(55.9, 1.58, carZ - 0.12);
+    pr.grips.R.set(56.2, 1.61, carZ - 0.155); pr.grips.L.set(55.9, 1.61, carZ - 0.155);
     yu.aim.set(0.3, 0, -1);
   }
   if (window.__lockCam) { if (C.humans) for (const h of C.humans) h.vel.set(0, 0, 0); return; }
@@ -278,8 +326,8 @@ export function updateCine(rdt) {
     const u = smooth((t - 31) / 9);
     cam.position.set(lerp(30, 70, u), lerp(130, 215, u), lerp(-120, -290, u));
     cam.lookAt(_l.set(110, 250, -420));
-  } else if (t >= 176 && C.heli) { // blizzard night: Nikolai's searchlight sweeps the roof and the dish
-    const H = C.heli, u = t - 176;
+  } else if (t >= NIGHT && C.heli) { // blizzard night: Nikolai's searchlight sweeps the roof and the dish
+    const H = C.heli, u = t - NIGHT;
     H.g.position.set(lerp(30, 18, smooth(u / 15)) + Math.sin(u * 0.7) * 0.6, 26 + Math.sin(u * 1.1) * 0.5, lerp(-34, -24, smooth(u / 15)));
     H.g.rotation.set(0.08, 2.3 - u * 0.012, Math.sin(u * 0.9) * 0.03);
     H.rotor.rotation.y += rdt * 24; H.tail.rotation.x += rdt * 60;
@@ -305,8 +353,9 @@ export function updateCine(rdt) {
   if (C.rollT0 !== null && HUD.credits.classList.contains('on')) {
     const roll = HUD.credits.querySelector('.roll');
     const total = roll.offsetHeight + innerHeight;
-    const k = clamp((C.t - C.rollT0) / 128, 0, 1);
+    const k = clamp((C.t - C.rollT0) / ROLL_LEN, 0, 1);
     roll.style.transform = `translateY(${-k * total}px)`;
   }
   if (C.humans) for (const h of C.humans) h.vel.set(0, 0, 0);
+  if (C.traffic && C.car) for (const c of C.traffic) { let z = c.z0 + c.v * t; z = ((z - 330) % 730 + 730) % 730 - 400; if (Math.abs(c.x - 56.5) < 0.5 && Math.abs(z - carZ) < 12) z -= 24; /* never through the SUV */ c.g.position.set(c.x, 0.35, z); }
 }
