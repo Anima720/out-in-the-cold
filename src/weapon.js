@@ -4,7 +4,7 @@ import { Builder, TEX, mat4, rbox } from './geom.js';
 import { M, TX, stdMat } from './mats.js';
 import { raycast } from './physics.js';
 import { play, gunShot } from './audio.js';
-import { fireGL } from './grenade.js';
+import { fireGL, GL } from './grenade.js';
 import { buildAttachments, fitAttachments } from './attach.js';
 import { T } from './train.js';
 
@@ -465,7 +465,7 @@ export function resetWeapons() {
 export function curDef() { return WP.ubOn && WP.ub && WP.cur === WP.prim ? WP.ub.def : DEF[WP.cur]; }
 export function attOf(id) { return WP.att[id] || ATT0[id] || NOATT; }
 // ADS field of view of the current weapon (optic magnification)
-export function adsFov() { const m = WP.m; return (m && m.adsFov && WP.cur === WP.prim) || DEF[WP.cur].adsFov || 54; }
+export function adsFov() { const m = WP.m; return m && m.adsFov && WP.cur === WP.prim ? m.adsFov : DEF[WP.cur].adsFov || 54; }
 
 function equip(id, instant) {
   for (const [k, m] of Object.entries(WP.models)) m.g.visible = k === id;
@@ -768,3 +768,6 @@ export function renderViewmodel(renderer) {
   renderer.clearDepth();
   renderer.render(WP.scene, WP.cam);
 }
+
+// test hooks (headless checks in tools/test_weapons.py)
+if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, GL, DEF, UBDEF };
