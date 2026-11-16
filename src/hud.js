@@ -64,8 +64,10 @@ HUD.say = (who, text, radio) => {
 HUD.setPrompt = (html) => {
   if (HUD._p === html) return; HUD._p = html;
   if (!html) { HUD.prompt.classList.remove('on'); return; }
-  HUD.prompt.innerHTML = html; HUD.prompt.classList.add('on');
+  HUD.prompt.innerHTML = html; HUD.prompt.classList.add('on'); HUD._pT = G.t;
 };
+// true while an interaction prompt is (or was within the last few frames) on screen: F means "interact", not melee
+HUD.promptActive = () => !!HUD._p || (HUD._pT !== undefined && G.t - HUD._pT < 0.15) || !!G.otherPrompt;
 HUD.hitmarker = (kill) => { HUD.hitT = kill ? 0.32 : 0.16; HUD.hitm.classList.toggle('kill', !!kill); };
 HUD.damage = (ang, amt) => {
   const el = $('div', 'dmgarc', HUD.dmg);

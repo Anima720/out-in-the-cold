@@ -1,4 +1,6 @@
-# 断点文件：v6 改版交接说明
+# 断点文件：v6 改版 + v7 玩家反馈交接说明
+
+> **v7（2026-11-17 起）**：用户又给了 30 条反馈，清单、分包和接口约定见 `docs/v7/BACKLOG.md`，进度见本文件第八节。v6 的说明（第一到七节）仍然有效。
 
 这份文件给接手的 AI（或人）看。分支 `v6-sandman` 是 v6 的集成分支；`main` 仍是已发布的 v5。
 先读本文件，再读 `docs/v6/COMMON.md`（工程约定、测试方法、文件归属、接口约定）、`docs/v6/STORY.md`（新剧本）、`docs/v6/BRIEFS.md`（四个工作包的详细要求）。
@@ -77,3 +79,10 @@
 - `assets/music/END_CREDITS.mp3` 是商业版权音乐（Hans Zimmer & Lorne Balfe），仓库目前是公开的，是否保留由用户决定（用户选择了保持现状）。
 - `docs/v6/COMMON.md` 里的 `/home/claude/work/...` 路径是原沙盒里的路径，换环境后忽略即可。
 - 无头测试用软件渲染，很慢；视口开小、画质用 `q=low`。
+
+## 八、v7 进度（2026-11-17 凌晨开始，第三个会话）
+
+- 先做的准备：Raider 敌人 AI、队友脚本（mateCustom/goMate/placeMate）和雷达站寻路从 `part5.js` 拆到了新文件 `src/raider.js`，行为不变（检查点 10/11/20/4/5 冒烟测试通过）。`HUD.promptActive()` 已加（F 键在交互和近战之间仲裁用）。
+- 分包：P4（最后阵地，接着 v6-c 做）、T（第一到三部分）、W（武器与玩家）、AI（敌我 AI）各一个子 Agent，主控做界面和尾声。文件归属见 BACKLOG。
+- 各包的滚动快照每 10 分钟推到 `wip-c`（P4）、`wip-t`、`wip-w`、`wip-ai`；和 `v6-sandman` 做 diff 就是该包的改动（快照的父提交就是该包开工时的 `v6-sandman`）。
+- 合并顺序：P4 → T → W → AI → 主控的名字替换（第 17 条，最后统一做）。
