@@ -8,7 +8,7 @@ import { WP, startReload } from './weapon.js';
 import { play, musicMode, muffle, A } from './audio.js';
 import { HUD } from './hud.js';
 import { D, LINES, say } from './director.js';
-import { S, setDoor, kickDoor, setUplink, ground5 } from './station.js';
+import { S, setDoor, blowDoor, setUplink, ground5 } from './station.js';
 import { key } from './input.js';
 import { los } from './physics.js';
 import { Builder } from './geom.js';
@@ -18,6 +18,7 @@ Object.assign(LINES, {
   P5_GRIN_13: ['GRINCH', 'Sandman! SANDMAN! Stay with me!', 'Sandman！SANDMAN！撑住！'],
   P5_GRIN_14: ['GRINCH', "I got you. I got you, boss. Don't you quit on me.", '我拖着你呢。我拖着你，头儿。别给我放弃。'],
   P5_GRIN_15: ['GRINCH', 'Ninety-nine percent. It needs a manual send. Boss… they\'re at the door.', '百分之九十九。得手动确认发送。头儿……他们到门口了。'],
+  P5_GRIN_16: ['GRINCH', 'Not a chance, you son of a bitch!', '你休想！'],
   P5_KRAS_02: ['克拉辛', 'Где данные?', '数据在哪？'],
 });
 const MONO = ['Price……剩下的，交给你了。', 'Metal 0-1……完毕。'];
@@ -322,18 +323,25 @@ function updateRoom(dt, rdt, P5) {
     if (t > 9.3 && !D.cur) { F.ph = 'breach'; F.t = 0; }
   } else if (F.ph === 'breach') {
     ov('k', 0); look(1.4, 0.6); heart(rdt, 0.85, 0.85);
-    if (!F.kicked) {
-      F.kicked = true; kickDoor();
-      play('doorkick', { pos: DOOR, vol: 1.4, ref: 4, rev: 0.4 }); P.addShake(0.25);
+    if (!F.kicked) { // breaching charge: flash, bang, smoke and debris into the room, one leaf torn off, brief deafness
+      F.kicked = true; blowDoor();
+      G.fx.explosion(_a.set(0, 1.1, 4.95), 0.8, { snow: false, wind: 0 });
+      for (let i = 0; i < 26; i++) G.fx.alpha.spawn(rr(-0.9, 0.9), rr(0.3, 2.1), 4.6, rr(-2.5, 2.5), rr(-0.2, 1.2), rr(-7, -2.5), { life: rr(2.5, 4.5), size: rr(0.6, 1.3), grow: 3.2, c: [0.42, 0.41, 0.4], alpha: 0.55, drag: 1.6, fadeIn: 0.05 });
+      G.fx.debrisBurst(_a.set(0, 1.0, 4.5), 14, { speed: 7, size: 0.12 });
+      for (let i = 0; i < 16; i++) G.fx.add.spawn(rr(-0.6, 0.6), rr(0.4, 2), 4.7, rr(-5, 5), rr(-1, 4), rr(-14, -6), { life: rr(0.2, 0.5), size: 0.06, c: [1, 0.75, 0.35], grav: 12, drag: 0.6 });
+      play('explosion', { pos: DOOR, vol: 1.8, ref: 8, rev: 0.7, prio: true }); play('doorkick', { pos: DOOR, vol: 1.3, ref: 4, rev: 0.4 }); play('tinnitus', { vol: 0.35, rev: 0 });
+      P.addShake(0.8); muffle(650, 0.03); F.deaf = 1.4;
       for (const a of [A1, K, B1]) a.h.hidden = false;
-      A1.path = [V(0.1, 0, 4.2), V(1.2, 0, 2.5)]; A1.aimAt = () => g.j[J.Ne]; A1.h.aimTarget = 1;
-      K.path = [V(0, 0, 4.2), V(-1.3, 0, -1.25)]; K.wait = 0.7; K.aimAt = () => P.eye; K.h.aimTarget = 1;
-      B1.path = [V(0.1, 0, 4.2), V(-3.1, 0, 1.9)]; B1.wait = 1.3; B1.aimAt = () => g.j[J.Ne]; B1.h.aimTarget = 1;
+      A1.path = [V(0.1, 0, 4.2), V(1.2, 0, 2.5)]; A1.wait = 0.45; A1.aimAt = () => g.j[J.Ne]; A1.h.aimTarget = 1;
+      K.path = [V(0, 0, 4.2), V(-1.3, 0, -1.25)]; K.wait = 1.0; K.aimAt = () => P.eye; K.h.aimTarget = 1;
+      B1.path = [V(0.1, 0, 4.2), V(-3.1, 0, 1.9)]; B1.wait = 1.6; B1.aimAt = () => g.j[J.Ne]; B1.h.aimTarget = 1;
       P.autoLook = { target: DOOR, rate: 2.2 };
       g.aim.subVectors(DOOR, g.pos).normalize(); g.crouchT = 0.85;
       if (G.bark) G.bark('RU_06', DOOR, true);
     }
+    if (F.deaf !== undefined && (F.deaf -= rdt) <= 0) { F.deaf = undefined; muffle(1800, 0.6); } // hearing comes back to the wounded level
     if (g.alive) { g.yaw += clamp(angDiff(g.yaw, yawOf(g.aim)), -4 * dt, 4 * dt); }
+    if (t > 4.5 && !F.g16 && g.alive) { F.g16 = true; say('P5_GRIN_16', 0); } // Grinch, before he fires back
     if (t > 2.4 && t < 4.6) P.autoLook = { target: K.h.j[J.Hc], rate: 1.6 };
     if (t > 3.0 && !F.k2) { F.k2 = true; say('P5_KRAS_02', 0); }
     if (t > 4.9 && !F.draw) { F.draw = true; g.noWeapon = false; g.sidearm = 2; g.aimTarget = 1; P.autoLook = { target: g.j[J.Hc], rate: 2.4 }; }
@@ -442,7 +450,7 @@ function sent() {
 export function finaleCleanup() {
   if (F.rpg) { G.scene.remove(F.rpg.mesh); F.rpg = null; }
   if (F.actors) F.actors.length = 0;
-  F.on = false; F.ph = ''; F.kicked = F.k2 = F.draw = F.gs1 = F.gs2 = F.ks1 = F.ks2 = false; F.bt = F.br = F.clr = F.gdecal = undefined; F.fired = 0; F.red = 0; F.hudOff = false; F.hold = 0; F.reach = 0;
+  F.on = false; F.ph = ''; F.kicked = F.k2 = F.draw = F.gs1 = F.gs2 = F.ks1 = F.ks2 = F.g16 = false; F.deaf = undefined; F.bt = F.br = F.clr = F.gdecal = undefined; F.fired = 0; F.red = 0; F.hudOff = false; F.hold = 0; F.reach = 0;
   if (UI) { for (const k of ['k', 'w', 'r', 'v', 'm']) ov(k, 0); mono(''); }
   if (ARM) ARM.g.visible = false;
   if (G.renderer) look(0, 1);

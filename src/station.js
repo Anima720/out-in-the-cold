@@ -1,6 +1,6 @@
 // Part 5 "最后阵地": the abandoned Soviet early-warning radar station.
 // Static level (no train frame). North = -z. The station sits on a plateau at y=0; ridge to the north.
-import { G, THREE, clamp, mulberry32 } from './core.js';
+import { G, THREE, clamp, lerp, mulberry32 } from './core.js';
 import { Builder } from './geom.js';
 import { M } from './mats.js';
 import { addBox } from './physics.js';
@@ -335,7 +335,8 @@ export function buildStation() {
     lb.build(mats, piv);
     return piv;
   };
-  S.door = { l: leaf(-1), r: leaf(1), ang: 1.62, tgt: 1.62, vel: 0 };
+  S.door = { l: leaf(-1), r: leaf(1), ang: 1.62, tgt: 1.62, vel: 0, blown: null };
+  S.door.l0 = S.door.l.position.clone();
   // --- uplink operator panel on the front of the west console (screen + guarded transmit key), facing +x
   {
     const pg = new THREE.Group(); pg.position.set(-6.27, 0.15, -2.6); root.add(pg);
@@ -388,7 +389,17 @@ export function setUplink(state, pct = 0) {
   u.key.material.emissiveIntensity = state === 'off' ? 0.15 : state === 'wait' ? 1.4 : 0.6;
 }
 // door: ang 0 = closed, ~1.62 = open against nothing; kick() slams it open with a bounce
-export function setDoor(ang, instant = true) { const d = S.door; if (!d) return; d.tgt = ang; if (instant) { d.ang = ang; d.vel = 0; } }
+export function setDoor(ang, instant = true) {
+  const d = S.door; if (!d) return;
+  if (d.blown) { d.blown = null; d.l.position.copy(d.l0); d.l.rotation.set(0, ang, 0); d.r.rotation.set(0, -ang, 0); } // restore a blown-in leaf
+  d.tgt = ang; if (instant) { d.ang = ang; d.vel = 0; }
+}
+// breaching charge (finale): the left leaf is torn off its hinges and thrown flat onto the floor inside, the right one slams open
+export function blowDoor() {
+  const d = S.door; if (!d) return;
+  d.blown = { t: 0, p0: d.l.position.clone(), p1: new THREE.Vector3(-0.25, 0.19, 3.15), y1: 0.45, z0: d.l.rotation.y }; d.l.rotation.order = 'YXZ'; // flat first, then yaw
+  d.tgt = 1.85; d.vel = 34;
+}
 export function kickDoor() { const d = S.door; if (!d) return; d.tgt = 1.55; d.vel = 13; }
 
 export function setPower(on) {
@@ -405,7 +416,13 @@ export function updateStation(dt) {
   if (dr) {
     dr.vel += ((dr.tgt - dr.ang) * 60 - dr.vel * 7) * dt; dr.ang += dr.vel * dt;
     if (dr.ang > 1.85) { dr.ang = 1.85; dr.vel *= -0.35; }
-    dr.l.rotation.y = dr.ang; dr.r.rotation.y = -dr.ang;
+    if (dr.blown) { // flight of the torn-off leaf: short arc, tumbling, lands flat (pivot = hinge edge, so the leaf lies toward -z)
+      const b = dr.blown, u = Math.min(1, (b.t += dt) / 0.55), e = u * u;
+      dr.l.position.lerpVectors(b.p0, b.p1, u); dr.l.position.y += Math.sin(u * Math.PI) * 0.9;
+      dr.l.rotation.set(-Math.PI / 2 * e, lerp(b.z0, b.y1, u), Math.sin(u * Math.PI) * 0.9);
+      if (u >= 1 && !b.landed) { b.landed = true; G.fx?.debrisBurst?.(dr.l.position.clone().setZ(dr.l.position.z - 1), 6, { speed: 2, size: 0.08 }); }
+    } else dr.l.rotation.y = dr.ang;
+    dr.r.rotation.y = -dr.ang;
   }
   const d = S.dish;
   const ty = d.aimYaw + d.off, te = d.aimEl - d.off * 0.6;
