@@ -26,7 +26,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V(), _c = V();
 const F = { on: false, ph: '', t: 0 };
 export const FIN = F;
-const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.7, 0.15, -1.15);
+const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.7, 0.15, -0.6);
 const IN_ROOM = (x, z) => Math.abs(x) < 7.7 && Math.abs(z) < 4.7;
 const floorY = (x, z) => (IN_ROOM(x, z) ? 0.15 : ground5(x, z));
 
@@ -302,7 +302,7 @@ export function startWake(P5, g) {
 function killGrinch() {
   const h = F.gr.h;
   h.invuln = false; h.flinch = 1; h.handL = null;
-  h.slump = { base: V(-6.34, 0.15, -0.95), yaw: -Math.PI / 2, side: -1, t: 0, dur: 0.45 };
+  h.slump = { base: V(-6.34, 0.15, -0.5), yaw: -Math.PI / 2, side: -1, t: 0, dur: 0.45 };
   h.alive = false; h.rag = null;
   const c = h.j[J.Ne].clone();
   for (let i = 0; i < 10; i++) G.fx.alpha.spawn(c.x, c.y, c.z, rr(-2.5, -0.5), rr(0, 2), rr(-1, 1), { life: rr(0.4, 0.8), size: 0.1, grow: 3, c: [0.42, 0.04, 0.03], alpha: 0.85, grav: 6, drag: 2 });
@@ -313,7 +313,7 @@ function updateRoom(dt, rdt, P5) {
   const t = F.t, d = P.downed, K = F.kras, A1 = F.sa, B1 = F.sb, g = F.gr && F.gr.h;
   if (F.gdecal !== undefined && (F.gdecal -= rdt) <= 0) {
     F.gdecal = undefined;
-    blood('splat', V(-6.3, 0.6, -0.95), V(1, 0, 0), 0.7); blood('splat', V(-6.3, 0.35, -0.8), V(1, 0, 0), 0.5); blood('pool', V(-5.95, 0.15, -0.9), 0.6);
+    blood('splat', V(-6.3, 0.6, -0.5), V(1, 0, 0), 0.7); blood('splat', V(-6.3, 0.35, -0.38), V(1, 0, 0), 0.5); blood('pool', V(-5.95, 0.15, -0.45), 0.6);
   }
   if (F.ph === 'wake') {
     // eyes open slowly: two failed blinks, then the room
