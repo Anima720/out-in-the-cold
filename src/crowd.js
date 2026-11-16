@@ -30,7 +30,7 @@ function addBody(h, kind, r) {
 
 // is the human free to be collided with at all
 function solid(h) {
-  return h && !h.removed && h.slot >= 0 && h.alive && !h.rag && !h.hidden && !h.sit && !h.noCrowd && !h.dragged && !h.carried;
+  return h && !h.removed && h.slot >= 0 && h.alive && !h.rag && !h.hidden && !h.sit && !h.noCrowd && !h.dragged && !h.carried && !h.downed;
 }
 
 function gather() {
