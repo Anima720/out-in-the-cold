@@ -55,9 +55,11 @@ function camoMaterial(tx) {
 }
 
 function faction(name) {
-  const jg = name === 'jg', ru = name === 'ru' || jg;
+  const jg = name === 'jg', kr = name === 'kr', ru = name === 'ru' || jg || kr;
   const C = jg
     ? { cloth: 0x8d938c, rig: 0x3a3e3a, pouch: 0x2f3330, belt: 0x252725, boot: 0x1e1d1c, glove: 0x2a2b2c, metal: 0x1d1e1f, furn: 0x1d1e1f }
+    : kr // Colonel Krasin: dark grey-brown greatcoat, black leather, plain cloth (no camo)
+    ? { cloth: 0x45433c, rig: 0x2b2925, pouch: 0x2b2925, belt: 0x1b1916, boot: 0x121110, glove: 0x1a1918, metal: 0x1d1e1f, furn: 0x3a2a20 }
     : ru
     ? { cloth: 0xffffff, rig: 0xaeb4b8, pouch: 0x969da1, belt: 0x4f5458, boot: 0x2b2826, glove: 0x3c3d3f, metal: 0x2a2b2c, furn: 0x5a3a2a }
     : { cloth: 0xffffff, rig: 0x5a5c44, pouch: 0x8b7a5a, belt: 0x4d4a3c, boot: 0x8a7556, glove: 0x9a8a68, metal: 0x232426, furn: 0x1e1f20 };
@@ -80,8 +82,55 @@ function faction(name) {
     hb.box(0, 0.12, -0.15, 0.16, 0.06, 0.06, C.pouch, 0);
     P.head_jg = hb.geo();
   }
+  const dk = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
+  const face2 = (b, o) => {
+    const sk = o.skin;
+    b.cyl(0, 0.05, 0, 0.058 * (o.neck || 1), 0.064 * (o.neck || 1), 0.1, sk, 0);
+    b.sph(0, 0.17, 0, 0.104, sk, 0, o.w || 1, 1.12, 1.04);
+    b.rb(0, 0.112, -0.05, 0.128 * (o.jaw || 1), 0.072, 0.1, sk, 0);                 // jaw
+    b.rb(0, 0.163, -0.113, 0.026 * (o.nose || 1), 0.05, 0.034, dk(sk, 0.97), 0);    // nose
+    b.rb(0, 0.142, -0.118, 0.018 * (o.nose || 1), 0.012, 0.02, dk(sk, 0.9), 0);
+    b.rb(0, 0.122, -0.106, 0.05, 0.012, 0.016, o.lips || dk(sk, 0.78), 0);           // lips
+    for (const sx of [-1, 1]) {
+      b.sph(sx * 0.036, 0.184, -0.094, 0.014, 0xe9e6df, 0, 1, 0.75, 0.8);            // eye white
+      b.sph(sx * 0.036, 0.184, -0.104, 0.0075, o.iris || 0x2a2018, 0);                 // iris
+      b.rb(sx * 0.038, 0.204, -0.104, 0.04, 0.01, 0.016, o.brow || 0x2a2018, 0, 0, 0, sx * (o.browTilt || 0.12)); // brow
+      b.rb(sx * 0.104, 0.172, 0.004, 0.022, 0.052, 0.034, sk, 0);                     // ear
+    }
+    if (o.hair) b.sph(0, 0.19, 0.008, 0.108, o.hair, 0, 1.02, 0.98, 1.06, true);
+    if (o.beard) { b.rb(0, 0.103, -0.07, 0.132, 0.07, 0.07, o.beard, 0); for (const sx of [-1, 1]) b.rb(sx * 0.078, 0.14, -0.035, 0.03, 0.08, 0.07, o.beard, 0); }
+    if (o.stache) b.rb(0, 0.133, -0.112, 0.06, 0.014, 0.016, o.stache, 0);
+    if (o.chops) for (const sx of [-1, 1]) b.rb(sx * 0.07, 0.125, -0.07, 0.03, 0.075, 0.05, o.chops, 0);
+    if (o.goatee) b.rb(0, 0.095, -0.098, 0.04, 0.04, 0.03, o.goatee, 0);
+    if (o.shades) { b.rb(0, 0.186, -0.112, 0.12, 0.028, 0.012, 0x0c0d0f, 0); b.rb(0, 0.196, -0.11, 0.13, 0.006, 0.014, 0x2a2a2a, 0); }
+  };
+  if (kr) { // greatcoat to the knees, Sam Browne belt, shoulder boards; officer's peaked cap
+    const b = new PB(), brass = 0xa88a44;
+    b.cap(0, 0.22, 0, 0.172, 0.3, C.cloth, 0, 1.22, 0.86);
+    b.rb(0, -0.05, 0, 0.36, 0.2, 0.25, C.cloth, 0);
+    for (const sx of [-1, 1]) b.sph(sx * 0.168, 0.455, 0.0, 0.086, C.cloth, 0, 1, 0.9, 1);
+    b.cyl(0, -0.34, 0.01, 0.2, 0.27, 0.56, C.cloth, 0);                      // coat skirt
+    b.cyl(0, -0.615, 0.01, 0.272, 0.272, 0.025, dk(C.cloth, 0.8), 0);
+    b.rb(0, 0.5, 0.01, 0.34, 0.08, 0.27, 0x2e2a25, 0);                       // fur collar
+    b.rb(0, -0.02, 0, 0.375, 0.06, 0.28, C.belt, 0);
+    b.rb(0, -0.02, -0.142, 0.07, 0.05, 0.012, brass, 0);
+    b.rb(0.02, 0.24, -0.15, 0.035, 0.52, 0.012, C.belt, 0, 0, 0, -0.55);    // cross strap
+    for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) b.sph(sx * 0.065, 0.07 + i * 0.1, -0.146, 0.012, brass, 0);
+    for (const sx of [-1, 1]) { b.rb(sx * 0.15, 0.47, 0, 0.1, 0.014, 0.06, 0x5a4a22, 0); b.sph(sx * 0.15, 0.48, -0.01, 0.01, 0xd8c070, 0); }
+    b.rb(0.19, -0.08, -0.04, 0.055, 0.13, 0.09, C.belt, 0);                 // holster
+    P.torso = b.geo();
+    const hb = new PB();
+    face2(hb, { skin: 0xcfa082, stache: 0x8f8a84, brow: 0x7a746e, jaw: 1.06, browTilt: 0.3, lips: 0x9a6a58 });
+    hb.cyl(0, 0.262, 0.012, 0.152, 0.118, 0.07, 0x3d4436, 0);               // crown
+    hb.sph(0, 0.295, 0.012, 0.15, 0x3d4436, 0, 1, 0.22, 1, true);
+    hb.rb(0, 0.3, -0.11, 0.2, 0.06, 0.06, 0x3d4436, 0, -0.5);                // raised front
+    hb.cyl(0, 0.22, 0, 0.116, 0.116, 0.046, 0x7a1c1c, 0);                     // red band
+    hb.rb(0, 0.205, -0.125, 0.18, 0.014, 0.085, 0x0e0e0e, 0, 0.32);          // visor
+    hb.sph(0, 0.245, -0.118, 0.02, brass, 0, 1, 1, 0.5);                      // cockade
+    P.head_kras = hb.geo();
+  }
   // torso: bone P(0) -> Ne(0.52); -Z = chest
-  if (!jg) {
+  if (!jg && !kr) {
     const b = new PB();
     b.cap(0, 0.22, 0, 0.165, 0.3, C.cloth, 1, 1.22, 0.82);                 // chest
     b.rb(0, -0.05, 0, 0.34, 0.18, 0.23, C.cloth, 1);                        // hips
@@ -123,7 +172,7 @@ function faction(name) {
     for (const sx of [-1, 1]) { b.sph(sx * 0.036, 0.185, -0.096, 0.013, 0x15171a, 0); b.rb(sx * 0.104, 0.17, 0.0, 0.02, 0.05, 0.035, skin, 0); }
     if (stubble) b.rb(0, 0.112, -0.072, 0.12, 0.06, 0.06, stubble, 0);
   };
-  if (jg) { /* built above */ } else if (ru) {
+  if (jg || kr) { /* built above */ } else if (ru) {
     const b = new PB();
     const bal = 0x3a3d40, skin = 0xc9a083;
     face(b, skin, null);
@@ -138,28 +187,6 @@ function faction(name) {
     P.head_ru = b.geo();
   } else {
     // distinct faces for the named characters
-    const dk = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
-    const face2 = (b, o) => {
-      const sk = o.skin;
-      b.cyl(0, 0.05, 0, 0.058 * (o.neck || 1), 0.064 * (o.neck || 1), 0.1, sk, 0);
-      b.sph(0, 0.17, 0, 0.104, sk, 0, o.w || 1, 1.12, 1.04);
-      b.rb(0, 0.112, -0.05, 0.128 * (o.jaw || 1), 0.072, 0.1, sk, 0);                 // jaw
-      b.rb(0, 0.163, -0.113, 0.026 * (o.nose || 1), 0.05, 0.034, dk(sk, 0.97), 0);    // nose
-      b.rb(0, 0.142, -0.118, 0.018 * (o.nose || 1), 0.012, 0.02, dk(sk, 0.9), 0);
-      b.rb(0, 0.122, -0.106, 0.05, 0.012, 0.016, o.lips || dk(sk, 0.78), 0);           // lips
-      for (const sx of [-1, 1]) {
-        b.sph(sx * 0.036, 0.184, -0.094, 0.014, 0xe9e6df, 0, 1, 0.75, 0.8);            // eye white
-        b.sph(sx * 0.036, 0.184, -0.104, 0.0075, o.iris || 0x2a2018, 0);                 // iris
-        b.rb(sx * 0.038, 0.204, -0.104, 0.04, 0.01, 0.016, o.brow || 0x2a2018, 0, 0, 0, sx * (o.browTilt || 0.12)); // brow
-        b.rb(sx * 0.104, 0.172, 0.004, 0.022, 0.052, 0.034, sk, 0);                     // ear
-      }
-      if (o.hair) b.sph(0, 0.19, 0.008, 0.108, o.hair, 0, 1.02, 0.98, 1.06, true);
-      if (o.beard) { b.rb(0, 0.103, -0.07, 0.132, 0.07, 0.07, o.beard, 0); for (const sx of [-1, 1]) b.rb(sx * 0.078, 0.14, -0.035, 0.03, 0.08, 0.07, o.beard, 0); }
-      if (o.stache) b.rb(0, 0.133, -0.112, 0.06, 0.014, 0.016, o.stache, 0);
-      if (o.chops) for (const sx of [-1, 1]) b.rb(sx * 0.07, 0.125, -0.07, 0.03, 0.075, 0.05, o.chops, 0);
-      if (o.goatee) b.rb(0, 0.095, -0.098, 0.04, 0.04, 0.03, o.goatee, 0);
-      if (o.shades) { b.rb(0, 0.186, -0.112, 0.12, 0.028, 0.012, 0x0c0d0f, 0); b.rb(0, 0.196, -0.11, 0.13, 0.006, 0.014, 0x2a2a2a, 0); }
-    };
     const helmet = (b, col, opt = {}) => {
       b.sph(0, 0.2, 0, 0.142, col, 1, 1, 0.86, 1.08, true);
       b.rb(0, 0.205, 0.0, 0.27, 0.018, 0.29, dk(col, 0.82), 0, 0, 0, 0, 0.008);
@@ -239,8 +266,18 @@ function faction(name) {
     }
     P.rifle = b.geo();
   }
+  // sidearm: bone W0 (hand on the grip) -> W1 (muzzle) 0.2; -Z = top of the slide
+  if (kr || !ru) {
+    const b = new PB();
+    b.box(0, 0.085, -0.036, 0.027, 0.19, 0.034, 0x1b1c1d, 0);
+    b.box(0, 0.07, -0.012, 0.025, 0.15, 0.022, 0x252627, 0);
+    b.box(0, 0.006, 0.035, 0.027, 0.05, 0.09, 0x161616, 0, 0.22);
+    b.box(0, 0.05, 0.012, 0.006, 0.04, 0.025, 0x111111, 0);
+    P.pistol = b.geo();
+  }
   const mat = camoMaterial(ru ? TX.camoRU : TX.camoUS);
   if (jg) mat.color.setRGB(0.55, 0.58, 0.55);
+  if (kr) mat.map = null;
   return { P, mat };
 }
 
@@ -249,7 +286,7 @@ const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 export const HR = { f: {} };
 export function initHumans() {
-  for (const [name, cap] of [['ru', 72], ['us', 4], ['jg', 3]]) {
+  for (const [name, cap] of [['ru', 72], ['us', 4], ['jg', 3], ['kr', 2]]) {
     const { P, mat } = faction(name);
     const meshes = {};
     for (const [part, geo] of Object.entries(P)) {
@@ -307,7 +344,7 @@ const _f = V(), _r = V(), _tf = V(), _tr = V(), _tu = V(), _a = V(), _s0 = V(), 
 
 export class Human {
   constructor(fname, opts = {}) {
-    this.faction = fname; this.headPart = opts.head || (fname === 'ru' ? 'head_ru' : fname === 'jg' ? 'head_jg' : 'head_helmet');
+    this.faction = fname; this.headPart = opts.head || (fname === 'ru' ? 'head_ru' : fname === 'jg' ? 'head_jg' : fname === 'kr' ? 'head_kras' : 'head_helmet');
     this.name = opts.name || ''; this.torsoPart = opts.torso || null;
     this.slot = allocSlot(fname);
     this.j = Array.from({ length: NJ }, () => new THREE.Vector3());
@@ -401,6 +438,18 @@ export class Human {
       _g1.copy(_s0).addScaledVector(_dir, 0.24).addScaledVector(_wu, -0.075);
       _g2.copy(_s0).addScaledVector(_dir, 0.5).addScaledVector(_wu, -0.045);
     }
+    if (this.sidearm) { // pistol: low ready -> arm(s) extended along the aim (1 = one-handed, 2 = two hands)
+      _s0.copy(j[J.SR]).addScaledVector(tr, -0.09 * at).addScaledVector(_tu, lerp(-0.34, -0.03, at)).addScaledVector(tf, lerp(0.2, 0.0, at)).addScaledVector(_a, 0.5 * at);
+      _dir.copy(tf).multiplyScalar(0.55).addScaledVector(UP, -0.83).normalize().lerp(_a, at).normalize();
+      _s0.addScaledVector(_dir, -0.05 * this.recoil);
+      _dir.addScaledVector(UP, 0.25 * this.recoil).normalize();
+      j[J.W0].copy(_s0); j[J.W1].copy(_s0).addScaledVector(_dir, 0.2);
+      _wu.copy(UP).addScaledVector(_dir, -_dir.y).normalize(); this.weaponUp.copy(_wu);
+      _g1.copy(_s0);
+      if (this.sidearm === 2) _g2.copy(_s0).addScaledVector(tr, -0.04).addScaledVector(_wu, -0.03);
+      else _g2.copy(j[J.SL]).addScaledVector(UP, -0.5).addScaledVector(tf, 0.06).addScaledVector(tr, -0.06);
+    }
+    if (this.handL) _g2.copy(this.handL); // scripted left-hand target (e.g. hauling a wounded man by the vest)
     _pole.copy(UP).multiplyScalar(-0.8).addScaledVector(tr, 0.75).addScaledVector(tf, -0.2);
     ik2(j[J.SR], _g1, L_UA, L_FA, _pole, j[J.ER], j[J.HR]);
     _pole.copy(UP).multiplyScalar(-1).addScaledVector(tr, -0.4).addScaledVector(tf, -0.1);
@@ -455,6 +504,47 @@ export class Human {
     this.lastDt = dt;
   }
 
+  // ---- posed corpse: sitting against a wall, legs out, head dropped, weapon on the ground beside him.
+  // slump = { base: floor point under the spine at the wall, yaw: facing away from the wall, t, dur }.
+  // The pose blends from the last live pose over `dur` (thrown back against the wall), then stays put (no ragdoll).
+  poseSlump(dt) {
+    const s = this.slump, j = this.j;
+    if (s.done) return;
+    if (!s.from) s.from = j.map((v) => v.clone());
+    s.t = (s.t || 0) + dt;
+    const f = fwdYaw(s.yaw, _f), r = rightYaw(s.yaw, _r), b = s.base, sd = s.side || 1;
+    const at = (out, a, c, u) => out.copy(b).addScaledVector(f, a).addScaledVector(r, c * sd).addScaledVector(UP, u);
+    const hd = clamp((s.t - s.dur) / 0.7, 0, 1), he = hd * hd * (3 - 2 * hd);
+    at(j[J.P], 0.25, 0.02, 0.15);
+    at(j[J.Ne], 0.1, 0.06, 0.65);
+    _hb.copy(f).multiplyScalar(lerp(0.02, 0.1, he)).addScaledVector(UP, lerp(0.17, 0.09, he)).addScaledVector(r, sd * lerp(0.02, 0.09, he)).normalize();
+    j[J.Hc].copy(j[J.Ne]).addScaledVector(_hb, 0.17);
+    j[J.SL].copy(j[J.Ne]).addScaledVector(r, -0.19).addScaledVector(UP, -0.05 - (sd < 0 ? 0.04 : 0));
+    j[J.SR].copy(j[J.Ne]).addScaledVector(r, 0.19).addScaledVector(UP, -0.05 - (sd > 0 ? 0.04 : 0));
+    j[J.HPL].copy(j[J.P]).addScaledVector(r, -0.1).addScaledVector(UP, -0.05);
+    j[J.HPR].copy(j[J.P]).addScaledVector(r, 0.1).addScaledVector(UP, -0.05);
+    at(_fl, 0.98, -0.24, 0.09); at(_fr, 0.86, 0.27, 0.09);
+    _pole.copy(UP).addScaledVector(f, 0.3);
+    ik2(j[J.HPL], _fl, L_TH, L_SH, _pole, j[J.KL], j[J.AL]);
+    ik2(j[J.HPR], _fr, L_TH, L_SH, _pole, j[J.KR], j[J.AR]);
+    j[J.TL].copy(j[J.AL]).addScaledVector(UP, 0.17).addScaledVector(r, -0.09).addScaledVector(f, 0.04);
+    j[J.TR].copy(j[J.AR]).addScaledVector(UP, 0.17).addScaledVector(r, 0.09).addScaledVector(f, 0.04);
+    at(_g2, 0.42, -0.37, 0.04); at(_g1, 0.5, 0.36, 0.04);
+    _pole.copy(r).multiplyScalar(-1).addScaledVector(UP, -0.4).addScaledVector(f, -0.3);
+    ik2(j[J.SL], _g2, L_UA, L_FA, _pole, j[J.EL], j[J.HL]);
+    _pole.copy(r).addScaledVector(UP, -0.4).addScaledVector(f, -0.3);
+    ik2(j[J.SR], _g1, L_UA, L_FA, _pole, j[J.ER], j[J.HR]);
+    if (this.sidearm) { at(j[J.W0], 0.62, 0.48, 0.03); _dir.copy(f).addScaledVector(r, 0.6).normalize(); j[J.W1].copy(j[J.W0]).addScaledVector(_dir, 0.2); }
+    else { at(j[J.W0], 0.35, 0.62, 0.04); _dir.copy(f).addScaledVector(r, 0.18 * sd).normalize(); j[J.W1].copy(j[J.W0]).addScaledVector(_dir, 0.85); }
+    this.weaponUp.copy(r).multiplyScalar(sd);
+    this.bodyFwd.copy(f).addScaledVector(UP, 0.32).normalize();
+    _t1.copy(f).multiplyScalar(0.45).addScaledVector(UP, -0.8).addScaledVector(r, 0.3 * sd).normalize();
+    this.headFwd.copy(this.bodyFwd).lerp(_t1, he).normalize();
+    const k = s.dur > 0 ? clamp(s.t / s.dur, 0, 1) : 1, e = 1 - (1 - k) * (1 - k);
+    if (k < 1) for (let i = 0; i < NJ; i++) j[i].lerpVectors(s.from[i], j[i], e);
+    if (hd >= 1) s.done = true;
+  }
+
   // ---- render instanced parts
   render() {
     if (this.slot < 0) return;
@@ -478,8 +568,9 @@ export class Human {
     pr('shin', 0, j[J.KL], j[J.AL], bf); pr('shin', 1, j[J.KR], j[J.AR], bf);
     _fw.subVectors(j[J.KL], j[J.AL]); pr('foot', 0, j[J.AL], j[J.TL], _fw);
     _fw.subVectors(j[J.KR], j[J.AR]); pr('foot', 1, j[J.AR], j[J.TR], _fw);
-    if (this.noWeapon || this.weaponGone) M.rifle.setMatrixAt(s, ZERO);
+    if (this.noWeapon || this.weaponGone || this.sidearm) M.rifle.setMatrixAt(s, ZERO);
     else M.rifle.setMatrixAt(s, segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp));
+    if (M.pistol) M.pistol.setMatrixAt(s, this.sidearm && !this.noWeapon && !this.weaponGone ? segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp) : ZERO);
     for (const im of Object.values(M)) im.instanceMatrix.needsUpdate = true;
   }
 
@@ -533,6 +624,7 @@ export class Human {
   update(dt) {
     if (this.removed) return;
     if (this.alive) { if (!this.hidden) this.animate(dt); }
+    else if (this.slump) this.poseSlump(dt);
     else if (this.rag) {
       this.deadT += dt;
       this.rag.step(dt);
