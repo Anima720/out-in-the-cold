@@ -1,10 +1,10 @@
-import { G, THREE, rr, clamp, damp, smooth, pick, reseed } from './core.js';
+import { G, THREE, rr, clamp, damp, smooth, pick, reseed, angDiff } from './core.js';
 import { input, hit } from './input.js';
 import { gorge } from './physics.js';
 import { W, buildGorge, rebuildChunks } from './world.js';
-import { T, buildTrain, setInvWalls, DECK, GUN_PIVOT, CAB_DOOR } from './train.js';
+import { T, buildTrain, setInvWalls, DECK, GUN_PIVOT, CAB_DOOR, CAB, cabDoor, cabKnob, deckY } from './train.js';
 import { clearHumans, J } from './humans.js';
-import { Enemy, Mate, spawnTrainEnemies, mateFollow, TOK } from './ai.js';
+import { Enemy, Mate, spawnTrainEnemies, mateFollow, TOK, laneMove } from './ai.js';
 import { Sled, Hind, fireRocket, clearVehicles, explodeAt } from './vehicles.js';
 import { clearFX } from './fx.js';
 import { clearNades } from './grenade.js';
@@ -125,7 +125,8 @@ export function startCheckpoint(k) {
     G.v = 22; G.vTarget = 22;
     resetPlayer(new THREE.Vector3(0, DECK, -44), 0);
     t.place(0.9, -40.2);
-    t.mode = 'hold'; g.h.hidden = true; g.mode = 'cab';
+    t.mode = 'hold';
+    g.place(CAB.stand.x, CAB.stand.z, CAB.floor); g.h.yaw = 0; cabScript(g, 'ctl'); T.cab.leverK = 1; T.cab.doorT = 1; cabDoor(true);
     setInvWalls(true);
     T.dshk.yaw.rotation.y = 0;
     P.canMount = true; mount();
@@ -167,14 +168,55 @@ function mateBoard() {
 function enterClear() {
   D.phase = 'clear'; D.f.clearT = D.t;
   say('SAND_03', 0.8);
-  after(1.6, () => {
-    const g = D.grinch; if (!g || g.h.hidden) return;
-    g.mode = 'cab'; g.target.set(0.85, 0, -50.7); g.speed = 7;
-  });
-  after(9, () => { // don't keep the player waiting: if Grinch is still far, he is already in the cab
-    const g = D.grinch; if (g && !g.h.hidden && g.mode === 'cab' && !g.arc) { g.h.pos.set(0.85, DECK, -50.7); g.target.copy(g.h.pos); }
-  });
   D.truck.offs = [0.9, 1.5];
+}
+
+// ---------- Grinch takes the engine: walks the centre lane, round the gun ring, opens the cab door, drives ----------
+function stepTo(h, x, z, sp, dt) { // straight walk on the deck / cab floor (y follows the floor, steps up into the cab)
+  const dx = x - h.pos.x, dz = z - h.pos.z, d = Math.hypot(dx, dz);
+  if (d < 0.04) { h.vel.set(0, 0, 0); return true; }
+  const v = Math.min(sp, d * 4 + 0.4), k = Math.min(1, (v * dt) / d);
+  h.pos.x += dx * k; h.pos.z += dz * k; h.vel.set((dx / d) * v, 0, (dz / d) * v);
+  h.yaw += clamp(angDiff(h.yaw, Math.atan2(-dx, -dz)), -9 * dt, 9 * dt);
+  const ty = deckY(h.pos.x, h.pos.z, h.pos.y + 0.05); h.pos.y += (ty - h.pos.y) * Math.min(1, dt * 14);
+  return false;
+}
+const CAB_IN = [[0.95, -51.35], [0.82, -52.8], [0.32, -53.9], [0.32, -55.22], [0.78, -55.2]];
+const CAB_OUT = [[0.32, -55.22], [0.32, -53.9], [0.82, -52.8], [0.88, -51.3], [1.3, -50.4]];
+function cabScript(g, from = 'lane') {
+  const h = g.h, C = { st: from, t: 0, i: 0, push: false, brake: false };
+  g.cab = C; g.mode = 'cab'; g.noCrowd = from !== 'lane';
+  g.custom = (dt) => {
+    if (!h.alive) return;
+    C.t += dt; h.crouchT = 0;
+    switch (C.st) {
+      case 'lane': h.aimTarget = 0.2; h.noWeapon = false; if (laneMove(h, 1.3, -44.3, 5.2, dt)) { C.st = 'ring'; g.noCrowd = true; } break;
+      case 'ring': h.aimTarget = 0.2; if (stepTo(h, 1.3, -50.7, 4.6, dt)) { C.st = 'door'; C.t = 0; } break;
+      case 'door': // reach for the handle and swing the door in
+        stepTo(h, 0.98, -51.3, 2.2, dt); h.yaw += clamp(angDiff(h.yaw, 0), -6 * dt, 6 * dt); h.aimTarget = 0;
+        if (C.t > 0.3 && !T.cab.doorOpen) { cabDoor(true); play('bolt', { pos: CAB_DOOR, vol: 0.6, ref: 4 }); play('metal', { pos: CAB_DOOR, vol: 0.3, ref: 3 }); }
+        if (C.t > 0.8) { C.st = 'in'; C.i = 1; }
+        break;
+      case 'in': h.aimTarget = 0;
+        if (stepTo(h, CAB_IN[C.i][0], CAB_IN[C.i][1], 2.4, dt) && ++C.i >= CAB_IN.length) { C.st = 'ctl'; C.t = 0; if (g.onCab) { const f = g.onCab; g.onCab = null; f(); } }
+        break;
+      case 'ctl': // at the controls: left hand on the big lever, right hand on the brake valve, eyes on the line
+        h.vel.set(0, 0, 0); h.noWeapon = true; h.aimTarget = 0;
+        h.yaw += clamp(angDiff(h.yaw, 0), -5 * dt, 5 * dt);
+        h.pos.x += (CAB.stand.x - h.pos.x) * Math.min(1, dt * 4); h.pos.z += (CAB.stand.z - h.pos.z) * Math.min(1, dt * 4);
+        h.grips = h.grips || { R: new THREE.Vector3(), L: new THREE.Vector3() };
+        cabKnob('lever', h.grips.L); cabKnob('brake', h.grips.R);
+        h.aim.set(Math.sin(C.t * 0.37) * 0.3, -0.1, -1).normalize();
+        if (C.push) T.cab.leverK = Math.min(1, T.cab.leverK + dt / 1.1);
+        if (C.brake) { T.cab.leverK = Math.max(0, T.cab.leverK - dt * 2.5); T.cab.brakeK = Math.min(1, T.cab.brakeK + dt / 0.45); }
+        break;
+      case 'out': // bail out of the cab back onto the gun car
+        h.grips = null; h.noWeapon = false; h.aimTarget = 0.1;
+        if (stepTo(h, CAB_OUT[C.i][0], CAB_OUT[C.i][1], 3.8, dt) && ++C.i >= CAB_OUT.length) { C.st = 'wait'; g.noCrowd = false; }
+        break;
+      case 'wait': h.vel.set(0, 0, 0); h.yaw += clamp(angDiff(h.yaw, -Math.PI / 2), -6 * dt, 6 * dt); h.aimTarget = 0.2; h.aim.set(1, -0.2, -0.3).normalize(); break;
+    }
+  };
 }
 
 function enterTurret(fromCk, quiet) {
@@ -237,9 +279,7 @@ function bridgeHit() {
 }
 
 function mateJump(m) {
-  if (m.h.hidden) { // Grinch bails out of the cab door
-    m.h.hidden = false; m.h.pos.copy(CAB_DOOR).setX(1.3); m.mode = 'hold';
-  }
+  if (m.custom) { m.custom = null; m.h.grips = null; m.h.noWeapon = false; m.noCrowd = false; }
   const z = m.h.pos.z;
   setTimeout(() => {
     m.mode = 'jump';
@@ -345,11 +385,11 @@ export function updateDirector(dt, rdt) {
     if (ph === 'cars' && alive === 0) enterClear();
     if (ph === 'clear') {
       const g = D.grinch;
-      if (g.mode === 'cab' && !g.h.hidden && !g.arc && g.h.pos.z < -49.5 && Math.hypot(g.h.pos.x - g.target.x, g.h.pos.z - g.target.z) < 0.6) {
-        g.h.hidden = true; play('bolt', { pos: CAB_DOOR, vol: 0.5 });
-        say('GRIN_03', 0.5); say('GRIN_05', 0.9);
-        D.f.leverAt = D.rt + 5.2;
+      if (!D.f.cabGo && D.t - D.f.clearT > 1.6 && g && !g.arc && g.h.pos.y > 1.0) {
+        D.f.cabGo = 1; cabScript(g);
+        g.onCab = () => { say('GRIN_03', 0.5); say('GRIN_05', 0.9); D.f.leverAt = D.rt + 5.4; };
       }
+      if (D.f.leverAt && g.cab && D.rt > D.f.leverAt - 1.2) g.cab.push = true;
       if (D.f.leverAt && D.rt > D.f.leverAt) {
         D.f.leverAt = 0; G.vTarget = 22; G.vRate = 1.3;
         play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 1.2, ref: 30 });

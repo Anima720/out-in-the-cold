@@ -18,7 +18,7 @@ export const GUN_PIVOT = new THREE.Vector3(0, DECK + 0.95, -46.6);
 export const CAB_DOOR = new THREE.Vector3(0.82, DECK, -51.5);
 // locomotive driving cab (hood unit, cab at the rear end facing the gun car): raised floor, door in the rear wall
 export const CAB = { z0: -56.2, z1: -52.0, floor: 1.9, roof: 4.35, door0: 0.42, door1: 1.22,
-  stand: new THREE.Vector3(0.78, 1.9, -55.22), seat: new THREE.Vector3(0.8, 2.42, -55.0), inside: new THREE.Vector3(0.82, 1.9, -52.7) };
+  stand: new THREE.Vector3(0.78, 1.9, -55.2), seat: new THREE.Vector3(0.8, 2.42, -54.9), inside: new THREE.Vector3(0.82, 1.9, -52.7) };
 
 export const T = { cars: [], invWalls: [], wheels: null, wheelInfo: [], mats: null, cab: null };
 
@@ -174,53 +174,47 @@ function buildLoco(b, c) {
   for (const z of [hz0 + 1.6, hz0 + 3.2]) { b.cyl(0, HT + 0.08, z, 0.62, 0.62, 0.08, 'dark', 0x1b1c1d, 0, 0, 0, 16); b.cyl(0, HT + 0.12, z, 0.5, 0.5, 0.03, 'snow', SNOW, 0, 0, 0, 14); }
   b.cyl(0.35, HT + 0.32, -61.2, 0.17, 0.2, 0.55, 'dark', 0x242424, 0, 0, 0, 8); // exhaust stack
   b.boxC(0, HT + 0.03, -58.6, 1.2, 0.06, 1.2, 'dark', 0x3a3e3a); // hatch
-  // ---- cab shell (walls are built around the window and door openings)
-  const wallK = 'paint', IN = 0x8fa79a;
+  // ---- cab shell: wall pieces around the window and door openings, green outside, pale lining inside
+  const IN = 0x8fa79a;
+  const wp = (x0, x1, y0, y1, z0_, z1_, ix, iz) => {
+    b.boxC((x0 + x1) / 2, (y0 + y1) / 2, (z0_ + z1_) / 2, x1 - x0, y1 - y0, z1_ - z0_, 'paint', green);
+    if (y1 > F + 0.01) { const ya = Math.max(y0, F); b.boxC((x0 + x1) / 2 + ix * ((x1 - x0) / 2 + 0.006), (ya + y1) / 2, (z0_ + z1_) / 2 + iz * ((z1_ - z0_) / 2 + 0.006), ix ? 0.012 : x1 - x0 - 0.01, y1 - ya, iz ? 0.012 : z1_ - z0_ - 0.01, 'cabin', IN); }
+  };
   const sideZw0 = -55.65, sideZw1 = -54.0, wy0 = 3.0, wy1 = 3.9;
   for (const sx of [-1, 1]) {
-    const x = sx * (W2 - 0.035);
-    b.boxC(x, (DECK + wy0) / 2, cz, 0.07, wy0 - DECK, z1 - z0, wallK, green);
-    b.boxC(x, (wy1 + R) / 2, cz, 0.07, R - wy1, z1 - z0, wallK, green);
-    b.boxC(x, (wy0 + wy1) / 2, (z0 + sideZw0) / 2, 0.07, wy1 - wy0, sideZw0 - z0, wallK, green);
-    b.boxC(x, (wy0 + wy1) / 2, (sideZw1 + z1) / 2, 0.07, wy1 - wy0, z1 - sideZw1, wallK, green);
-    b.boxC(x, (wy0 + wy1) / 2, (sideZw0 + sideZw1) / 2, 0.02, wy1 - wy0, sideZw1 - sideZw0, 'glassT', 0);
+    const xa = sx > 0 ? W2 - 0.07 : -W2, xb = xa + 0.07;
+    wp(xa, xb, DECK, wy0, z0, z1, -sx, 0); wp(xa, xb, wy1, R, z0, z1, -sx, 0);
+    wp(xa, xb, wy0, wy1, z0, sideZw0, -sx, 0); wp(xa, xb, wy0, wy1, sideZw1, z1, -sx, 0);
+    b.boxC(sx * (W2 - 0.035), (wy0 + wy1) / 2, (sideZw0 + sideZw1) / 2, 0.02, wy1 - wy0, sideZw1 - sideZw0, 'glassT', 0);
     b.boxC(sx * (W2 + 0.005), wy0 - 0.02, (sideZw0 + sideZw1) / 2, 0.06, 0.05, sideZw1 - sideZw0 + 0.1, 'dark', 0x1c1c1c);
     b.boxC(sx * (W2 + 0.03), wy0 + 0.02, (sideZw0 + sideZw1) / 2, 0.05, 0.03, sideZw1 - sideZw0, 'snow', SNOW);
     b.boxC(sx * (W2 + 0.006), 2.05, cz, 0.02, 0.22, z1 - z0, 'paint', red);
-    b.boxC(sx * (W2 - 0.075), (F + R) / 2, cz, 0.01, R - F, z1 - z0 - 0.1, 'cabin', IN);           // interior lining
     b.cyl(sx * (W2 + 0.04), 2.6, -52.25, 0.018, 0.018, 1.2, 'steel', 0xb8b8b8, 0, 0, 0, 5);         // grab handle
     icicles(b, sx * 1.52, R - 0.02, z0, z1, 0.25);
   }
-  // front wall: two windows over the desks, centre pillar (hood door below it)
-  const fz = z0 + 0.035, fy0 = 3.05, fy1 = 3.95;
-  b.boxC(0, (DECK + fy0) / 2, fz, W2 * 2, fy0 - DECK, 0.07, wallK, green);
-  b.boxC(0, (fy1 + R) / 2, fz, W2 * 2, R - fy1, 0.07, wallK, green);
-  b.boxC(0, (fy0 + fy1) / 2, fz, 0.24, fy1 - fy0, 0.07, wallK, green);
+  // front wall: two windows over the desks, centre pillar
+  const fa = z0, fb = z0 + 0.07, fz = z0 + 0.035, fy0 = 3.05, fy1 = 3.95;
+  wp(-W2, W2, DECK, fy0, fa, fb, 0, 1); wp(-W2, W2, fy1, R, fa, fb, 0, 1); wp(-0.12, 0.12, fy0, fy1, fa, fb, 0, 1);
   for (const sx of [-1, 1]) {
-    b.boxC(sx * 1.39, (fy0 + fy1) / 2, fz, 0.17, fy1 - fy0, 0.07, wallK, green);
+    wp(sx > 0 ? 1.3 : -W2, sx > 0 ? W2 : -1.3, fy0, fy1, fa, fb, 0, 1);
     b.boxC(sx * 0.71, (fy0 + fy1) / 2, fz, 1.18, fy1 - fy0, 0.02, 'glassT', 0);
-    b.boxC(sx * 0.71, fy1 + 0.09, fz + 0.13, 1.1, 0.03, 0.22, 'dark', 0x2a2a2a);                     // sun visor
-    b.boxC(sx * 0.62, fy0 + 0.3, fz - 0.05, 0.02, 0.6, 0.02, 'dark', 0x111111, 0, 0, sx * 0.5);       // wiper
-    b.boxC(sx * 0.71, fy0 - 0.02, fz - 0.05, 1.2, 0.05, 0.1, 'snow', SNOW);
+    b.boxC(sx * 0.71, fy1 + 0.09, fb + 0.12, 1.1, 0.03, 0.22, 'dark', 0x2a2a2a);                       // sun visor
+    b.boxC(sx * 0.62, fy0 + 0.3, fa - 0.03, 0.02, 0.6, 0.02, 'dark', 0x111111, 0, 0, sx * 0.5);         // wiper
+    b.boxC(sx * 0.71, fy0 - 0.02, fa - 0.05, 1.2, 0.05, 0.1, 'snow', SNOW);
   }
-  b.boxC(0, (F + R) / 2, fz + 0.045, W2 * 2 - 0.15, R - F, 0.01, 'cabin', IN);
-  b.boxC(0, F + 0.95, fz + 0.06, 0.6, 1.9, 0.03, 'cabin', 0x6f877a);                                    // door to the engine room
-  b.boxC(0.22, F + 1.0, fz + 0.09, 0.03, 0.12, 0.04, 'steel', 0xaaaaaa);
+  b.boxC(0, F + 0.3, fb + 0.1, 0.5, 0.6, 0.18, 'cabin', 0x4e5c54);                                       // heater
+  for (let k = 0; k < 4; k++) b.boxC(0, F + 0.12 + k * 0.13, fb + 0.195, 0.44, 0.03, 0.01, 'dark', 0x222222);
   // rear wall: window on the left, door opening on the right
-  const rz = z1 - 0.035, d0 = CAB.door0, d1 = CAB.door1, dTop = 3.95, ry0 = 3.0, ry1 = 3.85, rw0 = -1.2, rw1 = -0.15;
-  b.boxC((-W2 + d0) / 2, (DECK + ry0) / 2, rz, d0 + W2, ry0 - DECK, 0.07, wallK, green);
-  b.boxC((-W2 + d0) / 2, (ry1 + R) / 2, rz, d0 + W2, R - ry1, 0.07, wallK, green);
-  b.boxC((-W2 + rw0) / 2, (ry0 + ry1) / 2, rz, rw0 + W2, ry1 - ry0, 0.07, wallK, green);
-  b.boxC((rw1 + d0) / 2, (ry0 + ry1) / 2, rz, d0 - rw1, ry1 - ry0, 0.07, wallK, green);
+  const ra = z1 - 0.07, rb = z1, rz = z1 - 0.035, d0 = CAB.door0, d1 = CAB.door1, dTop = 3.95, ry0 = 3.0, ry1 = 3.85, rw0 = -1.2, rw1 = -0.15;
+  wp(-W2, d0, DECK, ry0, ra, rb, 0, -1); wp(-W2, d0, ry1, R, ra, rb, 0, -1);
+  wp(-W2, rw0, ry0, ry1, ra, rb, 0, -1); wp(rw1, d0, ry0, ry1, ra, rb, 0, -1);
   b.boxC((rw0 + rw1) / 2, (ry0 + ry1) / 2, rz, rw1 - rw0, ry1 - ry0, 0.02, 'glassT', 0);
-  b.boxC((d1 + W2) / 2, (DECK + R) / 2, rz, W2 - d1, R - DECK, 0.07, wallK, green);
-  b.boxC((d0 + d1) / 2, (dTop + R) / 2, rz, d1 - d0, R - dTop, 0.07, wallK, green);
-  b.boxC((d0 + d1) / 2, (DECK + F) / 2, rz, d1 - d0, F - DECK, 0.07, wallK, green);                    // step riser
-  b.boxC((d0 + d1) / 2, F - 0.01, rz + 0.08, d1 - d0, 0.04, 0.2, 'steel', 0x6a6d70);                   // sill plate
-  b.boxC(0, 2.05, rz + 0.04, W2 * 2, 0.22, 0.02, 'paint', red);
-  b.boxC((rw0 + rw1) / 2, ry0 - 0.02, rz + 0.05, rw1 - rw0 + 0.1, 0.05, 0.1, 'snow', SNOW);
-  for (const x of [d0 - 0.02, d1 + 0.02]) b.boxC(x, (F + dTop) / 2, rz, 0.05, dTop - F, 0.1, 'dark', 0x2b2f2b); // door jambs
-  b.boxC(0, (F + R) / 2, rz - 0.045, W2 * 2 - 0.15, R - F, 0.01, 'cabin', IN);
+  wp(d1, W2, DECK, R, ra, rb, 0, -1); wp(d0, d1, dTop, R, ra, rb, 0, -1);
+  b.boxC((d0 + d1) / 2, (DECK + F) / 2, rz, d1 - d0, F - DECK, 0.07, 'paint', green);                  // step riser
+  b.boxC((d0 + d1) / 2, F - 0.01, rz + 0.06, d1 - d0, 0.04, 0.2, 'steel', 0x6a6d70);                   // sill plate
+  b.boxC((-W2 + d0) / 2, 2.05, rb + 0.006, d0 + W2, 0.22, 0.02, 'paint', red); b.boxC((d1 + W2) / 2, 2.05, rb + 0.006, W2 - d1, 0.22, 0.02, 'paint', red);
+  b.boxC((rw0 + rw1) / 2, ry0 - 0.02, rb + 0.04, rw1 - rw0 + 0.1, 0.05, 0.1, 'snow', SNOW);
+  for (const x of [d0 - 0.025, d1 + 0.025]) b.boxC(x, (F + dTop) / 2, rz, 0.05, dTop - F, 0.1, 'dark', 0x2b2f2b); // door jambs
   // roof
   b.boxC(0, R + 0.07, cz, W2 * 2 + 0.06, 0.14, z1 - z0 + 0.12, 'paint', 0x3c4d38);
   b.boxC(0, R + 0.17, cz, W2 * 2 - 0.2, 0.08, z1 - z0 - 0.1, 'snow', SNOW);
@@ -247,13 +241,13 @@ function buildLoco(b, c) {
     b.boxC(x, F + 0.48, z, 0.46, 0.09, 0.42, 'cabin', 0x4a2e22);
     b.boxC(x, F + 0.85, z + 0.24, 0.44, 0.55, 0.08, 'cabin', 0x4a2e22, 0.12, 0, 0);
   }
-  b.boxC(-1.1, (F + 4.05) / 2, -52.4, 0.6, 4.05 - F, 0.6, 'cabin', 0x5d7466);                             // electrical cabinet
-  for (let k = 0; k < 6; k++) b.boxC(-1.1, 2.4 + k * 0.22, -52.71, 0.4, 0.04, 0.02, 'dark', 0x222222);
-  b.cyl(1.32, F + 0.42, -52.55, 0.08, 0.08, 0.5, 'paint', red, 0, 0, 0, 10);                             // extinguisher
+  b.boxC(-1.2, (F + 4.05) / 2, -53.4, 0.42, 4.05 - F, 1.0, 'cabin', 0x5d7466);                             // electrical cabinet
+  for (let k = 0; k < 6; k++) b.boxC(-0.985, 2.4 + k * 0.22, -53.4, 0.02, 0.04, 0.6, 'dark', 0x222222);
+  b.cyl(0.28, F + 0.42, -52.17, 0.08, 0.08, 0.5, 'paint', red, 0, 0, 0, 10);                             // extinguisher
   b.cyl(0, R - 0.05, -54.1, 0.16, 0.12, 0.06, 'dark', 0x333333, 0, 0, 0, 12);
   b.sphere(0, R - 0.1, -54.1, 0.11, 'lamp', 0, 1, 0.45, 1, 12);                                         // dome lamp
   // indicator lamps, switches on the driver's panel
-  for (let i = 0; i < 6; i++) b.cyl(0.32 + i * 0.17, dTopY + 0.34, -55.98, 0.018, 0.018, 0.02, i % 3 === 0 ? 'red' : i % 3 === 1 ? 'indG' : 'indA', 0, -0.6 + Math.PI / 2, 0, 0, 8);
+  for (let i = 0; i < 6; i++) b.cyl(0.32 + i * 0.17, dTopY + 0.288, -55.96, 0.018, 0.018, 0.02, i % 3 === 0 ? 'red' : i % 3 === 1 ? 'indG' : 'indA', 0, Math.PI / 2 - 0.6, 0, 0, 8);
   for (let i = 0; i < 5; i++) b.boxC(0.4 + i * 0.2, dTopY + 0.04, -55.62, 0.03, 0.05, 0.03, 'steel', 0xcccccc, -0.5, 0, 0);
   b.boxC(0.3, dTopY + 0.08, -55.7, 0.2, 0.16, 0.34, 'dark', 0x252826);                                     // controller quadrant
   b.boxC(0.3, dTopY + 0.165, -55.7, 0.04, 0.01, 0.3, 'dark', 0x0e0e0e);
@@ -266,7 +260,7 @@ function buildLoco(b, c) {
   addBox(-W2, F, z0, W2, R, z0 + 0.07, 'metal');
   addBox(-W2, F, z1 - 0.07, d0, R, z1, 'metal'); addBox(d1, F, z1 - 0.07, W2, R, z1, 'metal'); addBox(d0, dTop, z1 - 0.07, d1, R, z1, 'metal');
   addBox(0.12, F, z0, W2, dTopY, dzF, 'metal'); addBox(-W2, F, z0, -0.35, 2.75, -55.62, 'metal');
-  addBox(-1.41, F, -52.7, -0.8, 4.05, z1, 'metal');
+  addBox(-1.41, F, -53.9, -0.99, 4.05, -52.9, 'metal');
   addBox(-W2, R, z0, W2, R + 0.2, z1, 'metal');
   // number plates on the hood sides
   for (const sx of [-1, 1]) {
@@ -298,9 +292,9 @@ function buildCabParts(c) {
   bb.build(m, brake);
   // gauges: one instanced backlit dial mesh
   const dm = new THREE.MeshStandardMaterial({ map: dialTex(), emissive: 0xffffff, emissiveMap: dialTex(), emissiveIntensity: 0.45, roughness: 0.3 });
-  const spots = [[0.4, -55.94, 0.075], [0.66, -55.94, 0.075], [0.92, -55.94, 0.075], [1.18, -55.94, 0.075], [-1.15, -55.99, 0.06], [-0.85, -55.99, 0.06]];
+  const spots = [[0.4, dTopY + 0.157, -55.868, 0.075], [0.66, dTopY + 0.157, -55.868, 0.075], [0.92, dTopY + 0.157, -55.868, 0.075], [1.18, dTopY + 0.157, -55.868, 0.075], [-1.15, 2.92, -55.95, 0.06], [-0.85, 2.92, -55.95, 0.06]];
   const dials = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 24), dm, spots.length);
-  spots.forEach(([x, z, r], i) => dials.setMatrixAt(i, mat4(x, (x < 0 ? 2.9 : dTopY + 0.19) + 0.012, z + 0.035, -0.6, 0, 0, r, r, r)));
+  spots.forEach(([x, y, z, r], i) => dials.setMatrixAt(i, mat4(x, y, z, -0.6, 0, 0, r, r, r)));
   dials.computeBoundingSphere();
   const light = new THREE.PointLight(0xffd29a, 2.2, 4.5, 1.6); light.position.set(0, CAB.roof - 0.35, -54.1);
   for (const o of [door, lever, brake, dials, light]) c.inner.add(o);
@@ -379,11 +373,12 @@ function buildGunCar(b, c) {
   const sand = 0xa39a78;
   // sandbag horseshoe around the gun
   for (let i = 0; i < 9; i++) {
+    if (i === 6 || i === 7) continue; // gap on the right: the walkway forward to the loco cab
     const a = -Math.PI * 0.85 + (i / 8) * Math.PI * 1.7;
     const x = Math.sin(a) * 1.25, z = GUN_PIVOT.z - Math.cos(a) * 1.15;
     for (let k = 0; k < 2; k++) b.capsule(x, DECK + 0.14 + k * 0.24, z, 0.12, 0.42, 'cloth', sand, Math.PI / 2, a, 0, 1.1, 1.0);
   }
-  for (const [x, z] of [[1.05, -42.8], [1.05, -42.1], [-1.05, -49.4]]) {
+  for (const [x, z] of [[-1.05, -42.65], [-1.05, -43.35], [-1.05, -49.4]]) {
     b.boxC(x, DECK + 0.18, z, 0.5, 0.36, 0.3, 'paint', 0x4d5838);
     b.boxC(x, DECK + 0.37, z, 0.45, 0.03, 0.26, 'snow', SNOW);
   }
@@ -535,6 +530,7 @@ export function updateTrain(dt) {
     k.door.rotation.y = -(k.doorT * k.doorT * (3 - 2 * k.doorT)) * 1.75;
     k.lever.rotation.x = 0.45 - k.leverK * 0.9;
     k.brake.rotation.y = k.brakeK * 1.2;
+    k.door.updateMatrixWorld(); k.lever.updateMatrixWorld(); k.brake.updateMatrixWorld();
   }
   // loco exhaust
   const loco = T.cars[0];
