@@ -101,17 +101,17 @@ function bindSettings() {
 }
 
 const CHAPTERS = [
-  [10, '第一部分', '坍塌', '矿井深处醒来，在黑暗的巷道里找到马卡洛夫留下的东西。'],
-  [20, '第二部分', '升井', '乘罐笼回到地面，在暴风雪里冲过矿区，赶上那列火车。'],
-  [0, '第三部分', '铁马', '在飞驰的运矿列车上一节节推进，用机枪对付雌鹿。'],
-  [4, '第四部分', '最后阵地', '死守废弃雷达站，直到情报发出去。'],
+  [10, '第一部分', '坍塌', '在坍塌的矿井深处醒来，带着 Truck 和 Grinch 找到马卡洛夫的去向。'],
+  [20, '第二部分', '升井', '电台全毁，无人接应。乘罐笼回到地面，在暴风雪里冲过矿区，赶往货场。'],
+  [0, '第三部分', '铁马', '扒上北去的运矿列车，一节节推进，用 DShK 对付雌鹿。'],
+  [4, '第四部分', '最后阵地', '死守废弃雷达站，直到情报送到 Price 手上。'],
 ];
 function showTitle() {
   const last = +(lsGet('tiema_ck') ?? 10);
   HUD.showMenu('title', `<div class="m-title">
     <div class="m-eyebrow">使命召唤：现代战争 3 · 非官方同人战役</div>
     <div class="m-word">弃于寒冬<span class="m-subtitle">OUT IN THE COLD</span></div>
-    <p class="m-premise">西伯利亚，钻石矿坍塌后。黑鹰带着总统撤离了，Delta Force「Metal」小队和总统卫队军官索科洛夫被留在了地下。马卡洛夫的人还在矿里——他们要运走的东西，指向迪拜。</p>
+    <p class="m-premise">西伯利亚，钻石矿。总统获救，黑鹰起飞——负责断后的 Delta Force「Metal」小队被埋在了地下。官方记录写的是：三人阵亡。记录没写的是，他们在矿井深处找到了马卡洛夫的去向，并且打算把它送出去。</p>
     <div class="m-actions"><button class="btn primary" data-a="new">开始战役</button>${last !== 10 ? '<button class="btn" data-a="cont">继续上次的检查点</button>' : ''}</div>
     <div class="chapters">${CHAPTERS.map(([k, n, t, d]) => `<button class="chap" data-k="${k}"><small>${n}</small><b>${t}</b><span>${d}</span></button>`).join('')}</div>
     ${settingsHTML()}
