@@ -26,7 +26,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V(), _c = V();
 const F = { on: false, ph: '', t: 0 };
 export const FIN = F;
-const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.75, 0.15, -1.85);
+const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.7, 0.15, -1.15);
 const IN_ROOM = (x, z) => Math.abs(x) < 7.7 && Math.abs(z) < 4.7;
 const floorY = (x, z) => (IN_ROOM(x, z) ? 0.15 : ground5(x, z));
 
@@ -277,7 +277,7 @@ export function startWake(P5, g) {
   Object.assign(F, { on: true, ph: 'wake', t: 0, actors: F.actors && F.actors.length ? F.actors : [], hb: 0.4, rpg: null, gr: g, kras: null, sa: null, sb: null, hold: 0, reach: 0 });
   F.actors.length = 0;
   const yd = yawOf(_a.subVectors(DOOR, WAKE_POS)), yg = yawOf(_b.subVectors(GRINCH_AT, WAKE_POS));
-  resetPlayer(WAKE_POS.clone(), yd + angDiff(yd, yg) * 0.56);
+  resetPlayer(WAKE_POS.clone(), yd + angDiff(yd, yg) * 0.68);
   P.pitch = 0.05; P.shield = true; P.noCrowd = true; P.health = 45; P.enabled = true; P.lockLook = false;
   P.downed = { eye: 0.35, sens: 0.3, sway: 1, pmin: -0.5, pmax: 0.75, yawC: P.yaw, yawR: 1.2, gun: false, vmDrop: 1 };
   WP.hidden = true; WP.clay = 0;
@@ -302,7 +302,7 @@ export function startWake(P5, g) {
 function killGrinch() {
   const h = F.gr.h;
   h.invuln = false; h.flinch = 1; h.handL = null;
-  h.slump = { base: V(-6.34, 0.15, -1.65), yaw: -Math.PI / 2, side: -1, t: 0, dur: 0.45 };
+  h.slump = { base: V(-6.34, 0.15, -0.95), yaw: -Math.PI / 2, side: -1, t: 0, dur: 0.45 };
   h.alive = false; h.rag = null;
   const c = h.j[J.Ne].clone();
   for (let i = 0; i < 10; i++) G.fx.alpha.spawn(c.x, c.y, c.z, rr(-2.5, -0.5), rr(0, 2), rr(-1, 1), { life: rr(0.4, 0.8), size: 0.1, grow: 3, c: [0.42, 0.04, 0.03], alpha: 0.85, grav: 6, drag: 2 });
@@ -313,7 +313,7 @@ function updateRoom(dt, rdt, P5) {
   const t = F.t, d = P.downed, K = F.kras, A1 = F.sa, B1 = F.sb, g = F.gr && F.gr.h;
   if (F.gdecal !== undefined && (F.gdecal -= rdt) <= 0) {
     F.gdecal = undefined;
-    blood('splat', V(-6.3, 0.6, -1.65), V(1, 0, 0), 0.7); blood('splat', V(-6.3, 0.35, -1.5), V(1, 0, 0), 0.5); blood('pool', V(-5.95, 0.15, -1.6), 0.6);
+    blood('splat', V(-6.3, 0.6, -0.95), V(1, 0, 0), 0.7); blood('splat', V(-6.3, 0.35, -0.8), V(1, 0, 0), 0.5); blood('pool', V(-5.95, 0.15, -0.9), 0.6);
   }
   if (F.ph === 'wake') {
     // eyes open slowly: two failed blinks, then the room
@@ -395,6 +395,7 @@ function updateRoom(dt, rdt, P5) {
     const line = (t0) => clamp(Math.min((t - t0) / 1.2, (t0 + 5 - t) / 1.0), 0, 1);
     const a1 = line(1.6), a2 = line(7.2);
     mono(t < 6.9 ? MONO[0] : MONO[1]); ov('m', t < 6.9 ? a1 : a2);
+    if (t > 1.4 && !F.hudOff) { F.hudOff = true; HUD.show(false); HUD.objective(null); }
     ov('k', smooth((t - 9.5) / 3) * 0.6);
     if (t > 12.6) { // hard cut: black and near silence
       F.ph = 'end'; F.t = 0; ov('k', 1); ov('m', 0); reach(0);
@@ -441,7 +442,7 @@ function sent() {
 export function finaleCleanup() {
   if (F.rpg) { G.scene.remove(F.rpg.mesh); F.rpg = null; }
   if (F.actors) F.actors.length = 0;
-  F.on = false; F.ph = ''; F.kicked = F.k2 = F.draw = F.gs1 = F.gs2 = F.ks1 = F.ks2 = false; F.bt = F.br = F.clr = F.gdecal = undefined; F.fired = 0; F.red = 0; F.hold = 0; F.reach = 0;
+  F.on = false; F.ph = ''; F.kicked = F.k2 = F.draw = F.gs1 = F.gs2 = F.ks1 = F.ks2 = false; F.bt = F.br = F.clr = F.gdecal = undefined; F.fired = 0; F.red = 0; F.hudOff = false; F.hold = 0; F.reach = 0;
   if (UI) { for (const k of ['k', 'w', 'r', 'v', 'm']) ov(k, 0); mono(''); }
   if (ARM) ARM.g.visible = false;
   if (G.renderer) look(0, 1);

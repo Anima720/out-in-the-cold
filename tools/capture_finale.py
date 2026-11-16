@@ -20,7 +20,7 @@ async def main():
           window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend=cb; return 0; } return raf(cb); }; })()""")
         async def shot(n):
             await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; if(window.__pend){const c=window.__pend; window.__pend=null; window.__raf(c);}")
-            await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=200, timeout=200000)
+            await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
             await pg.screenshot(path=f"shots/f_{n}.png", timeout=200000)
             await ev("window.__rafHold=true")
         async def st(tag):
@@ -38,7 +38,9 @@ async def main():
             await until("__fin.ph==='drag'", 0.2, 8); await ev("__sim(1.4)"); await st("drag"); await shot("04_drag1")
             await ev("__sim(3.0)"); await shot("05_drag2")
             await ev("__sim(3.0)"); await shot("06_drag3")
-            await until("__fin.ph==='wake'", 0.2, 12); await st("wake0")
+            await until("__fin.ph==='wake'", 0.5, 12); await st("wake0")
+            if ONLY == 'a':
+                print("\n".join(logs[-10:])); await b.close(); return
         else:
             await ev("__begin(7)")
         await ev("__sim(4.5)"); await st("wake"); await shot("07_wake")
