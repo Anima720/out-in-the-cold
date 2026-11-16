@@ -3,7 +3,7 @@ import { WP, curDef } from './weapon.js';
 import { NADES } from './grenade.js';
 
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
-const COL = { SANDMAN: '#9fd0ff', TRUCK: '#ffd27a', GRINCH: '#a9f0a0', '索科洛夫': '#e9e4d6', '克拉辛': '#ff8a76', PRICE: '#d9c08a' };
+const COL = { SANDMAN: '#9fd0ff', TRUCK: '#ffd27a', GRINCH: '#a9f0a0', NIKOLAI: '#c9b8f0', '克拉辛': '#ff8a76', PRICE: '#d9c08a' };
 
 export const HUD = {};
 export function initHUD() {
@@ -44,7 +44,9 @@ export function initHUD() {
   HUD.toastEl = $('div', 'toast', ui);
   HUD.ftag = $('div', 'ftag', ui);
   HUD.scope = $('div', 'scope', ui, '<i></i><i></i><b></b>');
-  HUD.hitT = 0; HUD.dmgList = []; HUD.mk = null; HUD.lk = null;
+  HUD.threat = $('div', 'threat', ui, '<b></b><i></i><span></span>'); HUD.thS = HUD.threat.querySelector('span'); HUD.thA = HUD.threat.querySelector('b');
+  initMinimap(ui);
+  HUD.hitT = 0; HUD.dmgList = []; HUD.mk = null; HUD.lk = null; HUD.th = null;
   G.hud = HUD;
 }
 
@@ -81,10 +83,17 @@ HUD.fade = (to, dur = 1, color = '#000') => {
   HUD.fadeEl.style.transition = `opacity ${dur}s ease`;
   requestAnimationFrame(() => { HUD.fadeEl.style.opacity = to; });
 };
-HUD.setUpload = (p, stall) => {
-  if (p === null) { HUD.upl.classList.remove('on'); return; }
+HUD.setUpload = (p, stall, label) => {
+  if (p === null || p === undefined) { HUD.upl.classList.remove('on'); return; }
   HUD.upl.classList.add('on'); HUD.upl.classList.toggle('stall', !!stall);
-  HUD.uplI.style.width = `${clamp(p, 0, 100)}%`; HUD.uplB.textContent = stall ? `${Math.floor(p)}% · 信号中断` : `${Math.floor(p)}%`;
+  HUD.uplI.style.width = `${clamp(p, 0, 100)}%`;
+  const t = label ?? (stall ? `${Math.floor(p)}% · 信号中断` : `${Math.floor(p)}%`);
+  if (HUD.uplB.textContent !== t) HUD.uplB.textContent = t;
+};
+// red threat marker: pos = live Vector3 (read every frame) or null to clear
+HUD.setThreat = (pos, label) => {
+  HUD.th = pos ? { pos, label: label || '', d: -1 } : null;
+  if (pos) HUD.thS.textContent = label || ''; else HUD.threat.classList.remove('on');
 };
 HUD.setHold = (k) => { HUD.holdEl.classList.toggle('on', k !== null && k > 0); if (k !== null) HUD.holdI.style.width = `${clamp(k, 0, 1) * 100}%`; };
 HUD.setLock = (state, pos) => { HUD.lk = state ? { state, pos } : null; };
@@ -188,4 +197,148 @@ export function updateHUD(dt) {
     HUD.lockEl.style.transform = `translate(${((_v.x + 1) / 2) * innerWidth}px, ${((1 - _v.y) / 2) * innerHeight}px)`;
     HUD.lockS.textContent = HUD.lk.state === 'locked' ? '已锁定 · 左键发射' : '锁定中……';
   } else HUD.lockEl.classList.remove('on');
+  updateThreat();
+  updateMinimap(dt);
+}
+
+function updateThreat() {
+  const th = HUD.th;
+  if (!th || G.state !== 'play') { HUD.threat.classList.remove('on'); return; }
+  const cam = G.camera, W = innerWidth, H = innerHeight;
+  _v.copy(th.pos).project(cam);
+  const behind = _v.z > 1;
+  let x = _v.x, y = _v.y;
+  if (behind) { x = -x; y = -y; }
+  const off = behind || Math.abs(x) > 0.94 || Math.abs(y) > 0.9;
+  if (off) { const k = Math.max(Math.abs(x) / 0.94, Math.abs(y) / 0.86, 1e-3); x /= k; y /= k; if (behind && Math.abs(y) < 0.86 && Math.abs(x) < 0.93) { const k2 = 0.93 / Math.max(Math.abs(x), 1e-3); x *= k2; y *= k2; } }
+  const sx = (x * 0.5 + 0.5) * W, sy = (-y * 0.5 + 0.5) * H;
+  HUD.threat.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+  HUD.threat.classList.add('on'); HUD.threat.classList.toggle('off', off);
+  if (off) HUD.thA.style.transform = `rotate(${Math.atan2(x, y).toFixed(3)}rad)`;
+  const d = Math.round(cam.position.distanceTo(th.pos));
+  if (d !== th.d) { th.d = d; HUD.thS.textContent = `${th.label ? th.label + ' ' : ''}${d}米`; }
+}
+
+// ---------- minimap (classic COD: rotating, player facing up) ----------
+const MM = { R: 45, R2: 70, acc: 1, key: -1, foot: null, ppm: 4, x0: 0, z0: 0, px: 0, size: 0 };
+function initMinimap(ui) {
+  MM.el = $('div', 'minimap', ui, '<canvas></canvas><div class="mm-fx"></div>');
+  MM.cv = MM.el.querySelector('canvas'); MM.ctx = MM.cv.getContext('2d');
+  HUD.minimap = MM;
+}
+// level footprint from G.boxes, cached per level (train: static in the train frame)
+function buildFoot() {
+  let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; const list = MM.list || (MM.list = []); list.length = 0;
+  for (const b of G.boxes) {
+    if (!b.enabled || b.inv || b.max.y - b.min.y < 0.05) continue;
+    const w = b.max.x - b.min.x, d = b.max.z - b.min.z; if (w > 120 || d > 120) continue;
+    list.push(b); x0 = Math.min(x0, b.min.x); z0 = Math.min(z0, b.min.z); x1 = Math.max(x1, b.max.x); z1 = Math.max(z1, b.max.z);
+  }
+  if (!list.length) { MM.foot = null; return; }
+  x0 -= 2; z0 -= 2; x1 += 2; z1 += 2;
+  const ppm = Math.min(4, 1800 / Math.max(x1 - x0, z1 - z0));
+  const c = MM.foot || (MM.foot = document.createElement('canvas'));
+  c.width = Math.ceil((x1 - x0) * ppm); c.height = Math.ceil((z1 - z0) * ppm);
+  const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  // sort low -> high so tall walls end up on top
+  list.sort((a, b) => a.max.y - a.min.y - (b.max.y - b.min.y));
+  for (const b of list) {
+    const h = b.max.y - b.min.y, fence = b.tag === 'fence';
+    g.fillStyle = fence ? 'rgba(200,210,220,0.42)' : h < 0.5 ? 'rgba(205,212,220,0.13)' : h < 1.4 ? 'rgba(214,220,226,0.30)' : 'rgba(226,231,236,0.46)';
+    const X = (b.min.x - x0) * ppm, Z = (b.min.z - z0) * ppm, W = Math.max(1, (b.max.x - b.min.x) * ppm), D = Math.max(1, (b.max.z - b.min.z) * ppm);
+    g.fillRect(X, Z, W, D);
+    if (h >= 1.4 && !fence && W > 3 && D > 3) { g.strokeStyle = 'rgba(240,244,248,0.35)'; g.lineWidth = 1; g.strokeRect(X + 0.5, Z + 0.5, W - 1, D - 1); }
+  }
+  MM.ppm = ppm; MM.x0 = x0; MM.z0 = z0;
+}
+let mx = 0, my = 0, mClamp = false;
+function toMap(x, z, P, s, c, sn, half, maxR) { // world -> minimap px (sets mx,my); returns false when beyond maxR
+  const dx = x - P.pos.x, dz = z - P.pos.z, dist = Math.hypot(dx, dz);
+  if (dist > maxR) return false;
+  let ox = s * (dx * c - dz * sn), oy = s * (dx * sn + dz * c);
+  const m = Math.max(Math.abs(ox), Math.abs(oy)); mClamp = m > half;
+  if (mClamp) { ox *= half / m; oy *= half / m; }
+  mx = MM.cx + ox; my = MM.cy + oy; return true;
+}
+function diamond(g, x, y, r) { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); }
+function updateMinimap(dt) {
+  const show = G.state === 'play' && HUD.root.classList.contains('hud-on');
+  if (!show) return;
+  MM.acc += dt; if (MM.acc < 0.05) return; MM.acc = 0;
+  const cv = MM.cv, g = MM.ctx, P = G.player;
+  const css = MM.el.clientWidth || 176, dpr = Math.min(2, devicePixelRatio || 1), S = Math.round(css * dpr);
+  if (cv.width !== S) { cv.width = cv.height = S; MM.size = S; MM.font = `700 ${Math.round(9 * dpr)}px sans-serif`; }
+  const key = (G.lvl || 0) * 1e6 + G.boxes.length;
+  if (key !== MM.key) { MM.key = key; buildFoot(); }
+  MM.cx = S / 2; MM.cy = S / 2;
+  const half = S / 2 - 7 * dpr, s = (S / 2 - 6 * dpr) / MM.R, c = Math.cos(P.yaw), sn = Math.sin(P.yaw), k = dpr;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, S, S);
+  // footprint
+  if (MM.foot) {
+    const f = s / MM.ppm, ox = MM.x0 - P.pos.x, oz = MM.z0 - P.pos.z;
+    g.setTransform(f * c, f * sn, -f * sn, f * c, MM.cx + s * (ox * c - oz * sn), MM.cy + s * (ox * sn + oz * c));
+    g.drawImage(MM.foot, 0, 0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // view cone
+  if (!MM.cone || MM.coneS !== S) { MM.coneS = S; MM.cone = g.createRadialGradient(MM.cx, MM.cy, 0, MM.cx, MM.cy, S * 0.42); MM.cone.addColorStop(0, 'rgba(255,255,255,0.16)'); MM.cone.addColorStop(1, 'rgba(255,255,255,0)'); }
+  g.fillStyle = MM.cone; g.beginPath(); g.moveTo(MM.cx, MM.cy); g.arc(MM.cx, MM.cy, S * 0.42, -Math.PI / 2 - 0.62, -Math.PI / 2 + 0.62); g.closePath(); g.fill();
+  const pulse = 0.6 + 0.4 * Math.sin(G.real * 9);
+  // north tick
+  if (toMap(P.pos.x, P.pos.z - 1e4, P, s, c, sn, half + 1 * k, 1e9)) {
+    g.fillStyle = 'rgba(8,10,12,0.75)'; g.beginPath(); g.arc(mx, my, 6.5 * k, 0, 6.283); g.fill();
+    g.fillStyle = '#ebe7dc'; g.font = MM.font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', mx, my + 0.5 * k);
+  }
+  // vehicles
+  for (const v of G.sleds) {
+    if (v.dead || !v.pos || !toMap(v.pos.x, v.pos.z, P, s, c, sn, half, 120)) continue;
+    const big = v.kind === 'truck' || v.kind === 'btr' || v.kind === 'suv';
+    const w = Math.max((big ? 2.4 : 1.2) * s, (big ? 6 : 5) * k), l = Math.max((big ? 6.5 : 2.6) * s, (big ? 9 : 6) * k);
+    g.save(); g.translate(mx, my); g.rotate(P.yaw - (v.yaw || 0));
+    g.fillStyle = '#ff3b2f'; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = k;
+    if (mClamp) { g.fillRect(-2.5 * k, -2.5 * k, 5 * k, 5 * k); } else { g.fillRect(-w / 2, -l / 2, w, l); g.strokeRect(-w / 2, -l / 2, w, l); }
+    g.restore();
+  }
+  // enemies
+  for (const e of G.enemies) {
+    const h = e.h; if (!h || !h.alive || h.hidden || h.removed) continue;
+    if (!toMap(h.pos.x, h.pos.z, P, s, c, sn, half, MM.R2)) continue;
+    const far = mClamp || Math.hypot(h.pos.x - P.pos.x, h.pos.z - P.pos.z) > MM.R;
+    if (e.jugg || h.faction === 'jg') {
+      g.globalAlpha = pulse; g.fillStyle = '#ff2a1e'; diamond(g, mx, my, (far ? 4.5 : 6.5) * k); g.fill();
+      g.globalAlpha = 1; g.strokeStyle = '#ffd0c8'; g.lineWidth = k; g.stroke();
+      continue;
+    }
+    g.fillStyle = 'rgba(0,0,0,0.55)'; g.beginPath(); g.arc(mx, my, (far ? 2.3 : 3.6) * k, 0, 6.283); g.fill();
+    g.fillStyle = far ? 'rgba(255,70,55,0.75)' : '#ff4637'; g.beginPath(); g.arc(mx, my, (far ? 1.6 : 2.7) * k, 0, 6.283); g.fill();
+  }
+  // teammates
+  for (const m of G.mates) {
+    const h = m.h; if (!h || !h.alive || h.hidden) continue;
+    if (!toMap(h.pos.x, h.pos.z, P, s, c, sn, half, MM.R2)) continue;
+    g.fillStyle = 'rgba(0,0,0,0.55)'; g.beginPath(); g.arc(mx, my, 3.7 * k, 0, 6.283); g.fill();
+    g.fillStyle = '#6dff6a'; g.beginPath(); g.arc(mx, my, 2.8 * k, 0, 6.283); g.fill();
+  }
+  // Hind: red rotor icon (always shown, clamped to the rim)
+  const hd = G.hind;
+  if (hd && hd.visible && hd.pos && toMap(hd.pos.x, hd.pos.z, P, s, c, sn, half, 1e9)) {
+    const r = (mClamp ? 6 : 8) * k, a = G.real * 14;
+    g.strokeStyle = '#ff3b2f'; g.lineWidth = 1.6 * k; g.beginPath(); g.arc(mx, my, r, 0, 6.283); g.stroke();
+    g.lineWidth = 2 * k; g.beginPath();
+    for (let i = 0; i < 2; i++) { const q = a + i * 1.5708, cx = Math.cos(q) * r, cy = Math.sin(q) * r; g.moveTo(mx - cx, my - cy); g.lineTo(mx + cx, my + cy); }
+    g.stroke(); g.fillStyle = '#ff3b2f'; g.beginPath(); g.arc(mx, my, 2.2 * k, 0, 6.283); g.fill();
+  }
+  // scripted threat: big pulsing diamond
+  if (HUD.th && toMap(HUD.th.pos.x, HUD.th.pos.z, P, s, c, sn, half, 1e9)) {
+    g.globalAlpha = pulse; g.fillStyle = '#ff2a1e'; diamond(g, mx, my, (mClamp ? 5 : 7.5) * k); g.fill();
+    g.globalAlpha = 1; g.strokeStyle = '#ffe0d8'; g.lineWidth = k; g.stroke();
+  }
+  // objective: gold diamond clamped to the rim
+  if (HUD.mk && toMap(HUD.mk.pos.x, HUD.mk.pos.z, P, s, c, sn, half, 1e9)) {
+    g.fillStyle = 'rgba(0,0,0,0.6)'; diamond(g, mx, my, 6.5 * k); g.fill();
+    g.fillStyle = '#ffc54a'; diamond(g, mx, my, 5 * k); g.fill();
+  }
+  // player arrow
+  g.fillStyle = '#fff6d8'; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.lineWidth = 1.2 * k;
+  g.beginPath(); g.moveTo(MM.cx, MM.cy - 7 * k); g.lineTo(MM.cx + 5 * k, MM.cy + 5.5 * k); g.lineTo(MM.cx, MM.cy + 3 * k); g.lineTo(MM.cx - 5 * k, MM.cy + 5.5 * k); g.closePath(); g.fill(); g.stroke();
 }

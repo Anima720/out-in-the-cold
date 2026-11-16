@@ -12,7 +12,7 @@ HELPERS = r"""
 window.__bodies = () => { const L = []; const P = __P;
   if (P.alive) L.push([P.pos.x, P.pos.y, P.pos.z, 'P', 0.32]);
   for (const m of __G.mates) { const h = m.h; if (h.alive && !h.hidden && !h.sit && !m.arc && !h.noCrowd) L.push([h.pos.x, h.pos.y, h.pos.z, 'M' + m.name[0], 0.33]); }
-  for (const e of __G.enemies) { const h = e.h; if (h.alive && !h.hidden && !h.sit && e.kind !== 'gunner' && !h.noCrowd) L.push([h.pos.x, h.pos.y, h.pos.z, e.jugg ? 'J' : 'E', e.jugg ? 0.42 : 0.33]); }
+  for (const e of __G.enemies) { const h = e.h; if (h.alive && !h.hidden && !h.sit && e.kind !== 'gunner' && !h.noCrowd) L.push([h.pos.x, h.pos.y, h.pos.z, (e.jugg ? 'J' : 'E') + ':' + e.state + ':' + Math.hypot(h.vel.x,h.vel.z).toFixed(1) + '@' + h.pos.x.toFixed(0) + ',' + h.pos.z.toFixed(0), e.jugg ? 0.42 : 0.33]); }
   return L; };
 // min pairwise XZ distance and min clearance (distance - radius sum) among bodies at similar height
 window.__cm = () => { const L = __bodies(); let md = 9, mc = 9, who = '';
