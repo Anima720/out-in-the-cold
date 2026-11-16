@@ -120,7 +120,11 @@ function buildMine() {
   solid(3.5, 3.2, -69.5, 12.5, 3.6, -54.5, 'concrete', 0x5d5a54);
   B.box(3.5, -0.05, -68, 11, 0.04, -56, 'concrete', 0x5f5c56);
   solid(7.0, 0, -63.4, 9.6, 0.82, -61.8, 'wood', 0x6e5a42, 'wood');
-  B.boxC(8.3, 0.84, -62.6, 0.42, 0.03, 0.3, 'dark', 0x1c1c1c); B.boxC(8.3, 1.0, -62.76, 0.42, 0.28, 0.02, 'screen', 0);
+  { // the laptop is its own group: it disappears once the intel is taken (and at checkpoint 11)
+    const lb = new Builder(), lg = new THREE.Group();
+    lb.boxC(8.3, 0.84, -62.6, 0.42, 0.03, 0.3, 'dark', 0x1c1c1c); lb.boxC(8.3, 1.0, -62.76, 0.42, 0.28, 0.02, 'screen', 0);
+    lb.build({ ...M, screen: new THREE.MeshStandardMaterial({ color: 0, emissive: 0x7de0ff, emissiveIntensity: 2.5 }) }, lg); g.add(lg); CV.laptopGrp = lg;
+  }
   for (let i = 0; i < 3; i++) solid(10.4, 0, -67.5 + i * 0.9, 10.95, 1.6, -66.7 + i * 0.9, 'steel', 0x5f665f, 'metal');
   B.boxC(7.3, 1.8, -68 + 0.06, 2.4, 1.3, 0.04, 'wood', 0xb8a98a);
   for (let i = 0; i < 6; i++) solid(4.2 + (i % 3) * 0.9, 0, -67.6 + Math.floor(i / 3) * 0.9, 5.0 + (i % 3) * 0.9, 0.8, -66.8 + Math.floor(i / 3) * 0.9, 'crate', 0xffffff, 'wood');
@@ -347,6 +351,7 @@ G.startCave = (k, cont) => {
   const C = (D.cv = { ph: '', t: 0 });
   const [t, g] = makeMates();
   resetWeapons();
+  if (CV.laptopGrp) CV.laptopGrp.visible = k === 10;
   if (!G.stats || (!cont && k === 10)) G.stats = { shots: 0, hits: 0, kills: 0, deaths: G.stats ? G.stats.deaths || 0 : 0, t0: G.real };
   HUD.fade(1, 0); setTimeout(() => HUD.fade(0, k === 10 ? 4 : 1.5), 50);
   if (k === 10) {
@@ -413,12 +418,13 @@ function updateMine(dt) {
     say('P1_GRIN_02', 1.5);
     after(2.5, () => { HUD.objective('搜查右侧的办公室'); HUD.setMarker(CV.laptop.clone().setY(1.2), ''); musicMode('p1dark'); });
   }
-  if (C.ph === 'office' && Math.hypot(P.pos.x - CV.laptop.x, P.pos.z - CV.laptop.z) < 1.4) {
+  if (C.ph === 'office' && !C.intel && Math.hypot(P.pos.x - CV.laptop.x, P.pos.z - CV.laptop.z) < 1.4) {
     prompt = '按住 <kbd>F</kbd> 取走笔记本电脑';
     if (key('KeyF')) C.hold = (C.hold || 0) + dt; else C.hold = 0;
     holdK = C.hold / 1.6;
     if (C.hold >= 1.6) {
-      C.hold = 0; C.intel = true; play('magin', { vol: 0.6, rev: 0 });
+      C.hold = 0; C.intel = true; holdK = null; play('magin', { vol: 0.6, rev: 0 });
+      if (CV.laptopGrp) CV.laptopGrp.visible = false;
       HUD.setMarker(null); HUD.bigCard('ОАЗИС', '「绿洲」—— 情报已取得', 3.5);
       say('P1_GRIN_03', 0.8); say('P1_SAND_04', 0.4); say('P1_TRUCK_02', 0.6);
       D.ck = 11; if (G.saveCk) G.saveCk(11);
