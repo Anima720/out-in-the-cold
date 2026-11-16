@@ -62,7 +62,7 @@ export function initBlood() {
         float thr = 1.0 - vB.x;
         float ba = smoothstep(thr, thr + 0.035, bt.r);
         bInner = smoothstep(thr + 0.03, thr + 0.32, bt.r);
-        vec3 bc = mix(vec3(0.11, 0.004, 0.004), vec3(0.24, 0.012, 0.01), bInner) * (0.8 + 0.45 * bt.g);
+        vec3 bc = mix(vec3(0.045, 0.002, 0.002), vec3(0.10, 0.005, 0.004), bInner) * (0.88 + 0.25 * bt.g);
         diffuseColor = vec4(bc, ba * vB.y);`)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.55, 0.14, bInner);');
   };
@@ -169,3 +169,4 @@ export function clearBlood() {
 }
 
 export const BLOOD = { bloodPool, bloodSplat, BL };
+if (typeof window !== 'undefined') window.__blood = BL;

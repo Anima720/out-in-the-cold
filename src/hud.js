@@ -240,12 +240,15 @@ function buildFoot() {
   const c = MM.foot || (MM.foot = document.createElement('canvas'));
   c.width = Math.ceil((x1 - x0) * ppm); c.height = Math.ceil((z1 - z0) * ppm);
   const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = 'rgba(200,210,220,0.07)'; // faint 10 m grid
+  for (let x = Math.ceil(x0 / 10) * 10; x < x1; x += 10) g.fillRect((x - x0) * ppm, 0, 1, c.height);
+  for (let z = Math.ceil(z0 / 10) * 10; z < z1; z += 10) g.fillRect(0, (z - z0) * ppm, c.width, 1);
   // sort low -> high so tall walls end up on top
   list.sort((a, b) => a.max.y - a.min.y - (b.max.y - b.min.y));
   for (const b of list) {
     const h = b.max.y - b.min.y, fence = b.tag === 'fence';
-    g.fillStyle = fence ? 'rgba(200,210,220,0.42)' : h < 0.5 ? 'rgba(205,212,220,0.13)' : h < 1.4 ? 'rgba(214,220,226,0.30)' : 'rgba(226,231,236,0.46)';
-    const X = (b.min.x - x0) * ppm, Z = (b.min.z - z0) * ppm, W = Math.max(1, (b.max.x - b.min.x) * ppm), D = Math.max(1, (b.max.z - b.min.z) * ppm);
+    g.fillStyle = fence ? 'rgba(200,210,220,0.5)' : h < 0.5 ? 'rgba(205,212,220,0.16)' : h < 1.4 ? 'rgba(214,220,226,0.36)' : 'rgba(228,233,238,0.55)';
+    const X = (b.min.x - x0) * ppm, Z = (b.min.z - z0) * ppm, W = Math.max(fence ? 2 : 1, (b.max.x - b.min.x) * ppm), D = Math.max(fence ? 2 : 1, (b.max.z - b.min.z) * ppm);
     g.fillRect(X, Z, W, D);
     if (h >= 1.4 && !fence && W > 3 && D > 3) { g.strokeStyle = 'rgba(240,244,248,0.35)'; g.lineWidth = 1; g.strokeRect(X + 0.5, Z + 0.5, W - 1, D - 1); }
   }
