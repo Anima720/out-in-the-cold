@@ -277,7 +277,7 @@ export function startWake(P5, g) {
   Object.assign(F, { on: true, ph: 'wake', t: 0, actors: F.actors && F.actors.length ? F.actors : [], hb: 0.4, rpg: null, gr: g, kras: null, sa: null, sb: null, hold: 0, reach: 0 });
   F.actors.length = 0;
   const yd = yawOf(_a.subVectors(DOOR, WAKE_POS)), yg = yawOf(_b.subVectors(GRINCH_AT, WAKE_POS));
-  resetPlayer(WAKE_POS.clone(), yd + angDiff(yd, yg) * 0.42);
+  resetPlayer(WAKE_POS.clone(), yd + angDiff(yd, yg) * 0.56);
   P.pitch = 0.05; P.shield = true; P.noCrowd = true; P.health = 45; P.enabled = true; P.lockLook = false;
   P.downed = { eye: 0.35, sens: 0.3, sway: 1, pmin: -0.5, pmax: 0.75, yawC: P.yaw, yawR: 1.2, gun: false, vmDrop: 1 };
   WP.hidden = true; WP.clay = 0;
