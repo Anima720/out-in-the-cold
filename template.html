@@ -199,6 +199,8 @@ html,body { margin:0; height:100%; background:var(--ink); overflow:hidden; color
 .threat b { display:none; position:absolute; left:-8px; top:-34px; width:0; height:0; border:8px solid transparent; border-bottom:13px solid #ff3b2f; transform-origin:8px 34px; filter:drop-shadow(0 0 3px #000); }
 .threat.off b { display:block; }
 @keyframes thp { 50% { transform:rotate(45deg) scale(1.25); background:rgba(255,40,30,.5); } }
+.prompt { top:min(57%, calc(100% - 215px)); font-size:clamp(15px, 4.2vh, 19px); }
+.hold { top:calc(min(57%, calc(100% - 215px)) + 34px); }
 #ui:not(.hud-on) .minimap, #ui.letterbox .minimap, #ui:not(.hud-on) .threat, #ui.letterbox .threat { display:none; }
 </style>
 </head>
