@@ -17,10 +17,10 @@ async def main():
         ev = pg.evaluate
         # stop the render loop between screenshots (software GL is slow); __sim still advances the game
         await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
-          window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend=cb; return 0; } return raf(cb); }; })()""")
-        if ONLY == 'a': await ev("window.__rafHold=false; if(window.__pend){const c=window.__pend; window.__pend=null; window.__raf(c);}")
+          window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
+        if ONLY == 'a': await ev("window.__rafHold=false; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
         async def shot(n):
-            await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; if(window.__pend){const c=window.__pend; window.__pend=null; window.__raf(c);}")
+            await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
             await pg.screenshot(path=f"shots/f_{n}.png", timeout=200000)
             if ONLY != 'a': await ev("window.__rafHold=true")
