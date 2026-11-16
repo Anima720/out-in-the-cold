@@ -26,7 +26,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V(), _c = V();
 const F = { on: false, ph: '', t: 0 };
 export const FIN = F;
-const WAKE_POS = V(-2.4, 0.15, -3.5), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.75, 0.15, -1.85);
+const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.75, 0.15, -1.85);
 const IN_ROOM = (x, z) => Math.abs(x) < 7.7 && Math.abs(z) < 4.7;
 const floorY = (x, z) => (IN_ROOM(x, z) ? 0.15 : ground5(x, z));
 
@@ -347,6 +347,7 @@ function updateRoom(dt, rdt, P5) {
     if (t > 7.1) startBullet();
   } else if (F.ph === 'bullet') {
     const real = t;
+    if (F.aimHelp !== undefined && (F.aimHelp -= rdt) <= 0) { F.aimHelp = undefined; P.autoLook = null; }
     G.timeScale = lerp(1, 0.2, smooth(real / 0.35));
     if (F.fired && !P.god) G.timeScale = 1;
     d.vmDrop = 1 - smooth(real / 0.7); look(0.6, 0.75); ov('v', 0.55); heart(rdt, 0.6, 0.9);
@@ -415,7 +416,8 @@ function startBullet() {
   F.ph = 'bullet'; F.t = 0;
   P.autoLook = null; P.lockLook = false;
   forcePistol();
-  const d = P.downed; d.gun = true; d.vmDrop = 1; d.sens = 0.55; d.yawC = P.yaw; d.yawR = 1.3; d.pmin = -0.3; d.pmax = 0.8;
+  const d = P.downed; d.gun = true; d.vmDrop = 1; d.sens = 0.55; d.yawC = P.yaw; d.yawR = 2.4; d.pmin = -0.3; d.pmax = 0.8;
+  P.autoLook = { target: F.kras.h.j[J.Ne], rate: 14 }; F.aimHelp = 0.8; // swing toward Krasin; then the player has the gun
   for (const a of [F.kras, F.sb]) { a.h.invuln = false; a.h.hp = 35; }
   HUD.setSlowmo(true); HUD.root.classList.add('fin-aim');
   play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });

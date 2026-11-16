@@ -130,7 +130,7 @@ export function buildStation() {
   solid(2.2, 0.15, 1.2, 4.4, 0.95, 2.6, 'wood', 0x7a6248, 'wood');
   solid(-5.2, 0.15, -4.4, -3.9, 1.05, -3.6, 'crate', 0xffffff, 'wood');
   solid(3.9, 0.15, -4.4, 5.3, 0.95, -3.5, 'crate', 0xffffff, 'wood');
-  B.boxC(-4.7, 0.4, -2.9, 0.55, 0.5, 0.55, 'crate', 0xffffff);                       // stool crate (visual only)
+  B.boxC(-5.9, 0.4, 2.4, 0.55, 0.5, 0.55, 'crate', 0xffffff);                        // stool crate (visual only)
   solid(5.4, 0.15, 2.4, 7.5, 1.2, 4.5, 'steel', 0x575d55, 'metal');               // switchgear cabinet
   solid(-6.9, 0.15, 3.4, -5.6, 0.9, 4.5, 'crate', 0xffffff, 'wood');
   // weapon rack + ammo crate along the inner south wall

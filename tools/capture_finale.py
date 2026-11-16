@@ -52,6 +52,7 @@ async def main():
                 await ev(f"""(()=>{{const h=__fin.{tgt}.h; if(!h.alive) return; const c=__G.camera.position; const d=h.j[0].clone().sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y); __input.lmbPressed=true; __WP.cool=0; }})(); __sim(0.05)""")
                 await ev("__sim(0.3)")
         await st("shot"); await shot("12_bullet_after")
+        await ev("[__fin.kras,__fin.sb].forEach(a=>a.h.alive&&a.h.hurt(500,new __THREE.Vector3(0,0,-1),'torso'))")
         await until("__fin.ph==='crawl'", 0.1, 6); await ev("__sim(2.0)"); await ev("__input.down.add('KeyW')")
         await ev("__sim(2.5)"); await st("crawl"); await shot("13_crawl")
         await until("Math.hypot(__P.pos.x-__p5().S.keyPos.x,__P.pos.z-__p5().S.keyPos.z)<1.05", 0.2, 14)
