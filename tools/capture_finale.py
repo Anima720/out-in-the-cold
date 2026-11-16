@@ -25,7 +25,7 @@ async def main():
             while t < maxt and not await ev(cond): await ev(f"__sim({step})"); t += step
         if ONLY in ('', 'a'):
             await ev("__begin(6)"); await ev("__sim(1.5)")
-            await ev("__P.pos.set(4.2,0,-9.2); __P.yaw=Math.PI+0.35; __P.pitch=-0.25"); await ev("__sim(0.1)"); await shot("01_truck")
+            await ev("__P.pos.set(2.6,0,-6.1); __P.yaw=-Math.PI/2+0.25; __P.pitch=-0.3"); await ev("__sim(0.1)"); await shot("01_truck")
             # force the 99% RPG while standing in the yard
             await ev("const P5=__p5().P5; P5.hindDown=true; P5.l90=true; P5.up=98.97; P5.rate=1; __P.pos.set(-3,0,-13); __P.yaw=0.3; __P.pitch=0.05")
             await until("__fin.ph==='rpg'", 0.05, 5); await ev("__sim(0.3)"); await st("rpg"); await shot("02_rpg")

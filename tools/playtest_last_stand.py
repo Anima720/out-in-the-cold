@@ -18,7 +18,7 @@ async def main():
         async def st(tag):
             r = await ev("""JSON.stringify({ph:__p5().P5&&__p5().P5.ph, up:__p5().P5&&+__p5().P5.up.toFixed(1), st:__G.state, lvl:__G.lvl, P:__P.pos.toArray().map(v=>+v.toFixed(1)),
               en:__G.enemies.filter(e=>e.h.alive).length, mates:__G.mates.map(m=>[m.name[0],m.p5,m.h.pos.toArray().map(v=>+v.toFixed(1))]), hind: __G.hind? [__G.hind.state, __G.hind.pos.toArray().map(v=>+v.toFixed(0))]:null,
-              err:window.__errors.slice(0,3), cur: __D.cur && __D.cur.id})""")
+              err:window.__errors.slice(0,3), cur: __D.cur && __D.cur.id, fin:__fin.ph, ck:__D.ck})""")
             print(tag, r, flush=True)
         await ev("__begin(4)"); await ev("__sim(1.5)")
         await pg.screenshot(path="shots/p5_start.png")
@@ -56,10 +56,30 @@ async def main():
         await pg.screenshot(path="shots/p5_lock.png")
         await st("locking")
         await ev("__input.lmb=true; __input.lmbPressed=true; __sim(0.05); __input.lmb=false; __sim(4); __input.rmb=false"); await st("fired")
-        await ev("__sim(10)"); await st("after")
-        for i in range(8):
-            await ev("__sim(5)"); await st(f"end{i}")
-            if await ev("__G.state")=='end': break
+        await ev("__sim(4)"); await st("after")
+        # upload climbs to 99% -> RPG -> blackout/drag -> checkpoint 7 wake
+        for i in range(30):
+            await ev("__sim(1)")
+            if await ev("__fin.ph==='wake'"): break
+        await st("wake"); print("ck", await ev("__D.ck"))
+        for i in range(30):
+            await ev("__sim(0.5)")
+            if await ev("__fin.ph==='bullet'"): break
+        await ev("__sim(1.0)"); await st("bullet")
+        await ev("[__fin.kras,__fin.sb].forEach(a=>a.h.alive&&a.h.hurt(500,new __THREE.Vector3(0,0,-1),'torso'))")
+        for i in range(10):
+            await ev("__sim(0.5)")
+            if await ev("__fin.ph==='crawl'"): break
+        await ev("__sim(2); __input.down.add('KeyW')")
+        for i in range(40):
+            await ev("__sim(0.5)")
+            if await ev("Math.hypot(__P.pos.x-__p5().S.keyPos.x,__P.pos.z-__p5().S.keyPos.z)<1.05"): break
+        await st("at console")
+        await ev("__input.down.delete('KeyW'); __input.down.add('KeyF'); __sim(2); __input.down.delete('KeyF')"); await st("sent")
+        for i in range(20):
+            await ev("__sim(1)")
+            if await ev("__G.state")=='cine': break
+        await st("epilogue")
         await pg.screenshot(path="shots/p5_end.png")
         print("\n".join(logs[-15:]))
         await b.close()

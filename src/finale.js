@@ -138,7 +138,8 @@ export function startFinale(P5, ctx) {
   for (const d of opts) {
     const o = tgt.clone().addScaledVector(d, 42);
     if (!los(o, tgt)) continue;
-    const sc = -d.z * 0.6 + d.dot(_c.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw))) * 1.2;
+    const ang = Math.acos(clamp(d.dot(_c.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw))) / Math.hypot(d.x, d.y, d.z), -1, 1));
+    const sc = -d.z * 0.5 - Math.abs(ang - 0.45) * 1.5; // in view, but slightly off-axis so it streaks across
     if (sc > bs) { bs = sc; best = o; }
   }
   if (!best) best = tgt.clone().add(V(0, 30, -25));
@@ -171,7 +172,7 @@ export function updateFinale(dt, rdt, P5) {
       const step = r.v.length() * dt;
       if (r.pos.distanceTo(r.tgt) <= step + 0.2) { boom(); break; }
       r.pos.addScaledVector(r.v, dt); r.mesh.position.copy(r.pos); r.mesh.lookAt(r.tgt);
-      if ((r.smoke -= dt) <= 0) { r.smoke = 0.012; G.fx.smoke(r.pos, { size: 0.4, grow: 3.5, life: 2.2, color: 0xd8d8d6, alpha: 0.55, vy: 0.2, wind: 0.3 }); G.fx.add.spawn(r.pos.x, r.pos.y, r.pos.z, 0, 0, 0, { life: 0.06, size: 0.55, c: [1, 0.7, 0.35], alpha: 1 }); }
+      if ((r.smoke -= dt) <= 0) { r.smoke = 0.012; G.fx.smoke(r.pos, { size: 0.5, grow: 3, life: 2.4, color: 0x6e6c68, alpha: 0.7, vy: 0.15, wind: 0.3 }); G.fx.add.spawn(r.pos.x, r.pos.y, r.pos.z, 0, 0, 0, { life: 0.08, size: 0.9, c: [1, 0.65, 0.3], alpha: 1 }); }
       if (t > 3) boom();
       break;
     }
@@ -237,7 +238,7 @@ function updateDrag(dt, rdt) {
   if (F.seg !== i) enterSeg(i);
   const s = F.segs[i], u = clamp((T - acc) / s.dur, 0, 1);
   ov('k', T - acc > s.dur ? 1 : Math.max(1 - smooth(u / 0.22), smooth((u - 0.8) / 0.2)));
-  look(3.2 - Math.sin(u * Math.PI) * 1.2, 0.45); ov('v', 0.85);
+  look(3.0 - Math.sin(u * Math.PI) * 1.4, 0.5); ov('v', 0.6);
   heart(rdt, 0.95);
   // three hard pulls per glimpse
   const n = 3, pu = u * n, w = (Math.floor(pu) + smooth(Math.min(1, (pu % 1) / 0.55))) / n;
@@ -245,20 +246,20 @@ function updateDrag(dt, rdt) {
   P.pos.copy(s.a).addScaledVector(move, L * Math.min(1, w)); P.pos.y = floorY(P.pos.x, P.pos.z);
   P.vel.set(0, 0, 0);
   const lookYaw = yawOf(_b.copy(move).negate());
-  P.yaw = lookYaw + 0.5; P.pitch = 0.42 + Math.sin(T * 1.7) * 0.04; P.lockLook = true; P.autoLook = null;
+  P.yaw = lookYaw + 0.72; P.pitch = 0.27 + Math.sin(T * 1.7) * 0.04; P.lockLook = true; P.autoLook = null;
   if ((pu % 1) < 0.05) P.addShake(0.05);
   // Grinch walks backwards toward the door, left hand in the player's vest, pistol out one-handed at the yard
   const g = D.grinch;
   if (g) {
     const h = g.h, side = _c.set(-move.z, 0, move.x);
     const sp = (L / s.dur) * 1.4;
-    h.pos.copy(P.pos).addScaledVector(move, 0.55).addScaledVector(side, -0.42); h.pos.y = floorY(h.pos.x, h.pos.z);
+    h.pos.copy(P.pos).addScaledVector(move, -0.05).addScaledVector(side, 0.68); h.pos.y = floorY(h.pos.x, h.pos.z);
     h.vel.copy(move).multiplyScalar(sp);
-    h.handL = (h.handL || V()).copy(P.pos).addScaledVector(move, 0.18).setY(P.pos.y + 0.35);
+    h.handL = (h.handL || V()).copy(P.pos).addScaledVector(move, 0.15).addScaledVector(side, 0.2).setY(P.pos.y + 0.45);
     let tgt = null; for (const a of F.actors) if (a.h.alive) { tgt = a; break; }
     h.aimTarget = 1;
     if (tgt) h.aim.subVectors(tgt.h.j[J.Ne], h.j[J.SR]).normalize(); else h.aim.copy(move).negate();
-    h.yaw = yawOf(_b.copy(move).negate()) - 0.25;
+    h.yaw = yawOf(_b.copy(move).negate()) - 0.35;
     if ((F.fireT -= rdt) <= 0 && tgt) {
       F.fireT = rr(0.5, 0.9);
       shot(h, tgt.h.j[J.Ne].clone(), { pistol: true });
