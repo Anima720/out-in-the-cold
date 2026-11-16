@@ -181,15 +181,17 @@ html,body { margin:0; height:100%; background:var(--ink); overflow:hidden; color
 .minimap { left:var(--edge); top:var(--edge); width:var(--mm); height:var(--mm); background:rgba(8,11,14,.58); border:1px solid rgba(235,231,220,.3); border-radius:3px; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 4px 18px rgba(0,0,0,.35); overflow:hidden; }
 .minimap canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
 .minimap .mm-fx { position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.35) 100%); }
-.obj { left:var(--edge); top:calc(var(--edge) + var(--mm) + 10px); max-width:min(34vw, 420px); padding:8px 16px 10px 12px; }
+.obj { left:var(--edge); top:calc(var(--edge) + var(--mm) + 10px); max-width:min(46vw, 440px); padding:8px 16px 10px 12px; }
+.obj-t { font-size:clamp(15px, 2.7vh, 19px); }
 .compass { width:min(560px, calc(100vw - 2 * (var(--mm) + 2 * var(--edge) + 12px))); }
 .upl { width:min(300px, calc(100vw - 2 * (var(--mm) + 2 * var(--edge) + 12px))); }
 .sub { max-width:min(860px, calc(100vw - 2 * 250px)); font-size:clamp(15px, 2.9vh, 21px); bottom:max(13vh, 46px); }
 .am-n b { font-size:clamp(36px, 7.5vh, 54px); }
-.loc { bottom:27vh; }
+.loc { left:auto; right:26px; top:clamp(92px, 14vh, 110px); bottom:auto; text-align:right; padding:0 16px 0 0; }
+.loc i { left:auto; right:0; }
 .loc b { font-size:clamp(28px, 6.1vh, 44px); }
 .loc span { font-size:clamp(12px, 2.1vh, 15px); margin-top:clamp(3px, .8vh, 6px); }
-.toast { bottom:calc(clamp(36px, 7.5vh, 54px) + 100px); }
+.toast { bottom:calc(clamp(36px, 7.5vh, 54px) + 122px); }
 .threat { left:0; top:0; width:0; height:0; opacity:0; transition:opacity .2s; }
 .threat.on { opacity:1; }
 .threat i { position:absolute; left:-9px; top:-9px; width:14px; height:14px; border:2px solid #ff3b2f; background:rgba(255,40,30,.25); transform:rotate(45deg); box-shadow:0 0 8px rgba(255,40,30,.7); animation:thp .8s ease-in-out infinite; }
