@@ -67,10 +67,12 @@ export function rayBox(o, d, b, max, outN) {
   return tmin;
 }
 
+// bullet = true: projectiles / line of sight. They ignore invisible player-only walls and see-through
+// colliders (tag 'fence': chain-link that blocks walking and vehicles, but not bullets, LOS, grenades or rockets).
 export function rayBoxes(o, d, max, bullet = true) {
   let best = max, hb = null; const n = new THREE.Vector3();
   for (const b of G.boxes) {
-    if (!b.enabled || (bullet && b.inv)) continue;
+    if (!b.enabled || (bullet && (b.inv || b.tag === 'fence'))) continue;
     const t = rayBox(o, d, b, best, _n);
     if (t >= 0 && t < best) { best = t; hb = b; n.copy(_n); }
   }
@@ -253,6 +255,8 @@ export function raySegment(o, d, max, a, b) {
   const dx = _w.x + sc * _u.x - tc * _v.x, dy = _w.y + sc * _u.y - tc * _v.y, dz = _w.z + sc * _u.z - tc * _v.z;
   return { dist2: dx * dx + dy * dy + dz * dz, t: sc * max, s: tc };
 }
+
+if (typeof window !== 'undefined') window.__phys = { raycast, los, rayBoxes, supportAt, groundY };
 
 export function raySphere(o, d, c, r, max) {
   const ox = o.x - c.x, oy = o.y - c.y, oz = o.z - c.z;

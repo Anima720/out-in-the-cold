@@ -1,6 +1,7 @@
 import { G, THREE, rr, clamp } from './core.js';
 import { TEX } from './geom.js';
 import { groundY } from './physics.js';
+import { initBlood, updateBlood, clearBlood, BLOOD } from './blood.js';
 
 // Billboard particle pool rendered as one instanced quad mesh.
 class Pool {
@@ -122,6 +123,7 @@ export function initFX() {
   // flash lights pool
   FX.lights = [];
   for (let i = 0; i < 3; i++) { const l = new THREE.PointLight(0xffb060, 0, 18, 2); G.scene.add(l); FX.lights.push({ l, t: 0, max: 0.05, I: 0 }); }
+  initBlood(); FX.bloodPool = BLOOD.bloodPool; FX.bloodSplat = BLOOD.bloodSplat;
   G.fx = FX;
   FX.shakeCB = null;
 }
@@ -211,7 +213,7 @@ FX.splash = (pos, size = 1) => { // ice & water burst
 };
 
 export function updateFX(dt) {
-  FX.add.update(dt); FX.alpha.update(dt);
+  FX.add.update(dt); FX.alpha.update(dt); updateBlood(dt);
   // tracers
   let i = 0;
   for (let k = FX.tracers.length - 1; k >= 0; k--) {
@@ -254,4 +256,5 @@ export function clearFX() {
   FX.add.clear(); FX.alpha.clear(); FX.tracers.length = 0; FX.debris.length = 0;
   for (let i = 0; i < 160; i++) FX.decalMesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
   FX.decalMesh.instanceMatrix.needsUpdate = true;
+  clearBlood();
 }
