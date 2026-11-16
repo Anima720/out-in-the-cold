@@ -27,6 +27,7 @@ function mats() {
   if (!MT) MT = { ...M,
     glass: new THREE.MeshStandardMaterial({ color: 0x10161b, roughness: 0.08, metalness: 0.85, envMapIntensity: 1.4 }),
     tint: new THREE.MeshStandardMaterial({ color: 0x1b252c, roughness: 0.05, metalness: 0.6, envMapIntensity: 1.5, transparent: true, opacity: 0.5, depthWrite: false }),
+    rubber: new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.92, metalness: 0, envMapIntensity: 0.25 }),
     light: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff0c8, emissiveIntensity: 6 }) };
   return MT;
 }
@@ -59,7 +60,7 @@ function truckMesh() {
   b.cyl(0, 3.27, 3.48, 0.1, 0.1, 2.5, 'cloth', T, 0, 0, HP, 10);                         // rear flap, rolled up
   b.boxC(0, 2.73, -2.35, 2.3, 0.06, 1.6, 'snow', 0xffffff);
   b.boxC(0, 3.46, 1.25, 2.3, 0.06, 4.4, 'snow', 0xffffff);
-  for (const z of [-3.0, 0.7, 2.3]) for (const sx of [-1, 1]) { b.cyl(sx * 1.12, 0.55, z, 0.55, 0.55, 0.42, 'glove', 0, 0, 0, HP, 14); b.cyl(sx * 1.335, 0.55, z, 0.28, 0.28, 0.02, 'dark', 0x3a3d33, 0, 0, HP, 10); }
+  for (const z of [-3.0, 0.7, 2.3]) for (const sx of [-1, 1]) { b.cyl(sx * 1.12, 0.55, z, 0.55, 0.55, 0.42, 'rubber', 0, 0, 0, HP, 14); b.cyl(sx * 1.335, 0.55, z, 0.28, 0.28, 0.02, 'dark', 0x3a3d33, 0, 0, HP, 10); }
   build(b, g);
   const gate = new THREE.Group(); gate.position.set(0, TF, 3.55); g.add(gate);
   const tb = new Builder(); tb.boxC(0, 0.28, 0.03, 2.45, 0.56, 0.06, 'paint', C);
@@ -82,7 +83,7 @@ function suvMesh() {
     b.boxC(sx * 0.94, 1.5, 1.22, 0.07, 0.66, 0.08, 'paint', C);
     b.boxC(sx * 0.94, 1.5, 2.17, 0.08, 0.66, 0.1, 'paint', C);
     b.boxC(sx * 0.955, 1.49, 1.7, 0.03, 0.58, 0.88, 'tint', 0);
-    for (const z of [-1.55, 1.5]) { b.cyl(sx * 0.86, 0.38, z, 0.38, 0.38, 0.28, 'glove', 0, 0, 0, HP, 14); b.cyl(sx * 1.005, 0.38, z, 0.2, 0.2, 0.02, 'dark', 0x55585b, 0, 0, HP, 10); b.boxC(sx * 0.99, 0.84, z, 0.07, 0.08, 0.98, 'poly', 0); }
+    for (const z of [-1.55, 1.5]) { b.cyl(sx * 0.86, 0.38, z, 0.38, 0.38, 0.28, 'rubber', 0, 0, 0, HP, 14); b.cyl(sx * 1.005, 0.38, z, 0.2, 0.2, 0.02, 'dark', 0x55585b, 0, 0, HP, 10); b.boxC(sx * 0.99, 0.84, z, 0.07, 0.08, 0.98, 'poly', 0); }
     b.boxC(sx * 0.72, 0.95, -2.43, 0.28, 0.15, 0.04, 'light', 0);
     b.boxC(sx * 0.8, 0.98, 2.23, 0.16, 0.2, 0.03, 'paint', 0x8f2a22);
     b.boxC(sx * 0.75, 1.93, 0.8, 0.05, 0.05, 2.6, 'dark', K);
@@ -94,7 +95,7 @@ function suvMesh() {
   b.boxC(0, 1.49, 2.2, 1.8, 0.58, 0.03, 'tint', 0);
   b.boxC(0, 0.86, -2.43, 1.3, 0.34, 0.04, 'dark', K);
   b.boxC(0, 0.52, -2.5, 2.0, 0.2, 0.14, 'poly', 0); b.boxC(0, 0.52, 2.3, 2.0, 0.2, 0.14, 'poly', 0);
-  b.cyl(0, 1.0, 2.36, 0.36, 0.36, 0.22, 'glove', 0, HP, 0, 0, 14);
+  b.cyl(0, 1.0, 2.36, 0.36, 0.36, 0.22, 'rubber', 0, HP, 0, 0, 14);
   b.boxC(0, 1.05, -0.92, 1.78, 0.22, 0.26, 'dark', K);
   b.cyl(-0.42, 1.12, -0.66, 0.17, 0.17, 0.035, 'poly', 0, 1.15, 0, 0, 12);
   b.boxC(0, 0.74, 0.86, 1.62, 0.13, 0.5, 'poly', 0); b.boxC(0, 1.08, 1.17, 1.62, 0.6, 0.11, 'poly', 0, -0.15);
@@ -455,4 +456,4 @@ export function clearAssault() {
   A.veh.length = 0; A.q.length = 0; A.gap = 0; A.jugg = null; A.thOn = false;
   HUD.setThreat?.(null);
 }
-if (typeof window !== 'undefined') window.__assault = () => ({ A, ROUTES, KIND, send, aliveN });
+if (typeof window !== 'undefined') window.__assault = () => ({ A, ROUTES, KIND, send, aliveN, Raider });

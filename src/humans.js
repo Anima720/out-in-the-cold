@@ -646,10 +646,12 @@ export class Ragdoll {
     });
     this.cons = BONES.map(([a, b]) => [a, b, j[a].distanceTo(j[b])]);
     this.acc = 0; this.sleep = 0; this.asleep = false;
+    this.ref = j.map((p) => p.clone()); this.win = 0; this.touch = false; // rest detection window (see sub)
     if (dir) this.impulse(joint, dir, force);
   }
   impulse(joint, dir, force) {
-    this.asleep = false; this.sleep = 0;
+    this.asleep = false; this.sleep = 0; this.win = 0; this.touch = false;
+    for (let i = 0; i < NJ; i++) this.ref[i].copy(this.pos[i]);
     const h = 1 / 60;
     for (let i = 0; i < NJ; i++) {
       const w = i === joint ? 1 : (i === J.P || i === J.Ne) ? 0.55 : 0.3;
@@ -666,13 +668,11 @@ export class Ragdoll {
   sub(h) {
     const P = this.pos, Q = this.prev;
     const g = 17 * h * h;
-    let maxMove = 0;
     for (let i = 0; i < NJ; i++) {
       const p = P[i], q = Q[i];
       const vx = (p.x - q.x) * 0.993, vy = (p.y - q.y) * 0.993, vz = (p.z - q.z) * 0.993;
       q.copy(p);
       p.x += vx; p.y += vy - g; p.z += vz;
-      maxMove = Math.max(maxMove, vx * vx + vy * vy + vz * vz);
     }
     // candidate boxes near pelvis
     const pc = P[J.P];
@@ -703,8 +703,12 @@ export class Ragdoll {
         const p = P[i], r = RAD[i];
         for (const b of cand) {
           if (p.x <= b.min.x - r || p.x >= b.max.x + r || p.y <= b.min.y - r || p.y >= b.max.y + r || p.z <= b.min.z - r || p.z >= b.max.z + r) continue;
-          const pen = [p.x - (b.min.x - r), (b.max.x + r) - p.x, p.y - (b.min.y - r), (b.max.y + r) - p.y, p.z - (b.min.z - r), (b.max.z + r) - p.z];
-          let k = 0; for (let q = 1; q < 6; q++) if (pen[q] < pen[k]) k = q;
+          let k = 0, m = p.x - (b.min.x - r), t; // least-penetration face (no per-test allocation)
+          if ((t = b.max.x + r - p.x) < m) { m = t; k = 1; }
+          if ((t = p.y - (b.min.y - r)) < m) { m = t; k = 2; }
+          if ((t = b.max.y + r - p.y) < m) { m = t; k = 3; }
+          if ((t = p.z - (b.min.z - r)) < m) { m = t; k = 4; }
+          if ((t = b.max.z + r - p.z) < m) k = 5;
           if (k === 0) p.x = b.min.x - r; else if (k === 1) p.x = b.max.x + r;
           else if (k === 2) p.y = b.min.y - r; else if (k === 3) { p.y = b.max.y + r; grounded = true; }
           else if (k === 4) p.z = b.min.z - r; else p.z = b.max.z + r;
@@ -712,18 +716,26 @@ export class Ragdoll {
         }
         const gy = groundY(p.x, p.z) + r;
         if (p.y < gy) {
-          if (gy - p.y < 1.5) { p.y = gy; if (it === 6) this.friction(i, 1, G.v * h); }
+          if (gy - p.y < 1.5) { p.y = gy; if (!G.v) grounded = true; if (it === 6) this.friction(i, 1, G.v * h); } // scrolling ground (train) never counts as rest
         }
       }
     }
-    // weapon floor
-    if (maxMove < 0.00002 && grounded) { if (++this.sleep > 50) this.asleep = true; } else this.sleep = 0;
+    // rest: supported for a 0.5 s window in which no joint moved more than 1.5 cm in total -> sleep until the next impulse.
+    // (The old per-substep speed test never fired for bodies on the snow or wedged against an edge, and the solver's
+    // tiny per-step bias then accumulated into corpses slowly turning on the spot.)
+    this.touch = this.touch || grounded;
+    if ((this.win += h) >= 0.5) {
+      let m = 0;
+      for (let i = 0; i < NJ; i++) { const d = P[i].distanceToSquared(this.ref[i]); if (d > m) m = d; this.ref[i].copy(P[i]); }
+      if (this.touch && m < 0.015 * 0.015) this.asleep = true;
+      this.win = 0; this.touch = false;
+    }
   }
   friction(i, axis, svz) {
     const p = this.pos[i], q = this.prev[i];
     let vx = p.x - q.x, vy = p.y - q.y, vz = p.z - q.z - svz;
     const fr = 0.3;
-    if (axis === 1) { vy = Math.max(0, vy) * 0.2; vx *= 1 - fr; vz *= 1 - fr; }
+    if (axis === 1) { vy = Math.max(0, vy) * 0.2; vx *= 1 - fr; vz *= 1 - fr; if (vx * vx + vz * vz < 1e-5) vx = vz = 0; } // static friction
     else if (axis === 0) { vx *= 0.2; vy *= 1 - fr; vz *= 1 - fr; }
     else { vz *= 0.2; vx *= 1 - fr; vy *= 1 - fr; }
     q.set(p.x - vx, p.y - vy, p.z - (vz + svz));
