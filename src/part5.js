@@ -264,7 +264,7 @@ function enterLevel5() {
   for (const c of T.cars) c.group.visible = false;
   if (T.wheels) T.wheels.visible = false;
   buildStation();
-  if (T.dshk) { GUN_PIVOT.copy(S.mgPivot); T.dshk.yaw.position.copy(GUN_PIVOT); T.dshk.yaw.rotation.y = 0; T.dshk.pitch.rotation.x = 0; T.dshk.yaw.visible = true; }
+  if (T.dshk) { T.dshk.unglue(); GUN_PIVOT.copy(S.mgPivot); T.dshk.yaw.position.copy(GUN_PIVOT); T.dshk.yaw.rotation.y = 0; T.dshk.pitch.rotation.x = 0; T.dshk.yaw.visible = true; }
   G.mg5 = true;
   stationColliders();
   W.fogTarget = W.fogDensity = 0.0125;
@@ -274,7 +274,7 @@ G.leavePart5 = () => {
   if (G.lvl !== 5) return;
   hideStation(); clear5();
   if (T.wheels) T.wheels.visible = true;
-  if (T.dshk) { GUN_PIVOT.copy(GUN0); T.dshk.yaw.position.copy(GUN0); T.dshk.yaw.visible = true; }
+  if (T.dshk) { T.dshk.unglue(); GUN_PIVOT.copy(GUN0); T.dshk.yaw.position.copy(GUN0); T.dshk.yaw.visible = true; }
   G.mg5 = false; WP.clay = 0;
   for (const c of CLAY) G.scene.remove(c.mesh); CLAY.length = 0;
   setPower(false);
