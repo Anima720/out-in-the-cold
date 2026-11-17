@@ -19,6 +19,7 @@ const bundle = await build({ stdin: { resolveDir: root, contents: `
   export {S} from './src/station.js';
   export {D} from './src/director.js';
   export {WDEF,rollAtt} from './src/weapon.js';
+  export {GL} from './src/grenade.js';
   export {assaultEvents,updateAssault,sendJuggernauts,clearAssault} from './src/assault.js';
   export {HUD} from './src/hud.js';
 ` }, bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'warning' });
@@ -67,6 +68,9 @@ function test(name, fn) {
   reset(); fn(); results.push(name); console.log('PASS',name);
 }
 try {
+  test('weapon debug hook retains the live grenade array across module initialization',()=>{
+    assert.ok(Array.isArray(window.__wpn.GL)); assert.equal(window.__wpn.GL,game.GL);
+  });
   test('loadouts have matching weapon drops, actual attachments and distinct third-person models',()=>{
     const kinds=new Set();
     for(const key of ['ak','ak12','smg','saiga','svd','pkm','rpg']) {

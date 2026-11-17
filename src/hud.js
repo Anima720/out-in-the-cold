@@ -39,7 +39,7 @@ export function initHUD() {
   HUD.big = $('div', 'bigcard', ui);
   HUD.comp = $('div', 'compass', ui, '<div class="strip"></div><div class="ctr"></div><div class="tgt"></div>');
   { const st = HUD.comp.querySelector('.strip'); let h = '';
-    const N = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+    const N = { 0: '北', 45: '东北', 90: '东', 135: '东南', 180: '南', 225: '西南', 270: '西', 315: '西北' };
     for (let d = -360; d <= 720; d += 15) { const k = ((d % 360) + 360) % 360; h += `<span class="${N[k] !== undefined ? 'c' : ''}" style="left:${(d + 360) * 4}px">${N[k] ?? k}</span>`; }
     st.innerHTML = h; HUD.compStrip = st; HUD.compTgt = HUD.comp.querySelector('.tgt'); }
   HUD.credits = $('div', 'credits', ui, '<div class="roll"></div>');
@@ -55,7 +55,7 @@ export function initHUD() {
 HUD.objective = (t) => {
   if (!t) { HUD.obj.classList.remove('on'); return; }
   HUD.objT.textContent = t; HUD.obj.classList.remove('on'); void HUD.obj.offsetWidth; HUD.obj.classList.add('on', 'flash');
-  setTimeout(() => HUD.obj.classList.remove('flash'), 1600);
+  HUD._objT = 1.6;
 };
 HUD.say = (who, text, radio) => {
   if (!who) { HUD.sub.classList.remove('on'); return; }
@@ -81,7 +81,7 @@ HUD.setMarker = (pos, label) => { HUD.mk = pos ? { pos, label } : null; };
 HUD.locCard = (lines) => {
   HUD.loc.innerHTML = `<i></i><b>${lines[0]}</b>` + lines.slice(1).map((l) => `<span>${l}</span>`).join('');
   HUD.loc.classList.remove('on'); void HUD.loc.offsetWidth; HUD.loc.classList.add('on');
-  setTimeout(() => HUD.loc.classList.remove('on'), 7000);
+  HUD._locT = 7;
 };
 HUD.fade = (to, dur = 1, color = '#000') => {
   HUD.fadeEl.style.background = color;
@@ -104,13 +104,12 @@ HUD.setHold = (k) => { HUD.holdEl.classList.toggle('on', k !== null && k > 0); i
 HUD.setLock = (state, pos) => { HUD.lk = state ? { state, pos } : null; };
 HUD.bigCard = (title, sub, dur = 5) => {
   HUD.big.innerHTML = `<b>${title}</b>${sub ? `<span>${sub}</span>` : ''}`;
-  HUD.big.classList.add('on'); clearTimeout(HUD._bigT);
-  if (dur > 0) HUD._bigT = setTimeout(() => HUD.big.classList.remove('on'), dur * 1000);
+  HUD.big.classList.add('on'); HUD._bigT = dur > 0 ? dur : -1;
 };
-HUD.hideBig = () => HUD.big.classList.remove('on');
+HUD.hideBig = () => { HUD._bigT = 0; HUD.big.classList.remove('on'); };
 HUD.toast = (t) => {
   HUD.toastEl.textContent = t; HUD.toastEl.classList.remove('on'); void HUD.toastEl.offsetWidth; HUD.toastEl.classList.add('on');
-  clearTimeout(HUD._toT); HUD._toT = setTimeout(() => HUD.toastEl.classList.remove('on'), 1800);
+  HUD._toT = 1.8;
 };
 HUD.setSlowmo = (on) => { HUD.slow.classList.toggle('on', on); };
 HUD.hideMenu = () => { HUD.menu.className = 'menu'; HUD.menu.innerHTML = ''; };
@@ -123,6 +122,15 @@ HUD.show = (on) => { HUD.root.classList.toggle('hud-on', on); };
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 export function updateHUD(dt) {
   const P = G.player;
+  // Use the game clock: pause preserves reading time, and __sim expires cards just like normal play.
+  if (!G.paused) {
+    if (HUD._objT > 0 && (HUD._objT -= dt) <= 0) HUD.obj.classList.remove('flash');
+    if (HUD._locT > 0 && (HUD._locT -= dt) <= 0) HUD.loc.classList.remove('on');
+    if (HUD._bigT > 0 && (HUD._bigT -= dt) <= 0) HUD.big.classList.remove('on');
+    if (HUD._toT > 0 && (HUD._toT -= dt) <= 0) HUD.toastEl.classList.remove('on');
+  }
+  const aiming = G.state === 'play' && !P.mounted && WP.adsT > 0.6;
+  if (HUD._ads !== aiming) { HUD._ads = aiming; HUD.root.classList.toggle('ads', aiming); }
   // ammo / heat
   if (P.mounted) {
     HUD.amN.textContent = '∞'; HUD.amR.textContent = ''; HUD.amW.textContent = 'DShK 12.7mm';
@@ -143,7 +151,7 @@ export function updateHUD(dt) {
         _v3.copy(h.j[0]).sub(G.camera.position); const d = _v3.length(); if (d > 30 || d < 1) continue;
         const a = Math.acos(clamp(_v3.dot(_v2) / d, -1, 1)); if (a < ba) { ba = a; best = h; } } }
     if (best) { _v3.copy(best.j[0]).setY(best.j[0].y + 0.38).project(G.camera);
-      HUD.ftag.textContent = best.name.charAt(0) + best.name.slice(1).toLowerCase(); HUD.ftag.style.opacity = '1';
+      HUD.ftag.textContent = NAME[best.name] || best.name; HUD.ftag.style.opacity = '1';
       HUD.ftag.style.transform = `translate(${((_v3.x + 1) / 2) * innerWidth}px, ${((1 - _v3.y) / 2) * innerHeight}px) translate(-50%, -100%)`; }
     else HUD.ftag.style.opacity = '0'; }
   // compass + objective bearing
@@ -213,6 +221,7 @@ function updateThreat() {
   _v.copy(th.pos).project(cam);
   const behind = _v.z > 1;
   let dx = _v.x * W / 2, dy = -_v.y * H / 2;           // px from screen centre (y down)
+  if (!behind) dy -= clamp(H * 0.045, 12, 22); // leave the head and torso visible below the marker
   if (behind) { dx = -dx; dy = -dy; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) dy = 1; }
   const hx = W / 2 - 78, hy = H / 2 - 70;
   const off = behind || Math.abs(dx) > hx || Math.abs(dy) > hy;
@@ -220,6 +229,7 @@ function updateThreat() {
   const sx = W / 2 + dx, sy = H / 2 + dy;
   HUD.threat.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
   HUD.threat.classList.add('on'); HUD.threat.classList.toggle('off', off);
+  HUD.threat.classList.toggle('right', sx > W * 0.64);
   if (off) HUD.thA.style.transform = `rotate(${Math.atan2(dx, -dy).toFixed(3)}rad)`;
   const d = Math.round(cam.position.distanceTo(th.pos));
   if (d !== th.d) { th.d = d; HUD.thS.textContent = `${th.label ? th.label + ' ' : ''}${d}米`; }

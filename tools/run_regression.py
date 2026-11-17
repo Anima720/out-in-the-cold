@@ -24,6 +24,7 @@ CASES = {
     't_bridge': ['t_bridge.py', 'low'],
     'ai': ['test_ai.py'],
     'ai_shots': ['shot_ai.py'],
+    'review_shots': ['capture_review.py'],
 }
 
 def main():
@@ -55,6 +56,10 @@ def main():
         results.append(r)
         (dest/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2)+'\n')
         print('PASS' if code==0 else 'FAIL',name,r['seconds'],'s',r['log'],flush=True)
+        if code:
+            # Expose the failure in live CI output; keep the full trace alongside the screenshots.
+            lines=(dest/(name+'.log')).read_text(errors='replace').splitlines()
+            print('\n'.join(lines[-60:]),flush=True)
     return int(any(r['exit_code']!=0 for r in results))
 
 if __name__=='__main__':sys.exit(main())

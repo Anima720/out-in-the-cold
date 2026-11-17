@@ -182,11 +182,11 @@ function buildMasterkey(R) {
 // and the reticle remain, fixed on the view axis (bullets go there); W's vignette dims the world around it
 function buildScopeView(R) {
   const g = new THREE.Group(), E = OPT.x2.eye;
-  const rim = new THREE.Mesh(new THREE.RingGeometry(0.0166, 0.03, 48), R.dull); rim.position.z = -E; g.add(rim);
-  const lip = new THREE.Mesh(new THREE.RingGeometry(0.0163, 0.0176, 48), R.gun); lip.position.z = -E + 0.0004; g.add(lip);
-  g.add(plane(0.03, 0.03, R.retAcog, 0, 0, -E - 0.07, 11));
-  g.add(plane(0.03, 0.03, R.retChev, 0, 0, -E - 0.0705, 12));
-  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.0168, 32), R.lensA); lens.position.z = -E - 0.002; lens.renderOrder = 10; g.add(lens);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(0.0223, 0.0255, 48), R.dull); rim.position.z = -E; g.add(rim);
+  const lip = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.023, 48), R.gun); lip.position.z = -E + 0.0004; g.add(lip);
+  g.add(plane(0.046, 0.046, R.retAcog, 0, 0, -E - 0.07, 11));
+  g.add(plane(0.046, 0.046, R.retChev, 0, 0, -E - 0.0705, 12));
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.0225, 48), R.lensA); lens.position.z = -E - 0.002; lens.renderOrder = 10; g.add(lens);
   g.visible = false;
   return g;
 }
@@ -262,7 +262,7 @@ export function updateWUI(ubHtml, ubOn, tb, vig) {
   if (tb !== U.tbOn) { U.tbOn = tb; U.tb.classList.toggle('on', tb); }
   const vk = `${innerWidth}x${innerHeight}`;
   if (vig > 0.01 && vk !== U.vk) { // hole = the ACOG eyepiece as seen from the eye (viewmodel camera fov 50)
-    U.vk = vk; const r = (Math.tan(Math.atan(0.0168 / OPT.x2.eye)) / Math.tan((25 * Math.PI) / 180)) * innerHeight * 0.5;
+    U.vk = vk; const r = (0.0225 / OPT.x2.eye / Math.tan((25 * Math.PI) / 180)) * innerHeight * 0.5;
     U.vig.style.background = `radial-gradient(circle at 50% 50%, rgba(0,0,0,0) ${(r * 0.9).toFixed(0)}px, rgba(0,0,0,.5) ${(r * 1.02).toFixed(0)}px, rgba(0,0,0,.72) ${(r * 1.3).toFixed(0)}px)`;
   }
   const vo = Math.round(vig * 50) / 50;

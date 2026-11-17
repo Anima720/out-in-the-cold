@@ -68,7 +68,7 @@ tools/           无头浏览器试玩脚本、配乐切片脚本
 ```bash
 pip install playwright
 node tools/test_combat_logic.mjs  # 无图形 CPU 逻辑验证，不代替浏览器验收
-CHROME=/path/to/chrome python3 tools/run_regression.py  # 全部 19 项，串行执行
+CHROME=/path/to/chrome python3 tools/run_regression.py  # 原 19 项 + 补充固定机位，串行执行
 ```
 
 URL 参数：`?q=low|medium|high` 画质，`?god=1` 无敌。

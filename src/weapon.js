@@ -38,15 +38,26 @@ function sleeves(b, R0, R1, L0, L1) {
 // The left hand goes into its own builder `lb` (own group) so an underbarrel can move it down onto the launcher tube.
 function rifleHands(b, fy = 0, lb = b) {
   // right hand on grip
-  b.boxC(0.002, -0.08, 0.14, 0.052, 0.092, 0.056, 'glove', 0xffffff, -0.3, 0, 0, 0.018);
-  for (let k = 0; k < 3; k++) b.capsule(-0.004, -0.064 - k * 0.022, 0.108 + k * 0.007, 0.011, 0.034, 'glove', 0xffffff, 0, 0, H);
-  b.capsule(-0.026, -0.03, 0.08, 0.0105, 0.05, 'glove', 0xffffff, H + 0.25);
-  b.capsule(0.024, -0.034, 0.072, 0.0098, 0.04, 'glove', 0xffffff, H);
-  segm(b, [0.004, -0.115, 0.16], [0.03, -0.17, 0.25], 0.034, 0.031, 'glove');
+  b.boxC(0.002, -0.08, 0.14, 0.046, 0.081, 0.052, 'glove', 0xffffff, -0.3, 0, 0, 0.017);
+  for (let k = 0; k < 3; k++) {
+    const y = -0.063 - k * 0.021, z = 0.109 + k * 0.006;
+    segm(b, [0.024,y,z+0.022], [0.021,y,z], 0.009, 0.008, 'glove');
+    b.capsule(-0.002, y, z, 0.008, 0.028, 'glove', 0xffffff, 0, 0, H);
+  }
+  segm(b, [-0.023,-0.048,0.13], [-0.026,-0.032,0.103], 0.01, 0.009, 'glove');
+  segm(b, [-0.026,-0.032,0.103], [-0.024,-0.029,0.079], 0.009, 0.008, 'glove');
+  segm(b, [0.023,-0.047,0.117], [0.026,-0.032,0.089], 0.009, 0.008, 'glove');
+  segm(b, [0.026,-0.032,0.089], [0.024,-0.031,0.061], 0.008, 0.007, 'glove');
+  segm(b, [0.004, -0.108, 0.16], [0.03, -0.17, 0.25], 0.028, 0.031, 'glove');
   // left hand on handguard (fy lowers the wrapping fingers/thumb for a slimmer handguard)
-  lb.boxC(-0.004, -0.032, -0.28, 0.072, 0.036, 0.1, 'glove', 0xffffff, 0, 0, 0, 0.014);
-  lb.capsule(-0.037, 0.03 + fy, -0.29, 0.0105, 0.055, 'glove', 0xffffff, H - 0.15);
-  for (let k = 0; k < 4; k++) lb.capsule(0.035, 0.024 + fy + (k % 2) * 0.003, -0.32 + k * 0.022, 0.0098, 0.03, 'glove', 0xffffff, 0, 0, 0.15);
+  lb.boxC(-0.004, -0.032, -0.28, 0.061, 0.032, 0.086, 'glove', 0xffffff, 0, 0, 0, 0.013);
+  segm(lb, [-0.03,-0.015,-0.25], [-0.035,0.024+fy,-0.273], 0.0095, 0.0085, 'glove');
+  segm(lb, [-0.035,0.024+fy,-0.273], [-0.03,0.031+fy,-0.306], 0.0085, 0.0075, 'glove');
+  for (let k = 0; k < 4; k++) {
+    const z = -0.312 + k * 0.021, y = 0.023 + fy + (k % 2) * 0.003;
+    segm(lb, [0.026,-0.032,z], [0.035,y-0.007,z], 0.008, 0.0075, 'glove');
+    segm(lb, [0.035,y-0.007,z], [0.023,y+0.006,z], 0.0075, 0.007, 'glove');
+  }
   segm(lb, [-0.012, -0.018, -0.24], [-0.06, -0.074, -0.15], 0.034, 0.031, 'glove');
   sleeves(b, [0.025, -0.16, 0.23], [0.12, -0.34, 0.56], [-0.05, -0.065, -0.17], [-0.4, -0.37, 0.22]);
 }
@@ -673,9 +684,9 @@ export function updateViewmodel(dt, p) {
   const hip = mdl.hip, ad = [0, -mdl.sightY, mdl.adsZ - mdl.rearZ], sp = mdl.sprint;
   W.ubK = damp(W.ubK || 0, W.ubOn && W.cur === W.prim ? 1 : 0, 10, dt);
   const ubh = mdl.ub && W.cur === W.prim ? 1 - ads : 0;                    // hip carry raised a little so the launcher shows
-  let x = lerp(hip[0], ad[0], ads) - ubh * 0.012, y = lerp(hip[1], ad[1], ads) + ubh * (0.028 + W.ubK * 0.012), z = lerp(hip[2], ad[2], ads);
+  let x = lerp(hip[0], ad[0], ads) - ubh * (0.012 + W.ubK * 0.018), y = lerp(hip[1], ad[1], ads) + ubh * (0.028 + W.ubK * 0.035), z = lerp(hip[2], ad[2], ads);
   x = lerp(x, sp[0], spr); y = lerp(y, sp[1], spr); z = lerp(z, sp[2], spr);
-  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32 + W.ubK * 0.12 * (1 - ads * 0.6);
+  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32 + W.ubK * 0.3 * (1 - ads * 0.8);
   // weapon switch: lower, swap, raise
   if (W.sw) {
     W.sw.t += dt;
@@ -778,4 +789,4 @@ export function renderViewmodel(renderer) {
 }
 
 // test hooks (headless checks in tools/test_weapons.py)
-if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, GL, DEF, UBDEF, throwNade };
+if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, get GL() { return GL; }, DEF, UBDEF, throwNade };

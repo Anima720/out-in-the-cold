@@ -3,7 +3,7 @@
 // squad-level awareness (player pinned -> flank, suppression cooldowns) and the squad mates' callouts.
 import { G, THREE, rr, ri, clamp, yawOf, angDiff, fwdYaw, rightYaw, pick } from './core.js';
 import { J, MS } from './humans.js';
-import { raycast, rayBoxes, los, supportAt } from './physics.js';
+import { raycast, rayBoxes, los, supportAt, moveChar } from './physics.js';
 import { play } from './audio.js';
 import { NADES } from './grenade.js';
 import { say, LINES, D } from './director.js';
@@ -282,6 +282,7 @@ export function downedUpdate(e, dt) {
 // ---------- melee (both sides). Human animates h.meleeT (wind-up, strike at MS, recovery); the AI lands the blow.
 // returns true while the soldier is busy with melee (skip the rest of his AI this frame)
 const _ma = new THREE.Vector3(), _mb = new THREE.Vector3();
+const _ml = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), r: 0.3, h: 1.75, grounded: true };
 function meleeClear(h, target) {
   _ma.copy(h.pos); _ma.y += 1; _mb.copy(target.pos); _mb.y += target.downed ? 0.3 : 1; _mb.sub(_ma);
   const d = _mb.length(); return d < 0.01 || !rayBoxes(_ma, _mb.multiplyScalar(1 / d), d, false);
@@ -289,7 +290,17 @@ function meleeClear(h, target) {
 function meleeFace(h, tp, dt) {
   _o.subVectors(tp, h.pos); _o.y = 0; const d = _o.length();
   if (d > 1e-3) { h.yaw += clamp(angDiff(h.yaw, yawOf(_o)), -11 * dt, 11 * dt); h.aim.copy(_o).multiplyScalar(1 / d); h.aim.y = -0.05; }
-  return d;
+  // One short, collision-tested approach during the wind-up. Copy only the horizontal result so the
+  // caller's ordinary movement step still owns gravity, and cannot apply the lunge velocity twice.
+  const reach = h.meleeKind === 'knife' ? 1.23 : 1.08;
+  if (h.meleeT >= 0 && h.meleeT < MS && d > reach && dt > 0 && Math.abs(tp.y - h.pos.y) < 0.65) {
+    const speed = Math.min(2.5, (d - reach) / dt);
+    _ml.pos.copy(h.pos); _ml.vel.copy(_o).multiplyScalar(speed / d); _ml.vel.y = 0;
+    _ml.r = h.r || 0.3; _ml.h = h.h || 1.75; _ml.grounded = true;
+    moveChar(_ml, dt, false);
+    if (Math.abs(_ml.pos.y - h.pos.y) < 0.24) { h.pos.x = _ml.pos.x; h.pos.z = _ml.pos.z; }
+  }
+  return Math.hypot(tp.x - h.pos.x, tp.z - h.pos.z);
 }
 export function enemyMelee(e, dt) {
   const h = e.h, P = G.player;
@@ -300,7 +311,7 @@ export function enemyMelee(e, dt) {
     if (!m.hit && h.meleeT >= MS) {
       m.hit = true;
       const dy = Math.abs((isP ? P.pos.y : m.tgt.h.pos.y) - h.pos.y);
-      if (d < (e.jugg ? 2.6 : 2.35) && dy < 1.2 && (isP ? P.alive : m.tgt.h.alive) && meleeClear(h, isP ? P : m.tgt.h)) {
+      if (d < 1.48 && dy < 1.2 && (isP ? P.alive : m.tgt.h.alive) && meleeClear(h, isP ? P : m.tgt.h)) {
         _d.subVectors(isP ? P.pos : m.tgt.h.pos, h.pos).setY(0.2).normalize();
         if (isP) { P.damage(h.meleeKind === 'knife' ? 50 : 38, h.pos); P.addShake(0.7); AI.stats.melee.enemyHits++; }
         else { m.tgt.h.hurt(35, _d, 'torso', J.Ne, { force: 4, melee: true }); m.tgt.meleeCD = 0; AI.stats.melee.enemyOnMate = (AI.stats.melee.enemyOnMate || 0) + 1; }
@@ -331,10 +342,10 @@ export function mateMelee(m, dt) {
     h.crouchT = 0; h.aimTarget = 0.4; h.vel.x = h.vel.z = 0;
     if (!m.mel.hit && h.meleeT >= MS) {
       m.mel.hit = true;
-      if (e.h.alive && d < 2.3 && Math.abs(e.h.pos.y - h.pos.y) < 1.2 && meleeClear(h, e.h)) {
+      if (e.h.alive && d < 1.48 && Math.abs(e.h.pos.y - h.pos.y) < 1.2 && meleeClear(h, e.h)) {
         _d.subVectors(e.h.pos, h.pos).setY(0.25).normalize();
         const k = e.h.hurt(e.jugg ? 60 : 300, _d, 'torso', J.Ne, { force: 8, melee: true });
-        G.fx.impact(_o.copy(e.h.j[J.Ne]), _e.copy(_d).negate(), 'flesh');
+        G.fx.impact(_o.copy(e.h.j[J.Ne]).lerp(e.h.j[J.P], 0.35).addScaledVector(_d, -0.15), _e.copy(_d).negate(), 'flesh');
         play('thud', { pos: h.pos, vol: 0.95, ref: 4, rev: 0.1 }); play('flesh', { pos: h.pos, vol: 0.8, ref: 4, rev: 0.1 });
         if (k) { AI.stats.melee.mateKills++; mateKill(m); }
       } else play('rustle', { pos: h.pos, vol: 0.6, ref: 4 });

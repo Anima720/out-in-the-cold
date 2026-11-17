@@ -471,7 +471,7 @@ export class Human {
       if (u >= MD) this.meleeT = -1;
       else { mw = smooth(u / MW); ms = smooth((u - MW) / (MS - MW)); mk = mw * (1 - smooth((u - MS - 0.04) / (MD - MS - 0.04))); }
     }
-    const tYaw = this.yaw + dy * 0.8 + mk * lerp(-0.45, 0.3, ms);
+    const tYaw = this.yaw + dy * 0.8 + mk * lerp(-0.28, 0.04, ms);
     const tf = fwdYaw(tYaw, _tf), tr = rightYaw(tYaw, _tr);
     const surf = this.onGround ? G.v : 0;
     const gvx = this.vel.x, gvz = this.vel.z - surf;
@@ -495,8 +495,9 @@ export class Human {
     // pelvis
     if (this.sit) j[J.P].copy(this.sit.seat);
     else j[J.P].set(root.x, root.y + lerp(0.98, 0.56, c) - Math.abs(Math.sin(this.phase * Math.PI * 2)) * 0.045 * walkW, root.z);
+    if (mk > 0) j[J.P].addScaledVector(fwd, mk * lerp(-0.04, 0.16, ms)).addScaledVector(UP, -0.07 * mk);
     const aimPitch = Math.asin(clamp(_a.y, -1, 1));
-    let pitch = this.sit ? 0.28 : 0.05 + c * 0.2 + run * 0.22 * (1 - this.aimT) - aimPitch * 0.25 * this.aimT - this.flinch * 0.5 + mk * lerp(-0.12, 0.38, ms);
+    let pitch = this.sit ? 0.28 : 0.05 + c * 0.2 + run * 0.22 * (1 - this.aimT) - aimPitch * 0.25 * this.aimT - this.flinch * 0.5 + mk * lerp(-0.08, 0.26, ms);
     _tu.copy(UP).multiplyScalar(Math.cos(pitch)).addScaledVector(tf, Math.sin(pitch));
     if (this.flinch) _tu.addScaledVector(tr, this.flinchSide * this.flinch * 0.3).normalize();
     j[J.Ne].copy(j[J.P]).addScaledVector(_tu, 0.52);
@@ -517,8 +518,8 @@ export class Human {
       if (this.meleeKind === 'knife') { // rifle hangs in the left hand, low; the right hand stabs (see _g1 below)
         _t1.copy(ne).addScaledVector(tr, -0.12).addScaledVector(UP, -0.5).addScaledVector(tf, 0.12);
         _hb.copy(tf).multiplyScalar(0.5).addScaledVector(UP, -0.85).addScaledVector(tr, -0.1).normalize();
-      } else { // butt stroke: rifle cocked back over the right shoulder, then the butt is driven forward at face height
-        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.55, ms)).addScaledVector(tr, lerp(0.3, 0.02, ms)).addScaledVector(UP, lerp(-0.1, -0.04, ms));
+      } else { // butt stroke: cock over the right shoulder, then drive into the upper chest
+        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.58, ms)).addScaledVector(tr, lerp(0.3, -0.02, ms)).addScaledVector(UP, lerp(-0.1, -0.16, ms));
         _hb.copy(UP).multiplyScalar(lerp(0.45, 0.2, ms)).addScaledVector(tf, lerp(-0.55, -0.85, ms)).addScaledVector(tr, lerp(0.7, 0.42, ms)).normalize();
       }
       _s0.lerp(_t1, mk); _dir.lerp(_hb, mk).normalize();
@@ -536,9 +537,9 @@ export class Human {
     } else {
       _g1.copy(_s0).addScaledVector(_dir, gk.g1).addScaledVector(_wu, -0.075);
       _g2.copy(_s0).addScaledVector(_dir, gk.g2).addScaledVector(_wu, -0.045);
-      if (mk > 0 && this.meleeKind === 'knife') { // right hand: raised back beside the head, then stabs forward-down
+      if (mk > 0 && this.meleeKind === 'knife') { // keep the fist outside the face; thrust straight into the chest
         _g2.lerp(_t1.copy(_s0).addScaledVector(_dir, 0.3), mk);
-        _t1.copy(j[J.Ne]).addScaledVector(tr, lerp(0.3, 0.06, ms)).addScaledVector(UP, lerp(0.16, -0.06, ms)).addScaledVector(tf, lerp(-0.08, 0.58, ms));
+        _t1.copy(j[J.Ne]).addScaledVector(tr, lerp(0.34, 0.1, ms)).addScaledVector(UP, lerp(0.02, -0.13, ms)).addScaledVector(tf, lerp(-0.06, 0.53, ms));
         _g1.lerp(_t1, mk);
       }
     }
@@ -595,6 +596,10 @@ export class Human {
         _t1.set(root.x, root.y + 0.09 + lift, root.z).addScaledVector(right, sd * 0.12).addScaledVector(_mv, off);
         out.lerp(_t1, walkW);
       }
+    }
+    if (mk > 0 && !this.sit) { // weight over a bent front knee, rear foot braced behind the pelvis
+      _t1.copy(root).addScaledVector(right, -0.18).addScaledVector(fwd, lerp(0.2, 0.38, ms)).addScaledVector(UP, 0.09); _fl.lerp(_t1, mk);
+      _t1.copy(root).addScaledVector(right, 0.19).addScaledVector(fwd, -0.23).addScaledVector(UP, 0.09); _fr.lerp(_t1, mk);
     }
     _pole.copy(fwd).addScaledVector(UP, 0.15);
     if (this.sit) _pole.copy(fwd).addScaledVector(UP, 0.8);
@@ -679,7 +684,7 @@ export class Human {
     for (const g of f.guns) M[g].setMatrixAt(s, g === gp ? gm : ZERO);
     if (M.pistol) M.pistol.setMatrixAt(s, this.sidearm && !this.noWeapon && (!this.weaponGone || this.dropM) ? segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp) : ZERO);
     if (M.knife) {
-      if (this.meleeT >= 0 && this.meleeKind === 'knife' && !rag) { _fw.subVectors(j[J.HR], j[J.ER]).normalize(); _t1.copy(j[J.HR]).addScaledVector(_fw, 0.05); _x.copy(_t1).add(_fw); M.knife.setMatrixAt(s, segMatrix(_t1, _x, this.weaponUp)); }
+      if (this.meleeT >= 0 && this.meleeKind === 'knife' && !rag) { _fw.subVectors(j[J.HR], j[J.ER]).normalize().lerp(this.aim, smooth((this.meleeT - MW) / (MS - MW))).normalize(); _t1.copy(j[J.HR]).addScaledVector(_fw, 0.05); _x.copy(_t1).add(_fw); M.knife.setMatrixAt(s, segMatrix(_t1, _x, this.weaponUp)); }
       else M.knife.setMatrixAt(s, ZERO);
     }
     for (const im of f.list) im.instanceMatrix.needsUpdate = true;
@@ -767,13 +772,12 @@ export class Human {
     _hb.copy(_tu).multiplyScalar(0.5).addScaledVector(_a, 0.6 * lv).addScaledVector(UP, 0.15).addScaledVector(f, -0.7 * de).addScaledVector(r, -0.45 * de).normalize();
     j[J.Hc].copy(j[J.Ne]).addScaledVector(_hb, 0.17);
     this.headFwd.copy(_a).setY(_a.y * 0.4).normalize().multiplyScalar(lv).addScaledVector(UP, 0.6 * de).addScaledVector(r, -0.55 * de).normalize();
-    // left arm: forearm flat on the ground, elbow under the shoulder
-    _g2.copy(b).addScaledVector(f, lerp(-0.62, -0.22, lv)).addScaledVector(r, lerp(-0.42, -0.31, lv)).addScaledVector(UP, 0.05);
-    _pole.copy(f).multiplyScalar(-0.6).addScaledVector(UP, -0.5).addScaledVector(r, -0.45);
-    ik2(j[J.SL], _g2, L_UA, L_FA, _pole, j[J.EL], j[J.HL]);
+    // The grounded elbow carries the torso; the forearm stays visibly outside the vest.
+    j[J.EL].copy(j[J.SL]).addScaledVector(f, -0.07).addScaledVector(r, -0.12); j[J.EL].y = b.y + 0.065;
+    j[J.HL].copy(j[J.EL]).addScaledVector(f, 0.25).addScaledVector(r, -0.07); j[J.HL].y = b.y + 0.055;
     // right arm: pistol on the chest -> extended at the target; drops to the ground when he dies
-    _s0.copy(j[J.P]).addScaledVector(f, 0.12).addScaledVector(r, 0.06).addScaledVector(UP, 0.2);
-    _t1.copy(j[J.SR]).addScaledVector(_a, 0.45); _s0.lerp(_t1, aw);
+    _s0.copy(j[J.P]).addScaledVector(f, 0.14).addScaledVector(r, 0.2).addScaledVector(UP, 0.2);
+    _t1.copy(j[J.SR]).addScaledVector(_a, 0.51).addScaledVector(r, 0.08); _s0.lerp(_t1, aw);
     _dir.copy(f).multiplyScalar(0.6).addScaledVector(r, -0.5).addScaledVector(UP, 0.2).normalize().lerp(_a, aw).normalize();
     if (de > 0) { _t1.copy(b).addScaledVector(r, 0.5).addScaledVector(f, -0.05).addScaledVector(UP, 0.05); _s0.lerp(_t1, de); _mv.copy(f).multiplyScalar(0.45).addScaledVector(r, 0.9).normalize(); _dir.lerp(_mv, de).normalize(); }
     _s0.addScaledVector(_dir, -0.05 * this.recoil);

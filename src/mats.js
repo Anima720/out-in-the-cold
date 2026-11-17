@@ -195,9 +195,9 @@ export async function makePBR(renderer, onStep) {
   }, 1.2));
   add('concrete', () => pbr(512, (u, v, o) => {
     const n1 = fbm(u, v, 5, 4, 4, 71), n2 = fbm(u, v, 5, 14, 14, 72), fine = fbm(u, v, 3, 90, 90, 73);
-    const stk = sstep(0.5, 0.78, fbm(u, v, 4, 40, 2, 74)) * sstep(0.35, 0.7, n1);
+    const stk = sstep(0.5, 0.78, fbm(u, v, 4, 8, 8, 74)) * sstep(0.35, 0.7, n1);
     o.h = 0.5 + (n2 - 0.5) * 0.22 + (fine - 0.5) * 0.09;
-    let a = 0.5 + (n1 - 0.5) * 0.2 + (n2 - 0.5) * 0.1; a *= 1 - stk * 0.4;
+    let a = 0.5 + (n1 - 0.5) * 0.14 + (n2 - 0.5) * 0.08; a *= 1 - stk * 0.1;
     o.r = a * 1.02; o.g = a; o.b = a * 0.97; o.rough = 0.88; o.metal = 0;
   }, 1.7));
   const mkGun = (alb, met, seed) => pbr(512, (u, v, o) => {

@@ -47,13 +47,16 @@ async def main():
             await ev("""(()=>{ __P.pos.set(-3,__G.groundFn(-3,40),40); __P.yaw=0.25; __P.pitch=-0.18; __ai.forceDown=1;
               const e=new window.__Raider(-4.2,35.5,{maxTier:0,wk:'smg'}); e.update=()=>{}; e.h.pos.y=__G.groundFn(-4.2,35.5); window.__dn=e; __sim(0.4);
               e.update=e.constructor.prototype.update; e.h.hurt(150,new __THREE.Vector3(0.6,0,-1).normalize(),'torso',2,{bullet:true}); __ai.forceDown=undefined; e.crawlLeft=0; })()""")
+            assert await ev("__dn.downed && __dn.h.downed && __dn.h.alive"), "downed visual fixture did not enter last stand"
             await ev("__sim(0.25)")
             await snap("ai_downed_fall.png")
-            await ev("__sim(1.6); __dn.dph='aim'; __dn.dphT=9")
-            for i in range(60):
-                await ev("__sim(1/60)")
-                if await ev("__dn.h.recoil>0.8"): break
-            await ev("__P.pos.set(-3.6,__G.groundFn(-3.6,38.6),38.6); __P.yaw=0.15; __P.pitch=-0.45; __sim(1/60)")
+            await ev("__P.pos.set(-3.6,__G.groundFn(-3.6,38.6),38.6); __P.yaw=0.15; __P.pitch=-0.45; __sim(1.6); __dn.dph='aim'; __dn.dphT=9")
+            fired = False
+            for i in range(180):
+                fired = await ev("(()=>{const before=__dn.dfT; __sim(1/60); return __dn.dfT>before && __dn.dfT>1 && __dn.h.recoil>0.7;})()")
+                if fired: break
+            assert fired, "downed pistol never fired in the capture window"
+            # The same tick decays recoil from 1 to 0.792; preserve this actual shot frame without another simulation step.
             await snap("ai_downed_fire.png")
             # side view of the pose
             await ev("__P.pos.set(-1.9,__G.groundFn(-1.9,35.9),35.9); __P.yaw=Math.PI/2-0.15; __P.pitch=-0.5; __sim(0.05)")
@@ -61,6 +64,7 @@ async def main():
             await ev("__dn.bleedT=0.01; __sim(4)")
             await snap("ai_downed_dead.png")
             print("downed alive?", await ev("__dn.h.alive"), "rag", await ev("!!__dn.h.rag"))
+            assert await ev("!__dn.h.alive && !!__dn.h.rag"), "downed death capture is not a corpse"
         if "melee" in PH:
             await ev("__begin(4)"); await ev("__sim(0.3)"); await ev("__hud(false)")
             # enemy butt-stroke on the player, seen from the player's eyes
@@ -69,10 +73,12 @@ async def main():
             for i in range(40):
                 await ev("__sim(1/60)")
                 if await ev("__me.h.meleeT>=0.26"): break
+            assert await ev("__me.h.meleeT>=0.26 && __me.h.meleeT<0.42"), "enemy melee wind-up was missed"
             await snap("ai_melee_windup.png")
             for i in range(20):
                 await ev("__sim(1/60)")
                 if await ev("__me.h.meleeT>=0.43"): break
+            assert await ev("__me.h.meleeT>=0.43 && __me.h.meleeT<0.85"), "enemy melee strike was missed"
             await snap("ai_melee_strike.png")
             await ev("__me.h.die(new __THREE.Vector3(0,0,-1),2,1); __sim(0.1)")
             # mate (Truck) melee on an enemy, third person from the side; then a knife stab by an enemy on Grinch
@@ -83,10 +89,12 @@ async def main():
             for i in range(60):
                 await ev("__sim(1/60)")
                 if await ev("__G.mates[0].h.meleeT>=0.24"): break
+            assert await ev("__G.mates[0].h.meleeT>=0.24 && __G.mates[0].h.meleeT<0.42"), "mate melee wind-up was missed"
             await snap("ai_mate_melee_windup.png")
             for i in range(20):
                 await ev("__sim(1/60)")
                 if await ev("__G.mates[0].h.meleeT>=0.44||__G.mates[0].h.meleeT<0"): break
+            assert await ev("__G.mates[0].h.meleeT>=0.44 && __G.mates[0].h.meleeT<0.85"), "mate melee strike was missed"
             await snap("ai_mate_melee_strike.png")
             print("mate melee kind", await ev("__G.mates[0].h.meleeKind"), "victim alive", await ev("__mv.h.alive"))
             await ev("""(()=>{ const g=__G.mates[1]; const e=new window.__Raider(g.h.pos.x+1.3,g.h.pos.z,{maxTier:0,wk:'smg'}); e.h.pos.y=g.h.pos.y; e.state='cover'; e.coverT=99; e.t=9; e.h.firstPose=true; window.__mk2=e; __G.mates[0].p5='idle';
@@ -94,10 +102,12 @@ async def main():
             for i in range(60):
                 await ev("__sim(1/60)")
                 if await ev("__mk2.h.meleeT>=0.25"): break
+            assert await ev("__mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.25 && __mk2.h.meleeT<0.42"), "knife wind-up was missed"
             await snap("ai_knife_windup.png")
             for i in range(20):
                 await ev("__sim(1/60)")
                 if await ev("__mk2.h.meleeT>=0.44||__mk2.h.meleeT<0"): break
+            assert await ev("__mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.44 && __mk2.h.meleeT<0.85"), "knife strike was missed"
             await snap("ai_knife_strike.png")
             print("knife kind", await ev("__mk2.h.meleeKind"))
         print("\n".join(logs[-20:]))

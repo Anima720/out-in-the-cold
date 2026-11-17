@@ -80,8 +80,8 @@ export function updateRockets(dt) {
     r.smokeT -= dt;
     if (r.smokeT <= 0) {
       r.smokeT = 0.012;
-      G.fx.alpha.spawn(r.pos.x, r.pos.y, r.pos.z, rr(-0.3, 0.3), rr(-0.3, 0.3), rr(-0.3, 0.3), { life: rr(1.4, 2.4), size: 0.35, grow: 5, c: [0.82, 0.82, 0.83], alpha: 0.6, drag: 1.5, wind: 1, fadeIn: 0.05 });
-      G.fx.add.spawn(r.pos.x, r.pos.y, r.pos.z, 0, 0, 0, { life: 0.06, size: 0.6, c: [1, 0.7, 0.35], alpha: 1 });
+      G.fx.alpha.spawn(r.pos.x, r.pos.y, r.pos.z, rr(-0.3, 0.3), rr(-0.3, 0.3), rr(-0.3, 0.3), { life: rr(1.6, 2.6), size: 0.5, grow: 4.5, c: [0.46, 0.48, 0.5], alpha: 0.7, drag: 1.5, wind: 1, fadeIn: 0.03 });
+      G.fx.add.spawn(r.pos.x, r.pos.y, r.pos.z, 0, 0, 0, { life: 0.08, size: 0.85, c: [1, 0.7, 0.35], alpha: 1 });
     }
   }
 }

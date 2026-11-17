@@ -51,31 +51,31 @@ function windowTex() {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64;
   const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 64, 64);
   const r = mulberry32(9);
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) { const v = r(); if (v < 0.55) continue; x.fillStyle = v > 0.9 ? '#ffe7b8' : v > 0.75 ? '#ffc879' : '#b98a55'; x.fillRect(4 + i * 15, 3 + j * 8, 10, 5); }
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) { const v = r(); if (v < 0.72) continue; x.fillStyle = v > 0.94 ? '#d7bc86' : v > 0.84 ? '#a88a5b' : '#6d604c'; x.fillRect(4 + i * 15, 3 + j * 8, 9, 4); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function buildDubai() {
   const g = new THREE.Group();
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0f2a38, roughness: 0.12, metalness: 0.6, envMapIntensity: 1.2 }));
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x16313c, roughness: 0.28, metalness: 0.2, envMapIntensity: 0.8 }));
   water.position.y = -0.5; g.add(water);
   const sand = new THREE.Mesh(new THREE.PlaneGeometry(6000, 3000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xb48a5c, roughness: 1 }));
   sand.position.set(0, 0.3, -1700); g.add(sand);
-  const city = new THREE.MeshStandardMaterial({ color: 0x3a4048, emissive: 0xffffff, emissiveMap: windowTex(), emissiveIntensity: 1.6, roughness: 0.25, metalness: 0.65, envMapIntensity: 1.2 });
+  const city = new THREE.MeshStandardMaterial({ color: 0x3a4048, emissive: 0xffffff, emissiveMap: windowTex(), emissiveIntensity: 0.85, roughness: 0.5, metalness: 0.35, envMapIntensity: 0.8 });
   const b = new Builder(), r = mulberry32(42);
   for (let i = 0; i < 170; i++) {
     const x = (r() - 0.5) * 1500, z = -260 - r() * 700, h = 30 + Math.pow(r(), 2.2) * 230, w = 14 + r() * 26, d = 14 + r() * 26;
     if (Math.abs(x - 120) < 60 && z > -500) continue;
-    b.add(new THREE.BoxGeometry(w, h, d), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(x, h / 2, z), 1 / 9);
-    if (r() < 0.25) b.add(new THREE.BoxGeometry(w * 0.6, h * 0.25, d * 0.6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(x, h + h * 0.125, z), 1 / 9);
+    b.add(new THREE.BoxGeometry(w, h, d), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(x, h / 2, z), 1 / 28);
+    if (r() < 0.25) b.add(new THREE.BoxGeometry(w * 0.6, h * 0.25, d * 0.6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(x, h + h * 0.125, z), 1 / 28);
   }
   // the supertall on the skyline
-  for (let k = 0; k < 9; k++) { const s = 1 - k * 0.1, h = 70; b.add(new THREE.CylinderGeometry(24 * s - 2, 24 * s, h, 6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(-330, h / 2 + k * h, -980), 1 / 9); }
-  b.add(new THREE.CylinderGeometry(0.5, 3, 140, 6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(-330, 700, -980), 1 / 9);
+  for (let k = 0; k < 9; k++) { const s = 1 - k * 0.1, h = 70; b.add(new THREE.CylinderGeometry(24 * s - 2, 24 * s, h, 6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(-330, h / 2 + k * h, -980), 1 / 28); }
+  b.add(new THREE.CylinderGeometry(0.5, 3, 140, 6), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(-330, 700, -980), 1 / 28);
   // Hotel Oasis (fictional): tall curved tower with a lit crown and helipad
   const hx = 120, hz = -420;
-  for (let k = 0; k < 22; k++) { const y = k * 12, s = 1 - Math.pow(k / 22, 2) * 0.45; b.add(new THREE.BoxGeometry(46 * s, 12, 30 * s), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(hx - k * 0.8, y + 6, hz), 1 / 9); }
+  for (let k = 0; k < 22; k++) { const y = k * 12, s = 1 - Math.pow(k / 22, 2) * 0.45; b.add(new THREE.BoxGeometry(46 * s, 12, 30 * s), 'city', 0xffffff, new THREE.Matrix4().makeTranslation(hx - k * 0.8, y + 6, hz), 1 / 28); }
   b.build({ city }, g);
-  const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x9fd8ff, emissiveIntensity: 3.2 });
+  const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x9fd8ff, emissiveIntensity: 2.0 });
   const crown = new THREE.Mesh(new THREE.TorusGeometry(15, 0.8, 8, 40), glow); crown.rotation.x = Math.PI / 2; crown.position.set(hx - 17, 272, hz); g.add(crown);
   // helipad cantilevered off the top floor's east face: deck + pad + two diagonal struts back into the facade, edge lights
   const topX = hx - 21 * 0.8 + 46 * (1 - Math.pow(21 / 22, 2) * 0.45) / 2, padX = topX + 9.5, padY = 265;
@@ -120,7 +120,7 @@ function buildDubai() {
   const fin = new Builder();
   for (let k = 0; k < 22; k++) { const y = k * 12, sc = 1 - Math.pow(k / 22, 2) * 0.45, cx = hx - k * 0.8; for (let i = -3; i <= 3; i++) fin.boxC(cx + i * 46 * sc / 7, y + 6, hz + 15 * sc + 0.3, 0.35, 11.6, 0.5, 'fin', 0); }
   fin.boxC(hx, 4, hz + 26, 70, 8, 22, 'concrete', 0xc8b89a);
-  fin.build({ ...M, fin: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffe2b0, emissiveIntensity: 2.2 }) }, g);
+  fin.build({ ...M, fin: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffe2b0, emissiveIntensity: 1.35 }) }, g);
   // traffic: a few cars on both carriageways (moved in updateCine)
   C.traffic = [];
   const tc = mulberry32(3);
@@ -149,10 +149,11 @@ function buildSUV() {
   b.cyl(-0.45, 1.2, -0.12, 0.17, 0.17, 0.035, 'dark', 0x111111, 1.1, 0, 0, 18);       // steering wheel (driver reach)
   b.cyl(-0.45, 1.1, -0.33, 0.035, 0.045, 0.46, 'dark', 0x1a1a1a, 1.1, 0, 0, 8);       // steering column into the dash
   for (const sx of [-1, 1]) b.boxC(sx * 0.45, 0.6, 0.35, 0.55, 0.15, 0.6, 'dark', 0x2a2420);
-  b.build({ ...M, car: new THREE.MeshStandardMaterial({ color: 0x14171a, roughness: 0.22, metalness: 0.85, envMapIntensity: 1.5 }), head: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff2d8, emissiveIntensity: 7 }), tail: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2a1a, emissiveIntensity: 5 }) }, g);
+  b.build({ ...M, car: new THREE.MeshStandardMaterial({ color: 0x46515a, roughness: 0.48, metalness: 0.22, envMapIntensity: 0.8 }), head: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff2d8, emissiveIntensity: 7 }), tail: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2a1a, emissiveIntensity: 5 }) }, g);
   const glass = new THREE.MeshStandardMaterial({ color: 0x182028, roughness: 0.05, metalness: 0.7, transparent: true, opacity: 0.32, depthWrite: false });
   const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.75), glass); ws.position.set(0, 1.42, -1.0); ws.rotation.x = -0.4; g.add(ws);
   for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 0.68), glass); w.position.set(sx * 0.97, 1.41, 0.4); w.rotation.y = sx * Math.PI / 2; g.add(w); }
+  const fill = new THREE.PointLight(0xc6d6eb, 10, 11, 2); fill.position.set(-3.2, 3.2, 0.8); g.add(fill); // sky bounce on the shaded doors and faces
   G.scene.add(g); C.objs.push(g);
   return g;
 }
@@ -181,9 +182,13 @@ function buildHeli() {
   // searchlight under the nose: a real spotlight plus a soft additive cone so the beam reads through the snow
   const spot = new THREE.SpotLight(0xe8f0ff, 900, 0, 0.13, 0.45, 1.2); spot.position.set(0, -1.1, -4.6); g.add(spot); G.scene.add(spot.target);
   const cg = new THREE.ConeGeometry(Math.tan(0.13), 1, 28, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI / 2);
-  const col = []; const pa = cg.attributes.position; for (let i = 0; i < pa.count; i++) { const k = 0.16 * (1 - pa.getZ(i)) ** 1.4; col.push(k, k * 1.05, k * 1.15); }
-  cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const cone = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  const cone = new THREE.Mesh(cg, new THREE.ShaderMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying float vZ;
+      void main(){vec4 p=modelViewMatrix*vec4(position,1.0);vN=normalize(normalMatrix*normal);vV=-p.xyz;vZ=position.z;gl_Position=projectionMatrix*p;}`,
+    fragmentShader: `varying vec3 vN; varying vec3 vV; varying float vZ;
+      void main(){float edge=pow(abs(dot(normalize(vN),normalize(vV))),.75);
+        float fade=smoothstep(.015,.13,vZ)*(1.0-smoothstep(.55,1.0,vZ));
+        gl_FragColor=vec4(.58,.7,.86,.085*edge*fade);}` }));
   G.scene.add(cone);
   G.scene.add(g); C.objs.push(g, cone, spot.target);
   return { g, rotor, tail, beacon, tailW, bl, spot, cone };
@@ -245,7 +250,7 @@ const SHOTS = [
 function setDubai() {
   clearHumans();
   if (S.root) S.root.visible = false;
-  setLook({ fog: 0xc58a5a, top: 0x3c3f63, bot: 0xd9905a, density: 0.0011, sunDir: new THREE.Vector3(0.15, 0.08, -1), sun: [0xffb06a, 2.6], hemi: [0xffd2a8, 0x5a4a40, 0.7], exp: 1.05, env: 0.7, snow: false });
+  setLook({ fog: 0xc58a5a, top: 0x3c3f63, bot: 0xd9905a, density: 0.0011, sunDir: new THREE.Vector3(0.15, 0.08, -1), sun: [0xffb06a, 2.1], hemi: [0xffd2a8, 0x5a4a40, 1.0], exp: 0.98, env: 0.7, snow: false });
   buildDubai();
   // Price and Yuri on the rooftop
   C.car = buildSUV();
@@ -317,10 +322,10 @@ export function updateCine(rdt) {
   } else if (t < 24) { // tracking shot alongside the SUV on the coastal highway
     const u = (t - 15) / 9;
     cam.position.set(56.5 - lerp(7, 4.5, u), lerp(1.6, 2.4, u), carZ + lerp(5, -1, u));
-    cam.lookAt(_l.set(56.5, 1.1, carZ - 3));
+    cam.lookAt(_l.set(56.5, 1.25, carZ - 0.4));
   } else if (t < 31) { // from the back seat: the hotel through the windscreen
-    cam.position.set(56.5, 1.95, carZ + 1.75);
-    cam.lookAt(_l.set(100, 35, -420));
+    cam.position.set(56.5, 1.6, carZ + 0.95);
+    cam.lookAt(_l.set(100, 20, -420));
     cam.fov = 58; cam.updateProjectionMatrix();
   } else if (t < 40) { // push toward the hotel crown
     const u = smooth((t - 31) / 9);

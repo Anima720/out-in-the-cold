@@ -4,12 +4,12 @@
 #  - surface ck 20 (after the cage ride): 40 s, flank / suppression / retreat counters
 #  - downed: forced down -> pistol fire -> bleed out; finished off by a second hit
 #  - melee: enemy on the player (damage with god off), mate on an enemy
-# usage: timeout 900 python3 tools/test_ai.py [phases...]   (phases: train station surface downed melee contracts mine)
+# usage: timeout 900 python3 tools/test_ai.py [phases...]   (phases: train station surface downed melee contracts fence mine)
 import asyncio, json, sys, os, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
 CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
-PH = sys.argv[1:] or ["downed", "melee", "contracts", "train", "station", "surface"]
+PH = sys.argv[1:] or ["downed", "melee", "contracts", "fence", "train", "station", "surface"]
 from playwright.async_api import async_playwright
 from runtime import CHROME, assert_clean
 
@@ -182,6 +182,56 @@ async def main():
             show("train muzzle contract", r)
             assert r['shots']==2 and r['maxError']<1e-7 and r['minNorm']>5, r
             await assert_clean(pg, logs)
+
+        if "fence" in PH:
+            await ev("__begin(5); __sim(0.2)")
+            # Isolate walking from waves/shooters, retaining every real station collider. takeSpot
+            # calls production route(); each __sim tick runs Raider.update -> walk -> moveChar.
+            r=await ev("""(()=>{const G=__G,T=__THREE,level=G.levelUpdate,mates=G.mates.map(m=>[m,m.update,m.h.hidden]),boxes=G.boxes.slice();
+              const geometry=JSON.stringify(boxes.map(b=>[b.min.toArray(),b.max.toArray(),b.enabled,b.tag]));
+              const expected=[[-3,-34,-3,-26.5],[0,-34,0,-26.5],[3,-34,3,-26.5],[-20.5,-34,-20.5,-26.5],[0,30,0,22.5],
+                [-34,-12.5,-26.5,-12.5],[-34,4.5,-26.5,4.5],[-34,19.5,-26.5,19.5],[34,-27.5,26.5,-27.5],[34,-4.5,26.5,-4.5],[34,15.5,26.5,15.5]];
+              const entries=G.stationEntries?.();if(!entries||JSON.stringify(entries.map(e=>[...e.o,...e.i]))!==JSON.stringify(expected))throw Error('Missing real station entry');
+              if(boxes.filter(b=>b.enabled&&b.tag==='fence').length<4)throw Error('Station fences are not loaded');
+              const inside=p=>Math.abs(p.x)<29.8&&p.z>-29.8&&p.z<25.8,cases=[],results=[];let actor;
+              const clear=()=>{for(const e of G.enemies){e.freeSpot?.();e.h.remove();}G.enemies.length=0;G.resetCombat?.();};
+              const collision=h=>boxes.find(b=>b.enabled&&!b.inv&&b.max.y>h.pos.y+0.005&&b.min.y<h.pos.y+h.h-0.005&&
+                h.pos.x+h.r>b.min.x+0.005&&h.pos.x-h.r<b.max.x-0.005&&h.pos.z+h.r>b.min.z+0.005&&h.pos.z-h.r<b.max.z-0.005);
+              for(let k=0;k<entries.length;k++){const e=entries[k],dx=e.i[0]-e.o[0],dz=e.i[1]-e.o[1],d=Math.hypot(dx,dz),nx=dx/d,nz=dz/d;
+                const out=[e.o[0]-nx*2,e.o[1]-nz*2],inn=[e.i[0]+nx*1.5,e.i[1]+nz*1.5];
+                cases.push({name:k+' inward',from:out,to:inn,gate:e.i});cases.push({name:k+' outward',from:inn,to:out,gate:e.o});}
+              cases.push({name:'NE corner inward',from:[31,-25],to:[20,-27.5],gate:[26.5,-27.5]},
+                {name:'NE corner outward',from:[20,-27.5],to:[31,-25],gate:[34,-27.5]});
+              try{clear();G.levelUpdate=()=>{};__D.timers.length=0;__D.q.length=0;
+                for(const [m] of mates){m.update=()=>{};m.h.hidden=true;}
+                __input.down.clear();__input.pressed.clear();__input.lmb=__input.rmb=false;__P.god=true;__P.pos.set(0,.15,0);__P.vel.set(0,0,0);
+                for(const c of cases){clear();actor=new window.__Raider(...c.from,{wk:'ak',maxTier:0});const h=actor.h;
+                  actor.takeSpot({x:c.to[0],z:c.to[1],tier:0});h.firstPose=true;h.update(0);const path=actor.path.map(p=>[p.x,p.z]);
+                  if(!path.some(p=>p[0]===c.gate[0]&&p[1]===c.gate[1]))throw Error('Wrong routed gate '+JSON.stringify({case:c,path}));
+                  const initial=collision(h);if(initial)throw Error('Blocked walking fixture '+JSON.stringify({case:c,box:[initial.min.toArray(),initial.max.toArray(),initial.tag]}));
+                  let frames=0,crossings=0,side=inside(h.pos),travel=0,maxStep=0;
+                  while(frames<1200&&actor.state==='advance'){const x=h.pos.x,z=h.pos.z;__sim(1/60);frames++;
+                    const step=Math.hypot(h.pos.x-x,h.pos.z-z);travel+=step;maxStep=Math.max(maxStep,step);
+                    if(!Number.isFinite(step)||step>.16)throw Error('Non-walking displacement '+JSON.stringify({case:c.name,frames,step}));
+                    const b=collision(h);if(b)throw Error('Walker penetrated collider '+JSON.stringify({case:c.name,frames,pos:h.pos.toArray(),box:[b.min.toArray(),b.max.toArray(),b.tag]}));
+                    const next=inside(h.pos);if(next!==side){crossings++;side=next;}
+                  }
+                  const distance=Math.hypot(h.pos.x-c.to[0],h.pos.z-c.to[1]),arrived=h.alive&&actor.state==='cover'&&actor.path.length===0&&distance<.46&&side===inside({x:c.to[0],z:c.to[1]})&&crossings===1;
+                  const result={name:c.name,path,frames,seconds:+(frames/60).toFixed(3),arrived,distance:+distance.toFixed(4),crossings,travel:+travel.toFixed(3),maxStep:+maxStep.toFixed(4),end:h.pos.toArray()};
+                  results.push(result);if(!arrived)throw Error('Fence walk did not arrive '+JSON.stringify({...result,state:actor.state,remaining:actor.path}));
+                }
+                if(G.boxes.length!==boxes.length||!boxes.every((b,i)=>G.boxes[i]===b)||JSON.stringify(boxes.map(b=>[b.min.toArray(),b.max.toArray(),b.enabled,b.tag]))!==geometry)throw Error('Real colliders changed during walking test');
+                window.__fenceWalkActor=actor;return {cases:results.length,colliders:boxes.length,fences:boxes.filter(b=>b.tag==='fence').length,results};
+              }finally{G.levelUpdate=level;for(const [m,update,hidden] of mates){m.update=update;m.h.hidden=hidden;}}})()""")
+            show("real station fence walks",r)
+            assert r['cases']==24 and all(x['arrived'] and x['crossings']==1 for x in r['results']),r
+            # One evidence image after the final actual crossing; camera placement is only for documentation.
+            await ev("__P.pos.set(35,1.2,-18);__P.camY=1.2;__P.eyeY=1.62;__P.yaw=Math.atan2(35-__fenceWalkActor.h.pos.x,-18-__fenceWalkActor.h.pos.z);__P.pitch=-.17;__P.shake=0;__P.autoLook=null;window.__freeze=true;window.__rafHold=false;window.__f0=window.__frames||0;{const q=window.__pend.splice(0);for(const cb of q)window.__raf(cb);}")
+            await pg.wait_for_function("(window.__frames||0)>=window.__f0+2",polling=300,timeout=200000)
+            await ev("window.__rafHold=true")
+            await pg.screenshot(path=str(ROOT/'shots'/'ai_fence_walk.png'),timeout=200000)
+            await ev("window.__freeze=false")
+            await assert_clean(pg,logs)
 
         if "train" in PH:
             await ev("__begin(1)"); await ev("__sim(0.5)"); await ev(RESET)

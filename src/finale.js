@@ -24,7 +24,7 @@ Object.assign(LINES, {
 const MONO = ['普莱斯……剩下的，交给你了。', 'Metal 0-1……完毕。'];
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-const _a = V(), _b = V(), _c = V();
+const _a = V(), _b = V(), _c = V(), _drag = V();
 const F = { on: false, ph: '', t: 0 };
 export const FIN = F;
 const WAKE_POS = V(-2.3, 0.15, -2.75), DOOR = V(0, 1.2, 4.85), GRINCH_AT = V(-5.7, 0.15, -0.6);
@@ -38,9 +38,10 @@ function ui() {
   const st = document.createElement('style');
   st.textContent = `.fin{inset:0;pointer-events:none}.fin>div{position:absolute;inset:0;opacity:0}
 .fin .k{background:#000}.fin .w{background:#fff8ee}.fin .r{background:radial-gradient(ellipse at center,rgba(150,0,0,.35),rgba(110,0,0,.85))}
-.fin .v{background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 38%,rgba(70,0,0,.55) 72%,rgba(25,0,0,.95) 100%)}
+.fin .v{background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 52%,rgba(70,8,6,.4) 78%,rgba(22,2,2,.88) 100%)}
 .fin .m{inset:auto 0 auto 0;top:43%;text-align:center;font:italic 300 30px/1.6 "Noto Serif CJK SC","Source Han Serif SC","Songti SC",serif;color:#e9e3d6;letter-spacing:.14em;text-shadow:0 0 14px #000,0 0 3px #000}
-#ui.fin-min .ammo,#ui.fin-min .compass,#ui.fin-min .cross,#ui.fin-min .ftag,#ui.fin-min .nadeind,#ui.fin-min .minimap{display:none}#ui.fin-min.fin-aim .cross{display:block}`;
+#ui.fin-min .ammo,#ui.fin-min .compass,#ui.fin-min .cross,#ui.fin-min .ftag,#ui.fin-min .nadeind,#ui.fin-min .minimap{display:none}#ui.fin-min.fin-aim .cross{display:block}
+#ui.fin-min>.vign,#ui.fin-min>.blood{opacity:0!important}`;
   document.head.appendChild(st);
   const root = document.createElement('div'); root.className = 'fin';
   const mk = (c) => { const e = document.createElement('div'); e.className = c; root.appendChild(e); return e; };
@@ -50,8 +51,10 @@ function ui() {
 }
 function ov(name, o) { const u = ui(); o = Math.round(clamp(o, 0, 1) * 100) / 100; if (u.last[name] !== o) { u.last[name] = o; u[name].style.opacity = o; } }
 function look(blur, sat) {
-  const c = G.renderer.domElement, f = blur > 0.05 || sat < 0.99 ? `blur(${blur.toFixed(1)}px) saturate(${sat.toFixed(2)})` : '';
-  if (c.style.filter !== f) c.style.filter = f;
+  const b = Math.round(blur * 10) / 10, s = Math.round(sat * 100) / 100;
+  if (F.lookBlur === b && F.lookSat === s) return;
+  F.lookBlur = b; F.lookSat = s;
+  G.renderer.domElement.style.filter = b > 0.05 || s < 0.99 ? `blur(${b.toFixed(1)}px) saturate(${s.toFixed(2)})` : '';
 }
 function mono(text) { const u = ui(); if (u.mt !== text) { u.mt = text; u.m.textContent = text || ''; } }
 
@@ -68,11 +71,11 @@ function arm() {
   return ARM;
 }
 const SH = V(0.17, -0.3, 0.02), REST = V(0.16, -0.5, -0.3);
-function reach(k) {
+function reach(k, target = S.keyPos) {
   const a = arm(); a.g.visible = k > 0.01;
   if (!a.g.visible) return;
   G.camera.updateMatrixWorld(true);
-  _a.copy(S.keyPos); G.camera.worldToLocal(_a);
+  _a.copy(target); G.camera.worldToLocal(_a);
   _b.copy(REST).lerp(_a, smooth(k));
   _c.subVectors(_b, SH); const L = _c.length(); _c.normalize();
   a.sl.position.copy(SH); a.sl.quaternion.setFromUnitVectors(_a.set(0, 0, -1), _c); a.sl.scale.set(1, 1, Math.max(0.05, L - 0.08));
@@ -215,7 +218,8 @@ function startDrag() {
   }
   segs.push([V(0.7, 0, 10.4), V(0.3, 0, 7.6)], [V(0.15, 0, 6.1), V(-0.45, 0, 2.6)]);
   F.segs = segs.map(([a, b]) => ({ a, b, dur: 2.7 }));
-  const g = D.grinch; if (g) { g.custom = () => {}; const h = g.h; h.sit = null; h.noWeapon = false; h.sidearm = 1; h.invuln = true; h.crouchT = 0.65; }
+  const g = D.grinch; if (g) { g.custom = () => {}; const h = g.h; h.sit = null; h.noWeapon = false; h.sidearm = 1; h.invuln = true; h.crouchT = h.crouch = 1; h.handL = V(); }
+  P.downed.eye = 0.34; P.downed.sway = 0.35;
   muffle(700, 0.4);
   say('P5_GRIN_14', 1.2);
   F.hb = 0.2;
@@ -239,24 +243,24 @@ function updateDrag(dt, rdt) {
   if (F.seg !== i) enterSeg(i);
   const s = F.segs[i], u = clamp((T - acc) / s.dur, 0, 1);
   ov('k', T - acc > s.dur ? 1 : Math.max(1 - smooth(u / 0.22), smooth((u - 0.8) / 0.2)));
-  look(3.0 - Math.sin(u * Math.PI) * 1.4, 0.5); ov('v', 0.6);
+  look(1.2 - Math.sin(u * Math.PI) * 0.9, 0.65); ov('v', 0.48);
   heart(rdt, 0.95);
   // three hard pulls per glimpse
   const n = 3, pu = u * n, w = (Math.floor(pu) + smooth(Math.min(1, (pu % 1) / 0.55))) / n;
-  const move = _a.subVectors(s.b, s.a).setY(0), L = move.length(); move.normalize();
+  const move = _drag.subVectors(s.b, s.a).setY(0), L = move.length(); move.normalize();
   P.pos.copy(s.a).addScaledVector(move, L * Math.min(1, w)); P.pos.y = floorY(P.pos.x, P.pos.z);
   P.vel.set(0, 0, 0);
-  const lookYaw = yawOf(_b.copy(move).negate());
-  P.yaw = lookYaw + 0.72; P.pitch = 0.27 + Math.sin(T * 1.7) * 0.04; P.lockLook = true; P.autoLook = null;
+  P.yaw = yawOf(move) + 0.24; P.pitch = 0.32 + Math.sin(T * 1.7) * 0.025; P.lockLook = true; P.autoLook = null;
   if ((pu % 1) < 0.05) P.addShake(0.05);
-  // Grinch walks backwards toward the door, left hand in the player's vest, pistol out one-handed at the yard
+  // Grinch backs toward the door, hauling the raised forearm; both hands meet in view below his chest.
   const g = D.grinch;
   if (g) {
     const h = g.h, side = _c.set(-move.z, 0, move.x);
     const sp = (L / s.dur) * 1.4;
-    h.pos.copy(P.pos).addScaledVector(move, -0.05).addScaledVector(side, 0.68); h.pos.y = floorY(h.pos.x, h.pos.z);
+    h.pos.copy(P.pos).addScaledVector(move, 0.85).addScaledVector(side, -0.48); h.pos.y = floorY(h.pos.x, h.pos.z);
     h.vel.copy(move).multiplyScalar(sp);
-    h.handL = (h.handL || V()).copy(P.pos).addScaledVector(move, 0.15).addScaledVector(side, 0.2).setY(P.pos.y + 0.45);
+    h.handL.copy(P.pos).addScaledVector(move, 0.43).addScaledVector(side, -0.14).setY(P.pos.y + 0.6);
+    reach(1, h.handL);
     let tgt = null; for (const a of F.actors) if (a.h.alive) { tgt = a; break; }
     h.aimTarget = 1;
     if (tgt) h.aim.subVectors(tgt.h.j[J.Ne], h.j[J.SR]).normalize(); else h.aim.copy(move).negate();
@@ -282,6 +286,7 @@ export function startWake(P5, g) {
   P.pitch = 0.05; P.shield = true; P.noCrowd = true; P.health = 45; P.enabled = true; P.lockLook = false;
   P.downed = { eye: 0.35, sens: 0.3, sway: 1, pmin: -0.5, pmax: 0.75, yawC: P.yaw, yawR: 1.2, gun: false, vmDrop: 1 };
   WP.hidden = true; WP.clay = 0;
+  reach(0);
   setDoor(0); setUplink('wait', 99);
   HUD.show(true); HUD.root.classList.add('fin-min'); HUD.root.classList.remove('fin-aim');
   HUD.setUpload(99, true, '99% · 等待手动发送');
@@ -296,7 +301,7 @@ export function startWake(P5, g) {
   F.sa = actor('ru', 0.3, 6.3, { yaw: 0, speed: 2.6 }); F.kras = actor('kr', -0.2, 7.4, { yaw: 0, speed: 1.5, head: 'head_kras' }); F.sb = actor('ru', 0.5, 8.4, { yaw: 0, speed: 2.3 });
   for (const a of [F.sa, F.kras, F.sb]) { a.h.hidden = true; a.h.invuln = true; }
   F.kras.h.sidearm = 1;
-  ov('k', 1); ov('v', 0.7); look(4, 0.5);
+  ov('k', 1); ov('v', 0.5); look(2, 0.65);
   say('P5_GRIN_15', 2.4);
 }
 
@@ -314,15 +319,15 @@ function updateRoom(dt, rdt, P5) {
   const t = F.t, d = P.downed, K = F.kras, A1 = F.sa, B1 = F.sb, g = F.gr && F.gr.h;
   if (F.gdecal !== undefined && (F.gdecal -= rdt) <= 0) {
     F.gdecal = undefined;
-    blood('splat', V(-6.3, 0.6, -0.5), V(1, 0, 0), 0.7); blood('splat', V(-6.3, 0.35, -0.38), V(1, 0, 0), 0.5); blood('pool', V(-5.95, 0.15, -0.45), 0.6);
+    blood('splat', V(-6.3, 0.6, -0.5), V(1, 0, 0), 0.42); blood('splat', V(-6.3, 0.35, -0.38), V(1, 0, 0), 0.28); blood('pool', V(-5.95, 0.15, -0.45), 0.42);
   }
   if (F.ph === 'wake') {
     // eyes open slowly: two failed blinks, then the room
     const o = 1 - smooth(t / 3.4) + (t > 1.3 && t < 2.0 ? Math.sin((t - 1.3) / 0.7 * Math.PI) * 0.75 : 0);
-    ov('k', o); look(lerp(4, 1.6, smooth(t / 5)), 0.55); ov('v', 0.72); heart(rdt, 1.1);
+    ov('k', o); look(lerp(2, 0.1, smooth(t / 3.8)), 0.72); ov('v', 0.5); heart(rdt, 1.1);
     if (t > 9.3 && !D.cur) { F.ph = 'breach'; F.t = 0; }
   } else if (F.ph === 'breach') {
-    ov('k', 0); look(1.4, 0.6); heart(rdt, 0.85, 0.85);
+    ov('k', 0); look(lerp(0.5, 0.1, smooth(t / 1.2)), 0.74); heart(rdt, 0.85, 0.85);
     if (!F.kicked) { // breaching charge: flash, bang, smoke and debris into the room, one leaf torn off, brief deafness
       F.kicked = true; blowDoor();
       G.fx.explosion(_a.set(0, 1.1, 4.95), 0.8, { snow: false, wind: 0 });
@@ -358,7 +363,7 @@ function updateRoom(dt, rdt, P5) {
     if (F.aimHelp !== undefined && (F.aimHelp -= rdt) <= 0) { F.aimHelp = undefined; P.autoLook = null; }
     G.timeScale = lerp(1, 0.2, smooth(real / 0.35));
     if (F.fired && !P.god) G.timeScale = 1;
-    d.vmDrop = 1 - smooth(real / 0.7); look(0.6, 0.75); ov('v', 0.55); heart(rdt, 0.6, 0.9);
+    d.vmDrop = 1 - smooth(real / 0.7); look(0, 0.82); ov('v', 0.4); heart(rdt, 0.6, 0.9);
     WP.cool = Math.min(WP.cool, 0.028);
     for (const a of [K, B1]) if (a.h.alive) { a.aimAt = () => P.eye; a.turn = 2.2; }
     const dead = !K.h.alive && !B1.h.alive;
@@ -377,18 +382,19 @@ function updateRoom(dt, rdt, P5) {
   } else if (F.ph === 'crawl' || F.ph === 'send') {
     G.timeScale = Math.min(1, G.timeScale + rdt * 1.4);
     d.vmDrop = Math.min(1, (d.vmDrop || 0) + rdt * 1.1); if (d.vmDrop >= 1) d.gun = false;
-    const cyc = (t * 0.9) % 1;
-    look(1.2 + Math.max(0, Math.sin(t * 0.8)) * 1.2, 0.6); ov('v', 0.72 + Math.sin(t * 1.3) * 0.05); heart(rdt, 1.0);
+    const dist = Math.hypot(P.pos.x - S.keyPos.x, P.pos.z - S.keyPos.z), strain = clamp((dist - 1.2) / 1.5, 0, 1);
+    look(strain * (0.1 + Math.max(0, Math.sin(t * 0.8)) * 0.2), 0.76); ov('v', 0.48 + Math.sin(t * 1.3) * 0.03); heart(rdt, 1.0);
     if ((F.br = (F.br ?? 1.5) - rdt) <= 0 && !key('KeyW')) { F.br = 2.2; play('breath', { bus: A.master, rev: 0, vol: 0.45, noSlow: true }); }
     if (t > 1.7 && !d.crawl) {
       P.autoLook = null; d.crawl = true; d.sens = 0.35; d.pmin = -0.45; d.pmax = 0.5;
       HUD.objective('爬到控制台，发送情报'); HUD.setMarker(S.keyPos, '');
     }
     d.yawC = yawOf(_a.subVectors(S.keyPos, P.pos)); d.yawR = d.crawl ? 0.9 : 3.2;
-    const dist = Math.hypot(P.pos.x - S.keyPos.x, P.pos.z - S.keyPos.z);
+    if (d.crawl && P.autoLook === F.sendAim && (!key('KeyF') || dist >= 1.15)) P.autoLook = null;
     let holdK = null, prompt = null;
     if (d.crawl && dist < 1.15) {
       prompt = '按住 <kbd>F</kbd> 发送';
+      if (key('KeyF')) P.autoLook = F.sendAim;
       if (key('KeyF')) F.hold += rdt; else F.hold = Math.max(0, F.hold - rdt * 2);
       holdK = F.hold / 1.5;
       if (F.hold >= 1.5) { sent(); holdK = null; prompt = null; }
@@ -399,7 +405,7 @@ function updateRoom(dt, rdt, P5) {
   } else if (F.ph === 'mono') {
     const sag = smooth(t / 3.5); d.sag = sag; d.sway = 1 - sag * 0.6; d.crawl = false;
     F.reach = Math.max(0, F.reach - rdt * 0.5); reach(F.reach);
-    look(lerp(1.2, 3.5, sag), lerp(0.6, 0.35, sag)); ov('v', lerp(0.75, 1, sag)); heart(rdt, lerp(1.0, 1.7, sag), lerp(0.75, 0.4, sag));
+    look(lerp(0, 1.6, smooth((t - 1.4) / 3.5)), lerp(0.76, 0.4, sag)); ov('v', lerp(0.5, 0.95, sag)); heart(rdt, lerp(1.0, 1.7, sag), lerp(0.75, 0.4, sag));
     const line = (t0) => clamp(Math.min((t - t0) / 1.2, (t0 + 5 - t) / 1.0), 0, 1);
     const a1 = line(1.6), a2 = line(7.2);
     mono(t < 6.9 ? MONO[0] : MONO[1]); ov('m', t < 6.9 ? a1 : a2);
@@ -436,11 +442,12 @@ function startCrawl() {
   F.ph = 'crawl'; F.t = 0;
   HUD.setSlowmo(false); HUD.root.classList.remove('fin-aim');
   muffle(2400, 0.8);
-  P.autoLook = { target: S.keyPos, rate: 1.3 };
+  F.sendAim = { target: S.keyPos, rate: 4.5 }; P.autoLook = F.sendAim;
   musicMode('p5loss');
 }
 function sent() {
   F.ph = 'mono'; F.t = 0;
+  if (P.autoLook === F.sendAim) P.autoLook = null;
   setUplink('done', 100); HUD.setUpload(100, false, '100% · 已发送');
   for (let i = 0; i < 3; i++) play('ui', { vol: 0.6, rev: 0, delay: i * 0.16, rate: 1 + i * 0.25 });
   HUD.objective(null); HUD.setMarker(null); HUD.setPrompt(null); HUD.setHold(null);
