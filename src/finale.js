@@ -15,7 +15,7 @@ import { Builder } from './geom.js';
 import { M, TX, stdMat } from './mats.js';
 
 Object.assign(LINES, {
-  P5_GRIN_13: ['GRINCH', 'Sandman! SANDMAN! Stay with me!', '队长！队长！撑住！'],
+  P5_GRIN_13: ['GRINCH', 'Chief! CHIEF! Stay with me!', '队长！队长！撑住！'],
   P5_GRIN_14: ['GRINCH', "I got you. I got you, boss. Don't you quit on me.", '我拖着你呢。我拖着你，头儿。别给我放弃。'],
   P5_GRIN_15: ['GRINCH', 'Ninety-nine percent. It needs a manual send. Boss… they\'re at the door.', '百分之九十九。得手动确认发送。头儿……他们到门口了。'],
   P5_GRIN_16: ['GRINCH', 'Not a chance, you son of a bitch!', '你休想！'],
