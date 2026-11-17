@@ -506,14 +506,14 @@ export function buildGorge() {
     for (const rx of [-0.76, 0.76]) b.boxC(rx, 0.39, -zc, 0.075, 0.1, len, 'dark', 0x8a8d90);
     return b;
   };
-  const s1 = spanGeo(0, 30), s3 = spanGeo(60, 90);
-  s1.build(M, grp); s3.build(M, grp);
-  const mid = new THREE.Group();
-  mid.position.set(0, 0, -45);
-  const s2 = spanGeo(30, 60);
-  const midMeshes = s2.build(M, null);
-  for (const m of midMeshes) { m.position.z = 45; mid.add(m); }
-  grp.add(mid);
+  // the span between gorge.span0 and gorge.span1 is the one the Hind blows (its own group so it can fall)
+  let mid = null;
+  for (const [a, b] of [[0, 30], [30, 60], [60, 90]]) {
+    if (a !== gorge.span0) { spanGeo(a, b).build(M, grp); continue; }
+    mid = new THREE.Group(); mid.position.set(0, 0, -(a + b) / 2);
+    for (const m of spanGeo(a, b).build(M, null)) { m.position.z = (a + b) / 2; mid.add(m); }
+    grp.add(mid);
+  }
   W.midSpan = mid; W.midSpan.userData = { falling: false, vy: 0, av: 0, done: false };
   // piers & abutments
   const pb = new Builder();

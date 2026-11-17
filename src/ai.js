@@ -105,9 +105,14 @@ export class Enemy {
   }
   wake() { if (!this.active) { this.active = true; this.state = 'cover'; this.t = rr(1.0, 2.2); if (G.bark && Math.random() < 0.45) G.bark(pick(['RU_01', 'RU_04']), this.h.pos); } }
   updateGunnerPos() {
-    const D = T.dshk; const f = fwdYaw(D.yaw.rotation.y);
-    this.h.pos.set(GUN_PIVOT.x - f.x * 0.95, DECK, GUN_PIVOT.z - f.z * 0.95);
-    this.h.yaw = D.yaw.rotation.y;
+    const D = T.dshk; const f = fwdYaw(D.yaw.rotation.y), h = this.h;
+    h.pos.set(GUN_PIVOT.x - f.x * 0.95, DECK, GUN_PIVOT.z - f.z * 0.95);
+    h.yaw = D.yaw.rotation.y;
+    // hands stay on the spade grips, also before he is alerted (he visibly mans the gun)
+    D.yaw.updateMatrixWorld(true); h.noWeapon = true;
+    if (!this.active) h.aim.copy(f);
+    h.grips = h.grips || { R: new THREE.Vector3(), L: new THREE.Vector3() };
+    D.pitch.localToWorld(h.grips.R.set(0.09, -0.02, 0.5)); D.pitch.localToWorld(h.grips.L.set(-0.09, -0.02, 0.5));
   }
   update(dt) {
     const h = this.h; if (!h.alive) return;
@@ -124,27 +129,35 @@ export class Enemy {
     // aim at player
     h.aim.copy(toP).normalize();
     const wantYaw = yawOf(h.aim);
-    if (this.kind === 'gunner') {
+    if (this.kind === 'gunner') { // v7: heavy MG with its own fire cadence (no attack token: he was starved and never fired)
       const D = T.dshk;
-      D.yaw.rotation.y += clamp(angDiff(D.yaw.rotation.y, wantYaw), -2 * dt, 2 * dt);
-      D.pitch.rotation.x = damp(D.pitch.rotation.x, Math.asin(clamp(h.aim.y, -0.5, 0.6)), 4, dt);
-      this.updateGunnerPos();
-      h.crouchT = 0.25; h.aimTarget = 0; h.noWeapon = true;
-      D.yaw.updateMatrixWorld(true);
-      h.grips = h.grips || { R: new THREE.Vector3(), L: new THREE.Vector3() };
-      D.pitch.localToWorld(h.grips.R.set(0.09, -0.02, 0.5)); D.pitch.localToWorld(h.grips.L.set(-0.09, -0.02, 0.5));
+      D.pitch.updateMatrixWorld(true);
+      const mz = D.pitch.localToWorld((this.mzV || (this.mzV = new THREE.Vector3())).copy(D.muzzleLocal)); // own vector: shootAtPlayer reuses _e
+      this.losT = (this.losT || 0) - dt;
+      if (this.losT <= 0) { // who can he hit: the player (also keeps hammering his cover for 3 s after losing him), else a teammate
+        this.losT = 0.3;
+        if (dist < 80 && (los(mz, P.eye) || los(mz, P.chest))) { this.seenT = G.t; this.mt = null; }
+        else if (G.t - (this.seenT ?? -99) > 3) { this.mt = null; for (const m of G.mates) if (m.h.alive && !m.h.hidden && m.h.pos.distanceTo(GUN_PIVOT) < 70 && los(mz, m.h.j[J.Ne])) { this.mt = m; break; } }
+      }
+      const onP = G.t - (this.seenT ?? -99) < 3, tgt = onP ? P.chest : this.mt ? this.mt.h.j[J.Ne] : null;
+      if (tgt) h.aim.subVectors(tgt, GUN_PIVOT).normalize();
+      const wy = yawOf(h.aim), wp = Math.asin(clamp(h.aim.y, -0.5, 0.6));
+      D.yaw.rotation.y += clamp(angDiff(D.yaw.rotation.y, wy), -1.8 * dt, 1.8 * dt);
+      D.pitch.rotation.x = damp(D.pitch.rotation.x, wp, 5, dt);
+      this.updateGunnerPos(); h.crouchT = 0.25; h.aimTarget = 0;
       this.t -= dt;
       if (this.state === 'fire') {
-        if (this.t <= 0) {
-          this.t = 0.12; this.burst--;
-          D.pitch.updateMatrixWorld(true);
-          const mz = D.pitch.localToWorld(_e.copy(D.muzzleLocal));
-          shootAtPlayer(mz, { dmg: 12, acc: 0.6, snd: 'dshk_far', vol: 1, flash: 2, width: 0.045, tracer: 0.6 });
-          if (this.burst <= 0) { this.state = 'cover'; this.t = rr(1.5, 2.6); releaseToken(this); }
+        if (!tgt) { this.state = 'cover'; this.t = 0.8; }
+        else if (this.t <= 0) {
+          this.t = 0.11; this.burst--; h.recoil = 1; D.pitch.rotation.x += 0.012;
+          const near = mz.distanceTo(P.eye) < 30;
+          if (onP) shootAtPlayer(mz, { dmg: 13, acc: 0.65, snd: near ? 'dshk' : 'dshk_far', vol: near ? 0.8 : 1.1, flash: 2.2, width: 0.05, tracer: 0.75 });
+          else shootAt(h, mz, _t.copy(tgt).add(_o.set(rr(-0.7, 0.7), rr(-0.4, 0.5), rr(-0.7, 0.7))), { dmg: 0, skip: 'ru', spread: 0.03, tracer: 0.7, snd: near ? 'dshk' : 'dshk_far', vol: 0.9 });
+          if (this.burst <= 0) { this.state = 'cover'; this.t = rr(1.5, 2.7); if (G.bark && Math.random() < 0.2) G.bark('RU_02', h.pos); }
         }
       } else if (this.t <= 0) {
-        if (dist < 60 && los(GUN_PIVOT, P.eye) && requestToken(this)) { this.state = 'fire'; this.burst = 6 + (Math.random() * 5 | 0); this.t = 0.5; }
-        else this.t = 0.4;
+        if (tgt && Math.abs(angDiff(D.yaw.rotation.y, wy)) < 0.1) { this.state = 'fire'; this.burst = 5 + (Math.random() * 5 | 0); this.t = 0.15; }
+        else this.t = 0.25;
       }
       return;
     }

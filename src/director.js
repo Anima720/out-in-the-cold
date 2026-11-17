@@ -1,10 +1,10 @@
-import { G, THREE, rr, clamp, damp, smooth, pick, reseed } from './core.js';
+import { G, THREE, rr, clamp, damp, smooth, pick, reseed, angDiff } from './core.js';
 import { input, hit } from './input.js';
 import { gorge } from './physics.js';
 import { W, buildGorge, rebuildChunks } from './world.js';
-import { T, buildTrain, setInvWalls, DECK, GUN_PIVOT, CAB_DOOR } from './train.js';
+import { T, buildTrain, setInvWalls, DECK, GUN_PIVOT, CAB_DOOR, CAB, cabDoor, cabKnob, deckY } from './train.js';
 import { clearHumans, J } from './humans.js';
-import { Enemy, Mate, spawnTrainEnemies, mateFollow, TOK } from './ai.js';
+import { Enemy, Mate, spawnTrainEnemies, mateFollow, TOK, laneMove } from './ai.js';
 import { Sled, Hind, fireRocket, clearVehicles, explodeAt } from './vehicles.js';
 import { clearFX } from './fx.js';
 import { clearNades } from './grenade.js';
@@ -31,6 +31,11 @@ export const LINES = {
   SAND_06: ['SANDMAN', 'Everybody — JUMP!', '所有人——跳！'],
   TRUCK_06: ['TRUCK', 'Sandman… Sandman! On your feet, boss.', 'Sandman……Sandman！站起来，头儿。'],
   KRAS_01: ['克拉辛', 'Американцы на поезде. Остановить состав. Любой ценой.', '美国人在火车上。把车拦下来，不惜一切代价。', true],
+  TRUCK_07: ['TRUCK', 'More sleds — both sides!', '又来一批雪地摩托——两边都有！'],
+  GRIN_06: ['GRINCH', 'Got sleds coming up the left!', '左边又上来几辆雪地摩托！', true],
+  TRUCK_08: ['TRUCK', 'Right side! Swing it around!', '右边！把枪转过去！'],
+  GRIN_07: ['GRINCH', "Bridge is gone! I'm on the brakes — she won't stop!", '桥没了！我在刹车——停不下来了！', true],
+  TRUCK_09: ['TRUCK', 'Get to the side! Get ready to jump!', '到车边上去！准备跳车！'],
 };
 
 export const D = { phase: '', t: 0, rt: 0, ck: 0, q: [], cur: null, f: {}, timers: [], slow: null };
@@ -69,7 +74,7 @@ function clearAll() {
   G.boxes.length = 0;
   buildTrain();
   T.dshk.yaw.rotation.y = Math.PI; T.dshk.pitch.rotation.x = 0;
-  gorge.active = false; gorge.broken = false; gorge.D = 1e9;
+  gorge.active = false; gorge.broken = false; gorge.D = 1e9; gorge.span0 = 0; gorge.span1 = 30;
   if (W.gorgeGroup) { W.root.remove(W.gorgeGroup); W.gorgeGroup = null; }
   W.fogTarget = W.fogDensity = 0.0115;
   G.s = 0; rebuildChunks();
@@ -122,7 +127,8 @@ export function startCheckpoint(k) {
     G.v = 22; G.vTarget = 22;
     resetPlayer(new THREE.Vector3(0, DECK, -44), 0);
     t.place(0.9, -40.2);
-    t.mode = 'hold'; g.h.hidden = true; g.mode = 'cab';
+    t.mode = 'hold';
+    g.place(CAB.stand.x, CAB.stand.z, CAB.floor); g.h.yaw = 0; cabScript(g, 'ctl'); T.cab.leverK = 1; T.cab.doorT = 1; cabDoor(true);
     setInvWalls(true);
     T.dshk.yaw.rotation.y = 0;
     P.canMount = true; mount();
@@ -141,6 +147,7 @@ function enterCars(fromCk) {
   say('SAND_02', fromCk ? 0.6 : 1.0);
   musicMode('fight');
   for (const m of G.mates) { if (!m.arc && m.h.pos.y > 1.0) m.mode = 'follow'; }
+  for (const e of G.enemies) if (e.kind === 'gunner' && e.h.alive) { e.wake(); e.t = 1.2; } // the DShK opens up as soon as we are aboard
 }
 
 // teammates still on the ground sprint alongside and jump onto the rear car
@@ -163,14 +170,55 @@ function mateBoard() {
 function enterClear() {
   D.phase = 'clear'; D.f.clearT = D.t;
   say('SAND_03', 0.8);
-  after(1.6, () => {
-    const g = D.grinch; if (!g || g.h.hidden) return;
-    g.mode = 'cab'; g.target.set(0.85, 0, -50.7); g.speed = 7;
-  });
-  after(9, () => { // don't keep the player waiting: if Grinch is still far, he is already in the cab
-    const g = D.grinch; if (g && !g.h.hidden && g.mode === 'cab' && !g.arc) { g.h.pos.set(0.85, DECK, -50.7); g.target.copy(g.h.pos); }
-  });
   D.truck.offs = [0.9, 1.5];
+}
+
+// ---------- Grinch takes the engine: walks the centre lane, round the gun ring, opens the cab door, drives ----------
+function stepTo(h, x, z, sp, dt) { // straight walk on the deck / cab floor (y follows the floor, steps up into the cab)
+  const dx = x - h.pos.x, dz = z - h.pos.z, d = Math.hypot(dx, dz);
+  if (d < 0.04) { h.vel.set(0, 0, 0); return true; }
+  const v = Math.min(sp, d * 4 + 0.4), k = Math.min(1, (v * dt) / d);
+  h.pos.x += dx * k; h.pos.z += dz * k; h.vel.set((dx / d) * v, 0, (dz / d) * v);
+  h.yaw += clamp(angDiff(h.yaw, Math.atan2(-dx, -dz)), -9 * dt, 9 * dt);
+  const ty = deckY(h.pos.x, h.pos.z, h.pos.y + 0.05); h.pos.y += (ty - h.pos.y) * Math.min(1, dt * 14);
+  return false;
+}
+const CAB_IN = [[0.95, -51.35], [0.82, -52.8], [0.32, -53.9], [0.32, -55.22], [0.78, -55.2]];
+const CAB_OUT = [[0.32, -55.22], [0.32, -53.9], [0.82, -52.8], [0.88, -51.3], [1.3, -50.4]];
+function cabScript(g, from = 'lane') {
+  const h = g.h, C = { st: from, t: 0, i: 0, push: false, brake: false };
+  g.cab = C; g.mode = 'cab'; g.noCrowd = from !== 'lane';
+  g.custom = (dt) => {
+    if (!h.alive) return;
+    C.t += dt; h.crouchT = 0;
+    switch (C.st) {
+      case 'lane': h.aimTarget = 0.2; h.noWeapon = false; if (laneMove(h, 1.3, -44.3, 5.2, dt)) { C.st = 'ring'; g.noCrowd = true; } break;
+      case 'ring': h.aimTarget = 0.2; if (stepTo(h, 1.3, -50.7, 4.6, dt)) { C.st = 'door'; C.t = 0; } break;
+      case 'door': // reach for the handle and swing the door in
+        stepTo(h, 0.98, -51.3, 2.2, dt); h.yaw += clamp(angDiff(h.yaw, 0), -6 * dt, 6 * dt); h.aimTarget = 0;
+        if (C.t > 0.3 && !T.cab.doorOpen) { cabDoor(true); play('bolt', { pos: CAB_DOOR, vol: 0.6, ref: 4 }); play('metal', { pos: CAB_DOOR, vol: 0.3, ref: 3 }); }
+        if (C.t > 0.8) { C.st = 'in'; C.i = 1; }
+        break;
+      case 'in': h.aimTarget = 0;
+        if (stepTo(h, CAB_IN[C.i][0], CAB_IN[C.i][1], 2.4, dt) && ++C.i >= CAB_IN.length) { C.st = 'ctl'; C.t = 0; if (g.onCab) { const f = g.onCab; g.onCab = null; f(); } }
+        break;
+      case 'ctl': // at the controls: left hand on the big lever, right hand on the brake valve, eyes on the line
+        h.vel.set(0, 0, 0); h.noWeapon = true; h.aimTarget = 0;
+        h.yaw += clamp(angDiff(h.yaw, 0), -5 * dt, 5 * dt);
+        h.pos.x += (CAB.stand.x - h.pos.x) * Math.min(1, dt * 4); h.pos.z += (CAB.stand.z - h.pos.z) * Math.min(1, dt * 4);
+        h.grips = h.grips || { R: new THREE.Vector3(), L: new THREE.Vector3() };
+        cabKnob('lever', h.grips.L); cabKnob('brake', h.grips.R);
+        h.aim.set(Math.sin(C.t * 0.37) * 0.3, -0.1, -1).normalize();
+        if (C.push) T.cab.leverK = Math.min(1, T.cab.leverK + dt / 1.1);
+        if (C.brake) { T.cab.leverK = Math.max(0, T.cab.leverK - dt * 2.5); T.cab.brakeK = Math.min(1, T.cab.brakeK + dt / 0.45); }
+        break;
+      case 'out': // bail out of the cab back onto the gun car
+        h.grips = null; h.noWeapon = false; h.aimTarget = 0.1;
+        if (stepTo(h, CAB_OUT[C.i][0], CAB_OUT[C.i][1], 3.8, dt) && ++C.i >= CAB_OUT.length) { C.st = 'wait'; g.noCrowd = false; }
+        break;
+      case 'wait': h.vel.set(0, 0, 0); h.yaw += clamp(angDiff(h.yaw, -Math.PI / 2), -6 * dt, 6 * dt); h.aimTarget = 0.2; h.aim.set(1, -0.2, -0.3).normalize(); break;
+    }
+  };
 }
 
 function enterTurret(fromCk, quiet) {
@@ -185,14 +233,33 @@ function enterTurret(fromCk, quiet) {
     say('KRAS_01', 7);
     say('SAND_05', 11);
   } else new Hind();
-  D.sledT = fromCk ? 4 : 6; D.sledSide = 1;
+  D.sledT = fromCk ? 4 : 6; D.sledSide = 1; D.wave = 0;
+}
+
+// DShK section: snowmobiles arrive in waves on BOTH sides (some come up from ahead), staggered so they don't stack
+const WAVES = [[2, 1], [1, 2], [2, 2], [2, 2], [3, 2], [2, 3]];
+function sledWave() {
+  const w = WAVES[Math.min(D.wave, WAVES.length - 1)], first = D.wave % 2 ? 1 : -1;
+  let k = 0;
+  for (const side of [first, -first]) {
+    const n = w[side === first ? 0 : 1], offs = [rr(-8, -5), rr(1, 4), rr(8, 11)];
+    for (let i = 0; i < n; i++, k++) {
+      const ahead = D.wave > 0 && i === 1;
+      after(k * 0.9, () => {
+        if (D.phase !== 'turret') return;
+        new Sled(side, ahead ? rr(-175, -160) : rr(95, 125), { offs: offs[i], lane: i === 2 ? 11.5 : i ? 9.5 : 7.8, noGunner: i === 2 && Math.random() < 0.5 });
+      });
+    }
+  }
+  if (D.wave > 0 && !D.cur && D.q.length === 0) say(D.wave >= 3 ? 'TRUCK_07' : first < 0 ? 'GRIN_06' : 'TRUCK_08', 1.5);
+  D.wave++;
 }
 
 function enterBridge() {
   D.phase = 'bridge'; D.ck = 3; D.bridgeT = 0;
   const h = G.hind;
   if (h) { h.state = 'retreat'; h.stT = 0; h.hp = Math.min(h.hp, h.maxHp * 0.4); }
-  gorge.D = G.s + 70 + 640; gorge.active = true; gorge.broken = false;
+  gorge.D = G.s + 70 + 640; gorge.active = true; gorge.broken = false; gorge.span0 = 0; gorge.span1 = 30; // the near span gets blown
   buildGorge();
   W.fogTarget = 0.0042;
   HUD.objective('坚持住');
@@ -201,49 +268,61 @@ function enterBridge() {
 
 function edgeDist(z) { return z - (G.s - gorge.D); } // >0 while the gorge edge is still ahead of z
 
+const _sp = new THREE.Vector3();
+const spanZ = (u) => G.s - gorge.D - (gorge.span0 + (gorge.span1 - gorge.span0) * u); // train-frame z along the blown span
 function bridgeHit() {
   if (gorge.broken) { return; }
-  gorge.broken = true;
-  const ms = W.midSpan; ms.userData.falling = true; ms.userData.vy = 0; ms.userData.av = 0.22; ms.userData.az = 0.06;
-  const zc = G.s - gorge.D - 45;
-  for (const [x, dz, s] of [[0, -6, 2.4], [2, 5, 1.8], [-2, 12, 1.6]]) setTimeout(() => explodeAt(new THREE.Vector3(x, 2, G.s - gorge.D - 45 + dz), s, 1, 0, { noPlayerDmg: true, wind: 0.6 }), (Math.abs(dz) * 25));
-  P.addShake(0.5);
-  D.f.brakeAt = D.rt + 1.4;
-  HUD.objective('抓稳了');
+  gorge.broken = true; D.f.hitT = D.t;
+  const ms = W.midSpan; ms.userData.falling = true; ms.userData.vy = 1.5; ms.userData.av = 0.3; ms.userData.az = 0.07;
+  [[0, 0.15, 4.2, 0], [1.6, 0.45, 3.2, 0.14], [-1.8, 0.75, 2.8, 0.3], [0.5, 0.05, 2.4, 0.45], [2.5, 0.3, 3.0, 0.7]].forEach(([x, u, sz, dl]) =>
+    after(dl, () => { const p = new THREE.Vector3(x, 1.5, spanZ(u)); explodeAt(p, sz, 1, 0, { noPlayerDmg: true, wind: 0.6 }); G.fx.flash(p, 0xffa050, 60, 40, 0.15); }));
+  P.addShake(0.6);
+  D.f.brakeAt = D.rt + 0.9;
+  HUD.objective(D.f.side ? '抓稳了' : '到右侧车边，准备跳车');
   musicMode('bridge');
+  say('GRIN_07', 0.7); say('TRUCK_09', 1.2);
+  const g = D.grinch;
+  if (g && g.cab) { after(0.5, () => { if (g.cab) g.cab.brake = true; }); after(1.6, () => { if (g.cab && g.cab.st === 'ctl') { g.cab.st = 'out'; g.cab.i = 0; } }); }
 }
 
-function mateJump(m) {
-  if (m.h.hidden) { // Grinch bails out of the cab door
-    m.h.hidden = false; m.h.pos.copy(CAB_DOOR).setX(1.3); m.mode = 'hold';
-  }
-  const z = m.h.pos.z;
-  setTimeout(() => {
-    m.mode = 'jump';
-    m.jumpTo(rr(5.5, 8), 0, z + rr(-1, 2), 0.9, 1.6);
-    m.onArcDone = () => { m.mode = 'ground'; m.target.copy(m.h.pos); m.h.crouchT = 1; };
-  }, rr(150, 900));
+function mateJump(m, delay) {
+  if (m.custom && m.cab && m.cab.st === 'ctl') { m.cab.st = 'out'; m.cab.i = 0; } // still at the controls: get out first
+  after(delay, () => {
+    if (m.custom) { m.custom = null; m.cab = null; m.h.grips = null; m.h.noWeapon = false; m.noCrowd = false; }
+    // land on solid ground: in the train frame the lip moves back at G.v during the 0.9 s arc
+    const z = Math.max(m.h.pos.z + rr(-0.5, 1.5), G.s - gorge.D - gorge.span0 + G.v * 0.95 + 3.5);
+    m.mode = 'jump'; m.noCrowd = true;
+    m.jumpTo(rr(5.5, 7.5) * (m === D.grinch ? 1 : 1.1), 0, z, 0.9, 1.5);
+    m.onArcDone = () => { m.mode = 'ground'; m.target.copy(m.h.pos); m.h.crouchT = 1; m.noCrowd = false; };
+  });
 }
 
 function doJump() {
   D.f.jumped = true; D.f.jumpOpen = false;
   if (D.screech) { D.screech.stop(); D.screech = null; }
+  if (P.pos.z < CAB.z1 + 0.1 && P.pos.y > 1.6) { P.pos.x = 1.75; P.pos.y = Math.max(P.pos.y, 2.4); } // out through the cab side window
   jumpOff(); setInvWalls(false);
+  // keep the landing on this side of the lip: the jumper carries the train's speed relative to the ground
+  const e = edgeDist(P.pos.z), fwd = clamp((e - 3.0) / 0.8, 0, G.v + 2); // aim to come to rest ~2.5 m short of the lip
+  P.vel.z = G.v - fwd;
+  P.autoLook = { target: new THREE.Vector3(0, -4, G.s - gorge.D - 6), rate: 1.4 }; D.f.lookEdge = true;
   HUD.setPrompt(null); HUD.objective(null);
-  D.slow = { t: 0, hold: 2.4, out: 1.2, k: 0.22 };
+  D.slow = { t: 0.25, hold: 1.9, out: 1.3, k: 0.3 };
   HUD.setSlowmo(true);
-  play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });
   musicMode('silence'); muffle(900, 0.1);
 }
 
 G.onJumpLand = () => {
-  P.autoLook = { target: new THREE.Vector3(0, -6, P.pos.z - 80), rate: 2.2 };
+  P.autoLook = { target: new THREE.Vector3(-1, -1.5, G.s - gorge.D - 6), rate: 2.0 };
   P.lockLook = true;
   D.f.landed = true; D.landT = D.t; D.landRT = D.rt;
 };
 
 G.onCarFall = (c) => {
-  if (c.type === 'loco') play('horn', { pos: new THREE.Vector3(0, 4, c.z0), vol: 0.9, ref: 30, noSlow: true });
+  if (c.type === 'loco') { G.vTarget = 7.5; G.vRate = 3.2; } // the rest of the train grinds over the lip car by car
+  if (c.type === 'loco') { play('horn', { pos: new THREE.Vector3(0, 4, c.z0), vol: 0.9, ref: 30, noSlow: true }); play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 1.2, ref: 20, noSlow: true }); }
+  else play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 0.7, ref: 14 });
+  if (!D.f.jumped && P.pos.z >= c.z0 - 0.6 && P.pos.z <= c.z1 + 0.6) D.f.doomT = D.t + 0.4; // still aboard this car: it goes over with you
 };
 G.onCarLand = (c) => {
   const p = new THREE.Vector3(0, gorge.iceY + 1, c.group.position.z);
@@ -255,7 +334,7 @@ G.onCarLand = (c) => {
   D.lastCarLand = D.t;
 };
 G.onSpanLanded = () => {
-  const p = new THREE.Vector3(0, gorge.iceY + 2, G.s - gorge.D - 45);
+  const p = new THREE.Vector3(0, gorge.iceY + 2, spanZ(0.5));
   G.fx.splash(p, 2.0); play('crash', { pos: p, vol: 1.6, ref: 50, roll: 0.5, rev: 0.6 }); play('icecrack', { pos: p, vol: 1.5, ref: 50, roll: 0.5 });
 };
 G.onBridgeHit = () => bridgeHit();
@@ -322,11 +401,11 @@ export function updateDirector(dt, rdt) {
     if (ph === 'cars' && alive === 0) enterClear();
     if (ph === 'clear') {
       const g = D.grinch;
-      if (g.mode === 'cab' && !g.h.hidden && !g.arc && g.h.pos.z < -49.5 && Math.hypot(g.h.pos.x - g.target.x, g.h.pos.z - g.target.z) < 0.6) {
-        g.h.hidden = true; play('bolt', { pos: CAB_DOOR, vol: 0.5 });
-        say('GRIN_03', 0.5); say('GRIN_05', 0.9);
-        D.f.leverAt = D.rt + 5.2;
+      if (!D.f.cabGo && D.t - D.f.clearT > 1.6 && g && !g.arc && g.h.pos.y > 1.0) {
+        D.f.cabGo = 1; cabScript(g);
+        g.onCab = () => { say('GRIN_03', 0.5); say('GRIN_05', 0.9); D.f.leverAt = D.rt + 5.4; };
       }
+      if (D.f.leverAt && g.cab && D.rt > D.f.leverAt - 1.2) g.cab.push = true;
       if (D.f.leverAt && D.rt > D.f.leverAt) {
         D.f.leverAt = 0; G.vTarget = 22; G.vRate = 1.3;
         play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 1.2, ref: 30 });
@@ -339,7 +418,7 @@ export function updateDirector(dt, rdt) {
     D.turretT += dt;
     D.sledT -= dt;
     const live = G.sleds.filter((s) => !s.dead).length;
-    if (D.sledT <= 0 && live < 3) { D.sledT = rr(6, 9); D.sledSide *= -1; new Sled(D.sledSide, rr(95, 120), { offs: rr(-9, 7) }); }
+    if ((D.sledT <= 0 && live < 5) || (live === 0 && D.sledT < 8)) { D.sledT = rr(13, 16); sledWave(); }
     if (!P.mounted && P.canMount && P.pos.distanceTo(GUN_PIVOT) < 2.6) prompt = '按 <kbd>F</kbd> 使用 DShK 机枪';
     const h = G.hind;
     if (h && ((h.hp / h.maxHp < 0.45 && D.turretT > 32) || D.turretT > 75)) enterBridge();
@@ -352,18 +431,31 @@ export function updateDirector(dt, rdt) {
       if (D.sledT <= 0 && G.sleds.filter((x) => !x.dead).length < 2) { D.sledT = rr(6, 9); D.sledSide *= -1; new Sled(D.sledSide, rr(95, 120), { offs: rr(-9, 7) }); }
     } else if (!D.f.sledsAway) { D.f.sledsAway = 1; for (const x of G.sleds) x.offs = 90; }
     if (!D.f.g4 && dLoco < 430) { D.f.g4 = 1; say('GRIN_04'); }
-    if (!D.f.t4 && dLoco < 345) {
-      D.f.t4 = 1; say('TRUCK_04');
-      const h = G.hind; if (h) { h.state = 'hover'; h.stT = 0; }
-      for (let i = 0; i < 4; i++) setTimeout(() => {
-        if (!G.hind) return;
-        const from = G.hind.pod(i, new THREE.Vector3());
-        const dd = gorge.D + 38 + i * 5;
-        fireRocket(from, new THREE.Vector3(0, -0.3, 1).normalize(), { speed: 110, home: () => new THREE.Vector3((i % 2 ? 1 : -1) * 1.5, 2.5, G.s - dd) });
-      }, 500 + i * 220);
+    const h = G.hind;
+    // the Hind breaks off, swings out over the gorge and lines up side-on to the near span
+    if (!D.f.lineup && dLoco < 300) { D.f.lineup = 1; if (h) { h.state = 'lineup'; h.stT = 0; } }
+    if (!D.f.t4 && dLoco < 215) { D.f.t4 = 1; say('TRUCK_04'); HUD.objective('到右侧车边，准备跳车'); HUD.setMarker(new THREE.Vector3(1.75, DECK + 1.1, -44.5), ''); D.truck.target.set(1.3, 0, -41.6); }
+    if (D.f.t4 && !D.f.side && P.pos.x > 1.45 && !P.mounted) { D.f.side = 1; HUD.setMarker(null); }
+    if (!D.f.salvo && dLoco < 138) { // ripple of rockets into the near span; the camera is drawn to it for a moment
+      D.f.salvo = 1; D.f.lookT = D.t + 2.4;
+      if (!P.autoLook) { P.autoLook = { target: new THREE.Vector3(0, 3, spanZ(0.3)), rate: 1.3 }; D.f.lookSalvo = true; }
+      for (let i = 0; i < 6; i++) after(i * 0.17, () => {
+        const from = G.hind ? G.hind.pod(i, new THREE.Vector3()) : new THREE.Vector3(-40, 22, spanZ(0.9));
+        const u = 0.12 + (i % 3) * 0.28, x = (i % 2 ? 1 : -1) * 1.2;
+        const tgt = () => new THREE.Vector3(x, 1.8, spanZ(u));
+        fireRocket(from, tgt().sub(from).normalize(), { speed: 95, home: tgt, hitR: 5 });
+      });
+      after(2.2, () => { if (G.hind && G.hind.state === 'lineup') { G.hind.state = 'retreat'; G.hind.stT = 0; } });
     }
-    if (!gorge.broken && dLoco < 240) bridgeHit(); // fallback if the rockets were too far away
-    if (D.f.brakeAt && D.rt > D.f.brakeAt) { D.f.brakeAt = 0; D.f.braking = true; G.vTarget = 17; G.vRate = 1.1; D.screech = loop('screech', { vol: 0.45, rev: 0.3 }); play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 0.8, ref: 30 }); }
+    if (D.f.lookSalvo && P.autoLook) { P.autoLook.target.set(0, 3, spanZ(0.3)); if (D.t > D.f.lookT) { P.autoLook = null; D.f.lookSalvo = false; } }
+    if (!gorge.broken && dLoco < 95) bridgeHit(); // fallback if the rockets were too far away
+    if (D.f.hitT && D.t - D.f.hitT < 7 && Math.random() < 0.55) { // the blown span keeps burning: a tall smoke column readable from the train
+      const u = Math.random();
+      _sp.set(rr(-2.5, 2.5), rr(-3, 2), spanZ(0.15 + u * 0.5));
+      G.fx.smoke(_sp, { size: rr(2.5, 4.5), grow: 6, life: rr(4, 6), color: u < 0.5 ? 0x24211e : 0x38332e, alpha: 0.45, vy: rr(4, 7), wind: 1 });
+      if (Math.random() < 0.3) G.fx.add.spawn(_sp.x, _sp.y + 1, _sp.z, rr(-2, 2), rr(3, 8), rr(-2, 2), { life: rr(0.3, 0.7), size: rr(1.2, 2.2), c: [1, 0.55, 0.2], alpha: 1, wind: 1 });
+    }
+    if (D.f.brakeAt && D.rt > D.f.brakeAt) { D.f.brakeAt = 0; D.f.braking = true; G.vTarget = 13; G.vRate = 1.5; D.screech = loop('screech', { vol: 0.5, rev: 0.3 }); play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 0.8, ref: 30 }); }
     if (D.f.braking && !D.f.jumped) {
       for (let i = 0; i < 3; i++) {
         const w = T.wheelInfo[(Math.random() * T.wheelInfo.length) | 0];
@@ -372,25 +464,32 @@ export function updateDirector(dt, rdt) {
         G.fx.add.spawn(x, 0.45, w.pos.z + 0.4, x * rr(1, 4), rr(0.5, 3), rr(4, 12), { life: rr(0.15, 0.4), size: 0.06, c: [1, 0.75, 0.35], grav: 9, drag: 1 });
       }
     }
-    if (!D.f.jumpOpen && !D.f.jumped && gorge.broken && edgeDist(P.pos.z) < 94) { D.f.jumpOpen = true; say('SAND_06'); HUD.objective('跳车！'); for (const m of G.mates) mateJump(m); }
-    if (D.f.landed && P.autoLook) P.autoLook.target.set(0, -22, G.s - gorge.D - 36);
-    // after the jump: hit the snow, stay down a beat, get up and take a couple of unsteady steps (no long run)
+    // the engine reaches the lip: slow motion, JUMP (the player is still aboard and sees it tip over)
+    if (!D.f.jumpOpen && !D.f.jumped && gorge.broken && dLoco < 6) {
+      D.f.jumpOpen = true; D.q.length = 0; D.cur = null; say('SAND_06'); HUD.objective('跳车！'); HUD.setMarker(null);
+      D.slow = { t: 0, hold: 3.4, out: 1.1, k: 0.3 }; HUD.setSlowmo(true); play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });
+      if (D.f.lookSalvo) { P.autoLook = null; D.f.lookSalvo = false; }
+      mateJump(D.truck, 0.25); mateJump(D.grinch, 0.55);
+    }
+    if (D.f.lookEdge && P.autoLook && !D.f.landed) P.autoLook.target.set(0, -4, G.s - gorge.D - 6);
+    if (D.f.landed && P.autoLook) P.autoLook.target.set(-1, -1.5 - clamp(D.rt - D.landRT - 3, 0, 4), G.s - gorge.D - 6);
+    // after the jump: hit the snow, stay down a beat, get up and take a couple of unsteady steps toward the lip
     if (D.f.landed && !D.f.ran && D.rt - D.landRT > 0.05) { D.f.ran = 1; P.prone = true; P.getUp = true; }
     if (D.f.ran === 1 && !D.f.knee && D.rt - D.landRT > 1.1) { D.f.knee = 1; P.prone = false; P.crouched = true; }
     if (D.f.ran === 1 && D.rt - D.landRT > 2.1) {
       D.f.ran = 2; P.crouched = false; P.slide = false; P.prone = false;
-      const d0 = G.s - P.pos.z + 1.8, x0 = P.pos.x + 0.35;
-      P.scriptMove = { x: x0, zf: () => G.s - d0, speed: 1.1 };
+      const step = clamp(edgeDist(P.pos.z) - 1.5, 0, 16), d0 = G.s - P.pos.z + step, x0 = P.pos.x - 0.6;
+      P.scriptMove = { x: x0, zf: () => G.s - d0, speed: step > 4 ? 2.2 : 1.2 };
       P.addShake(0.25);
     }
     if (D.f.jumpOpen && !D.f.jumped) {
       prompt = '<span class="urgent">按 <kbd>空格</kbd> 跳车！</span>';
-      if (hit('Space')) doJump();
-      if (edgeDist(P.pos.z) < 46) { D.f.jumpOpen = false; fail('你随列车坠入了冰河。', '提示：听到“跳”的时候马上按空格。'); }
+      if (hit('Space') && !D.f.doomT) doJump();
     }
+    if (D.f.doomT && !D.f.jumped && D.t > D.f.doomT) { D.f.jumpOpen = false; D.f.doomT = 0; fail('你随列车坠入了冰河。', '提示：车头冲出断桥的一瞬间按空格跳车。'); }
     if (D.f.landed && !D.f.ending) {
       const allDown = T.cars.every((c) => c.landed);
-      if ((allDown && D.t - (D.lastCarLand || 0) > 2.5) || D.t - D.landT > 16) endSequence();
+      if ((allDown && D.t - (D.lastCarLand || 0) > 2.5) || D.t - D.landT > 20) endSequence();
     }
   }
   // fell off the train
