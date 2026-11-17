@@ -195,7 +195,7 @@ const CREDITS = `
 <p style="letter-spacing:.5em">OUT IN THE COLD</p>
 <p><em>一部《使命召唤：现代战争 3》非官方同人战役</em></p>
 <h3>主演</h3>
-<p>沙人 <em>Metal 0-1</em></p><p>卡车 <em>Metal 0-2</em></p><p>格林奇 <em>Metal 0-3</em></p>
+<p>睡魔 <em>Metal 0-1</em></p><p>卡车 <em>Metal 0-2</em></p><p>格林奇 <em>Metal 0-3</em></p>
 <p>约翰·普莱斯 上尉</p><p>尤里</p><p>俄军高级将领</p><p>尼科莱</p>
 <h3>出品 · 剧本 · 关卡构思</h3><p>Anima720</p>
 <h3>程序 · 模型 · 特效 · 音效</h3><p>Claude <em>Anthropic</em></p>

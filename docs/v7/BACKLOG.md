@@ -21,7 +21,7 @@ cross-package contracts are in the last section. Status is kept in HANDOFF.md.
 | 14 | Smarter enemy and squad AI; both sides can melee, with melee animations | AI |
 | 15 | Part 1: after taking the laptop intel you can still press F on it — fix | T |
 | 16 | Part 2: the mine cage elevator is crude — improve it | T |
-| 17 | Character names in Chinese (Sandman 沙人, Truck 卡车, Grinch 格林奇, Price 普莱斯, Yuri 尤里, Nikolai 尼科莱); Colonel Krasin becomes just「俄军高级将领」 | Lead (final pass) |
+| 17 | Character names in Chinese (Sandman 睡魔, Truck 卡车, Grinch 格林奇, Price 普莱斯, Yuri 尤里, Nikolai 尼科莱); Colonel Krasin becomes just「俄军高级将领」 | Lead (final pass) |
 | 18 | Post-credits beat moves: after Price drives to Hotel Oasis → Nikolai: "faint signal found" → black → credits start with the Hans Zimmer track | Lead |
 | 19 | Credits: creator is "Anima720", not 玩家/你 | Lead |
 | 20 | Finale breach: enemies BLOW the door in; Grinch shouts a line ("你休想……"), fires back, kills one, is killed | P4 |

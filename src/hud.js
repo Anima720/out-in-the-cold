@@ -4,7 +4,7 @@ import { NADES } from './grenade.js';
 
 const $ = (tag, cls, parent, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; if (parent) parent.appendChild(e); return e; };
 // speaker tags in LINES stay English; this is what the player sees
-export const NAME = { SANDMAN: '沙人', TRUCK: '卡车', GRINCH: '格林奇', PRICE: '普莱斯', NIKOLAI: '尼科莱', YURI: '尤里', '克拉辛': '俄军高级将领' };
+export const NAME = { SANDMAN: '睡魔', TRUCK: '卡车', GRINCH: '格林奇', PRICE: '普莱斯', NIKOLAI: '尼科莱', YURI: '尤里', '克拉辛': '俄军高级将领' };
 const COL = { SANDMAN: '#9fd0ff', TRUCK: '#ffd27a', GRINCH: '#a9f0a0', NIKOLAI: '#c9b8f0', '克拉辛': '#ff8a76', PRICE: '#d9c08a' };
 
 export const HUD = {};
