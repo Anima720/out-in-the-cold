@@ -673,7 +673,7 @@ export function updateViewmodel(dt, p) {
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   W.sun.position.set(-0.45, 1, 0.35).applyQuaternion(_viewQ.copy(G.camera.quaternion).invert()).multiplyScalar(5);
   // Cant the complete gun/optic around the eye's view axis, not the weapon's grip origin.
-  W.root.rotation.z = W.inspect ? 0 : -(p.leanOff || 0) * 0.3;
+  W.root.rotation.z = W.inspect ? 0 : -(p.leanOff || 0) * 0.3 * (1 - W.adsT);   // hip: gun cants with the lean; ADS: rigid with the eye so sight/reticle stay on the crosshair
   W.cool = Math.max(0, W.cool - dt); W.dCool = Math.max(0, W.dCool - dt);
   W.bloom = damp(W.bloom, 0, 5, dt);
   W.heat = Math.max(0, W.heat - dt * (W.overheated ? 0.32 : 0.22));
