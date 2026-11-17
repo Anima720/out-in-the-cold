@@ -27,7 +27,7 @@ async def main():
                 if key: await ev(f"__input.down.add('{key}')")
                 await ev('__sim(1.2)'); r=await ev('__leanSample()');samples.append(r)
                 assert r['ads']>.9999, r
-                assert abs(r['off'])>.34 and abs(r['roll'])>.1 if key else abs(r['off'])<.0001 and abs(r['roll'])<.0001, r
+                assert abs(r['off'])>.34 and abs(r['roll'])<.0001 if key else abs(r['off'])<.0001 and abs(r['roll'])<.0001, r  # ADS: viewmodel rigid with the eye
                 if optic=='pso': assert r['scoped'] and abs(r['scopeRoll']+r['roll'])<.00001, r
                 else: assert max(map(abs,r['pixel']))<2, (weapon,optic,key,r)
                 if optic=='x2': assert r['scope'], r
@@ -43,6 +43,11 @@ async def main():
                 await ev('__sim(1.2)')
                 await shot(pg,f'lean_{optic}_{tag}.png')
             await ev("__input.down.clear(); __sim(1.2)")
+        await ev("__input.rmb=false; __wpn.giveWeapon('m4',30,90,{optic:'reddot',under:null}); __sim(1.5)")
+        for key,tag in [('KeyQ','q'),('KeyE','e')]:   # hip-fire: the gun cants with the lean
+            await ev("__input.down.delete('KeyQ'); __input.down.delete('KeyE'); __input.down.add('%s')" % key); await ev('__sim(1.2)')
+            assert abs(await ev('__WP.root.rotation.z'))>.05; await shot(pg,f'lean_hip_{tag}.png')
+        await ev("__input.down.clear(); __sim(1.2)")
         await assert_clean(pg,logs); await b.close()
 
 asyncio.run(main())
