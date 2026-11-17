@@ -347,7 +347,7 @@ function hint5(html, dur = 10) {
   if (typeof document === 'undefined') return;
   if (!hintEl) {
     const st = document.createElement('style');
-    st.textContent = '#p5hint{left:50%;top:15%;transform:translate(-50%,-8px);max-width:min(600px,84vw);padding:10px 18px 11px;background:rgba(10,12,14,.66);border-left:3px solid #ffc54a;color:#ebe7dc;font-size:14px;line-height:1.7;letter-spacing:.05em;opacity:0;transition:opacity .4s,transform .4s;text-shadow:0 1px 2px #000}#p5hint.on{opacity:1;transform:translate(-50%,0)}#p5hint b{color:#ffc54a;margin-right:.6em;letter-spacing:.2em}#p5hint kbd{font:inherit;padding:0 5px;border:1px solid rgba(255,255,255,.4);border-radius:3px}';
+    st.textContent = '#p5hint{left:50%;top:23%;transform:translate(-50%,-8px);max-width:min(560px,80vw);padding:8px 16px 9px;background:rgba(10,12,14,.62);border-left:3px solid #ffc54a;color:#ebe7dc;font-size:13px;line-height:1.65;letter-spacing:.05em;opacity:0;transition:opacity .4s,transform .4s;text-shadow:0 1px 2px #000}#p5hint.on{opacity:1;transform:translate(-50%,0)}#p5hint b{color:#ffc54a;margin-right:.6em;letter-spacing:.2em}#p5hint kbd{font:inherit;padding:0 5px;border:1px solid rgba(255,255,255,.4);border-radius:3px}';
     document.head.appendChild(st);
     hintEl = document.createElement('div'); hintEl.id = 'p5hint'; (document.getElementById('ui') || document.body).appendChild(hintEl);
   }
@@ -359,7 +359,7 @@ const hideHint5 = () => { if (hintEl) hintEl.classList.remove('on'); };
 
 function startDefend() {
   const P5 = D.p5;
-  hint5('<b>补给</b>楼内南墙的武器架上有 PKM、SVD、霰弹枪和 RPG，旁边有弹药箱，走近按 <kbd>F</kbd> 拿取或补给。<br>楼顶北侧架着一挺 DShK 重机枪——从东侧外楼梯上去。', 11);
+  after(6.5, () => { if (D.p5 && D.p5.ph === 'defend') hint5('<b>补给</b>楼内南墙武器架：PKM、SVD、霰弹枪、RPG，旁边是弹药箱（按 <kbd>F</kbd> 拿取）。<br>楼顶北侧有一挺 DShK 重机枪，走东侧外楼梯上去。', 11); }); // after the claymore tip
   P5.ph = 'defend'; P5.up = 0; P5.rate = 0.5;
   WP.clay = 3; P.canMount = true;
   HUD.objective('守住雷达站，直到情报上传完毕');
