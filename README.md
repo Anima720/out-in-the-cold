@@ -2,8 +2,9 @@
 
 一部《使命召唤：现代战争 3》（2011）的非官方同人战役，在浏览器里运行。
 用 three.js 实时生成全部模型、贴图、特效和音效，最后打包成一个单文件 `index.html`。
+作者：**Anima720**。当前开发分支为 `v6-sandman`，验收状态与剩余问题见 `HANDOFF.md`。
 
-故事接在「Down the Rabbit Hole」结尾：Delta Force「Metal」小队留下断后，矿井坍塌，官方记录写的是三人阵亡。玩家扮演小队长 Sandman（Metal 0-1），带着 Truck 和 Grinch 从地下爬出来——他们在矿里找到了马卡洛夫的去向「ОАЗИС（绿洲）」，扒上运矿列车，一路打到废弃雷达站，用最后的代价把情报送到 Price 手上，最后交接到「Dust to Dust」。剧本全文见 `docs/script.md`。
+故事接在「Down the Rabbit Hole」结尾：Delta Force「Metal」小队留下断后，矿井坍塌，官方记录写的是三人阵亡。玩家扮演小队长睡魔（Metal 0-1），带着卡车和格林奇从地下爬出来——他们在矿里找到了马卡洛夫的去向「ОАЗИС（绿洲）」，扒上运矿列车，一路打到废弃雷达站，用最后的代价把情报送到普莱斯手上，最后交接到「Dust to Dust」。剧本全文见 `docs/script.md`。
 
 ## 章节
 
@@ -12,8 +13,8 @@
 | 第一部分 | 坍塌 | 矿井醒来、巷道战、笔记本里的「ОАЗИС」、溶洞、罐笼 | 10、11 |
 | 第二部分 | 升井 | 罐笼上升、电台全毁、暴风雪矿区、RPG 打 BTR、冲向货场 | 20 |
 | 第三部分 | 铁马 | 扒上北去的运矿列车、DShK 对雌鹿、断桥跳车 | 0–3 |
-| 第四部分 | 最后阵地 | 雷达站死守、上传情报、Truck 牺牲、针式导弹、最后的手动发送 | 4–6 |
-| 尾声 | — | Metal 0-1 完毕、三个月后·迪拜、演职员表、彩蛋（尼古拉的探照灯） | — |
+| 第四部分 | 最后阵地 | 雷达站死守、上传情报、卡车牺牲、针式导弹、最后的手动发送 | 4–7 |
+| 尾声 | — | Metal 0-1 完毕、三个月后·迪拜、尼科莱发现微弱信号、片尾名单 | — |
 
 ## 构建
 
@@ -22,10 +23,10 @@
 ```bash
 npm install
 npm run build        # 生成 dist/index.html，直接用浏览器打开即可
-WITH_VO=1 npm run build   # 把 assets/vo 里的配音也打包进去（目前默认不带配音，只有字幕）
 ```
 
 `build.mjs` 用 esbuild 把 `src/` 打成一个 IIFE，塞进 `template.html`，再把 `assets/music/*.mp3`（和可选的 `assets/vo/*.mp3`）以 base64 内嵌进去。
+当前版本保持配音关闭，不设置 `WITH_VO`，只显示中文字幕。
 
 ## 目录
 
@@ -34,13 +35,17 @@ src/
   main.js        启动、主循环、标题/暂停菜单
   director.js    第三部分（列车）的剧本、台词表、检查点分发
   cave.js        第一部分（矿井）和第二部分（地面 + BTR）
-  part5.js       第四部分（雷达站）的剧本、敌人 AI（Raider）、载具冲锋、阔剑、针式导弹
+  part5.js       第四部分（雷达站）的剧本、增援压力、阔剑、针式导弹
+  raider.js      地面敌人 AI、队友脚本动作、围栏缺口寻路
+  combat.js      武器配置、射击、倒地还击、双方近战、小队战术
+  assault.js     载具冲锋、下车流程、重装兵调度、增援容量
+  finale.js      最后阵地结局、拖行、破门、手动发送
   station.js     雷达站场景几何
   cine.js        尾声过场动画、演职员表、彩蛋
   world.js       天空、雾、地形分块、山脉、吹雪、光照
   train.js       列车与 DShK
   humans.js      士兵模型（分部件实例化）、IK、布娃娃
-  ai.js          列车段敌人与队友 AI、射击判定
+  ai.js          列车段敌人与队友 AI、公共战斗接口转导出
   weapon.js      第一人称武器（M4A1、M1911、可拾取的 AK、PKM、СВД、Сайга、RPG-7、针式）
   player.js      玩家移动、视角、上机枪、近战
   vehicles.js    雪地摩托、雌鹿直升机、火箭弹、爆炸
@@ -62,17 +67,17 @@ tools/           无头浏览器试玩脚本、配乐切片脚本
 
 ```bash
 pip install playwright
-python3 tools/playtest_mine_surface.py
-python3 tools/playtest_last_stand.py
-python3 tools/playtest_train.py
+node tools/test_combat_logic.mjs  # 无图形 CPU 逻辑验证，不代替浏览器验收
+CHROME=/path/to/chrome python3 tools/run_regression.py  # 全部 19 项，串行执行
 ```
 
 URL 参数：`?q=low|medium|high` 画质，`?god=1` 无敌。
+浏览器检查记录在 `shots/regression/`；每项必须检查 `window.__errors`、页面异常及致命错误。固定机位截图需实际审阅，具体机位与尚未完成的验收见 `HANDOFF.md`。`.github/workflows/regression.yml` 可在 `v6-sandman` 推送后或手动触发；配置文件存在不表示已运行通过。
 
 ## 致谢与版权
 
 - three.js（MIT）
 - 部分材质/光照思路参考 [wquguru/fable52-fps-repro](https://github.com/wquguru/fable52-fps-repro)（MIT），源码里有注明
 - 战役配乐由 Gemini 生成；配音由 ElevenLabs 生成的原创声音
-- `assets/music/END_CREDITS.mp3` 是 Hans Zimmer & Lorne Balfe 的《Opening Credits》（《使命召唤：现代战争 2》原声），属于商业版权音乐，**仓库公开前请删掉或替换**
+- `assets/music/END_CREDITS.mp3` 是 Hans Zimmer & Lorne Balfe 的《Opening Credits》（《使命召唤：现代战争 2》原声），属于商业版权音乐；本版本按作者决定保留。
 - 本作为粉丝自制、非商业、非官方作品；《使命召唤》及相关角色版权归 Activision 所有
