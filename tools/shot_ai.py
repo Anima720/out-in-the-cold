@@ -23,8 +23,9 @@ async def main():
         async def snap(name):
             await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=300, timeout=600000)
+            await ev("window.__rafHold=true")  # stop rendering: the canvas keeps the last frame, the compositor is idle
             await pg.screenshot(path=str(OUT / name), timeout=200000)
-            await ev("window.__rafHold=true; window.__freeze=false")
+            await ev("window.__freeze=false")
             print("shot", name, flush=True)
         # helpers: a frozen raider (no AI) with a given loadout, posed toward a point
         await ev("""window.__pose=(x,z,wk,o={})=>{ const e=new window.__Raider(x,z,{maxTier:0,wk,...o}); e.update=()=>{}; const h=e.h; h.pos.y=(__G.groundFn?__G.groundFn(x,z):0);
