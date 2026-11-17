@@ -43,7 +43,7 @@ export function explodeAt(pos, size = 1, radius = 7, maxDmg = 70, o = {}) {
 
 // ---------- rockets ----------
 export function fireRocket(from, dir, o = {}) {
-  const r = { pos: from.clone(), vel: dir.clone().multiplyScalar(o.speed || 80), life: 0, home: o.home || null, smokeT: 0, wind: o.wind ?? 0, owner: o.owner || null };
+  const r = { pos: from.clone(), vel: dir.clone().multiplyScalar(o.speed || 80), life: 0, home: o.home || null, smokeT: 0, wind: o.wind ?? 0, owner: o.owner || null, hitR: o.hitR || 0, lastT: null };
   G.rockets.push(r);
   play('rocket', { pos: from, vol: 1, ref: 20, roll: 0.7, rev: 0.4 });
   G.fx.flash(from, 0xffb070, 30, 15, 0.08);
@@ -54,11 +54,14 @@ export function updateRockets(dt) {
   for (let i = G.rockets.length - 1; i >= 0; i--) {
     const r = G.rockets[i];
     r.life += dt;
-    if (r.home) {
-      const tgt = r.home(); _d.subVectors(tgt, r.pos);
-      const L = _d.length(); _d.normalize();
-      const sp = r.vel.length(); r.vel.lerp(_d.multiplyScalar(sp), Math.min(1, dt * 4));
-      if (L < 3.5) { explodeAt(r.pos, 2.2, 10, 40, { noPlayerDmg: true, wind: 0.5 }); G.rockets.splice(i, 1); if (G.onBridgeHit) G.onBridgeHit(); continue; }
+    if (r.home) { // homing with lead on a moving target (the bridge scrolls toward the rocket at train speed); keeps its speed
+      const tgt = r.home(), sp = r.vel.length();
+      if (!r.lastT) r.lastT = tgt.clone();
+      _w.subVectors(tgt, r.lastT).multiplyScalar(dt > 0 ? 1 / dt : 0); r.lastT.copy(tgt);
+      _d.subVectors(tgt, r.pos); const L = _d.length();
+      _d.addScaledVector(_w, Math.min(2, L / Math.max(1, sp))).normalize();
+      r.vel.lerp(_d.multiplyScalar(sp), Math.min(1, dt * 6)).setLength(sp);
+      if (L < (r.hitR || 3.5)) { explodeAt(r.pos, 2.2, 10, 40, { noPlayerDmg: true, wind: 0.5 }); G.rockets.splice(i, 1); if (G.onBridgeHit) G.onBridgeHit(); continue; }
     }
     const step = r.vel.length() * dt; _d.copy(r.vel).normalize();
     let hit = null;
@@ -110,9 +113,9 @@ export function sledMesh() {
 export class Sled {
   constructor(side, z, o = {}) {
     this.isSled = true; this.side = side; this.t = 0; this.phase = rr(0, 6);
-    this.pos = new THREE.Vector3(side * rr(8, 12), 0, z); this.vel = new THREE.Vector3(0, 0, -13);
+    this.pos = new THREE.Vector3(side * rr(8, 12) * ((o.lane ?? 7.8) / 7.8), 0, z); this.vel = new THREE.Vector3(0, 0, z < 0 ? 4 : -13);
     this.yaw = 0; this.pitch = 0; this.roll = 0; this.hp = 260; this.dead = false; this.deadT = 0;
-    this.offs = o.offs ?? rr(-5, 5); this.fireT = rr(1.5, 3); this.burst = 0; this.hasTok = false;
+    this.offs = o.offs ?? rr(-5, 5); this.fireT = rr(1.5, 3); this.burst = 0; this.hasTok = false; this.lane = o.lane ?? 7.8;
     this.group = sledMesh(); G.scene.add(this.group);
     this.driver = new Human('ru'); this.driver.sit = { seat: new THREE.Vector3(), driver: true, barL: new THREE.Vector3(), barR: new THREE.Vector3() }; this.driver.hp = 60;
     this.gunner = o.noGunner ? null : new Human('ru');
@@ -189,7 +192,7 @@ export class Sled {
     if (!this.dead) {
       const desZ = clamp(P.pos.z + this.offs, -78, 50);
       this.vel.z = damp(this.vel.z, clamp((desZ - this.pos.z) * 0.7, -15, 9), 1.1, dt);
-      const desX = this.side * (7.8 + 2.4 * Math.sin(this.t * 0.45 + this.phase));
+      const desX = this.side * (this.lane + 2.4 * Math.sin(this.t * 0.45 + this.phase));
       this.vel.x = damp(this.vel.x, (desX - this.pos.x) * 1.2, 2, dt);
       this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
       const gx = this.vel.x, gz = this.vel.z - G.v;
@@ -390,6 +393,10 @@ export class Hind {
         maxSp = 60;
         if (gorge.active) { const gz = G.s - gorge.D - 45; this.wp.set(28, 45, gz - 30); this.faceTarget.set(0, 0, gz); }
         else this.wp.set(30, 50, -420);
+        break;
+      case 'lineup': // swings out over the gorge, side-on to the bridge, nose on the near span (rockets come from here)
+        maxSp = 58;
+        if (gorge.active) { const ez = G.s - gorge.D - gorge.span0; this.wp.set(46, 21, ez + 70); this.faceTarget.set(0, 1, ez - 12); } // ahead-right: clear of the loco cab from the gun car
         break;
       case 'hover':
         maxSp = 60;
