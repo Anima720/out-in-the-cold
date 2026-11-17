@@ -2,6 +2,7 @@ import { G, THREE, clamp } from './core.js';
 import { Builder, TEX, mat4, labelTex, canvasTex } from './geom.js';
 import { M } from './mats.js';
 import { addBox, groundY, gorge } from './physics.js';
+import { J } from './humans.js';
 
 export const DECK = 1.45, ORE = 1.62, WALL = 2.62;
 
@@ -485,7 +486,7 @@ export function buildTrain() {
 
 export function setInvWalls(on) { for (const w of T.invWalls) w.enabled = on && !(T.cars[w.car] && T.cars[w.car].falling); }
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _x = new THREE.Vector3(1, 0, 0);
+const _ri = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _x = new THREE.Vector3(1, 0, 0);
 export function updateTrain(dt) {
   // falling cars into the gorge
   const ez = G.s - gorge.D - gorge.span0; // train-frame z of the gap's near edge (blown span)
@@ -494,6 +495,17 @@ export function updateTrain(dt) {
     if (!c.falling && gorge.active && gorge.broken && c.z0 < ez - 0.2) {
       c.falling = true; c.tip = true; c.vy = 0; c.av = c.type === 'loco' ? -0.62 : -0.5 - Math.random() * 0.2; c.ar = (Math.random() - 0.5) * 0.25;
       for (const bx of c.boxes) bx.enabled = false;
+      // corpses (and the guns lying with them) riding on this car are glued to its transform so they fall with it
+      c.riders = []; _ri.copy(c.group.matrixWorld).invert();
+      for (const h of G.humans) {
+        if (h.alive || h.removed || h.faction === 'us') continue;
+        const pj = h.j[J.P]; if (pj.z < c.z0 - 0.3 || pj.z > c.z1 + 0.3 || pj.y < DECK - 0.6 || pj.y > DECK + 3 || Math.abs(pj.x) > 2.7) continue;
+        if (!h.rag) { h.remove(); continue; } // posed (non-ragdoll) corpse: just clear it away
+        c.riders.push({ h, l: h.j.map((v) => v.clone().applyMatrix4(_ri)) });
+      }
+      G.fx?.bloodCar?.(c);
+      { const dm = G.fx?.decalMesh; c.decals = []; // bullet holes in the car's panels fall with it too
+        if (dm) for (let i = 0; i < 160; i++) { dm.getMatrixAt(i, _m); _p.setFromMatrixPosition(_m); if (_m.elements[0] === 0 && _m.elements[5] === 0 || _p.z < c.z0 - 0.1 || _p.z > c.z1 + 0.1 || Math.abs(_p.x) > 2.9 || _p.y < 0.9) continue; c.decals.push({ i, m: _m.clone().premultiply(_ri) }); } }
       if (G.onCarFall) G.onCarFall(c);
     }
     if (c.tip) { // still rolling over the edge: pivots nose-down on the lip until its middle is past it, then drops
@@ -518,6 +530,13 @@ export function updateTrain(dt) {
       c.group.rotation.x *= 1 - dt * 0.5;
     }
     c.group.updateMatrixWorld(true);
+    if (c.decals && c.decals.length) { for (const d of c.decals) G.fx.decalMesh.setMatrixAt(d.i, _m.multiplyMatrices(c.group.matrixWorld, d.m)); G.fx.decalMesh.instanceMatrix.needsUpdate = true; }
+    if (c.riders) for (let r = c.riders.length - 1; r >= 0; r--) {
+      const { h, l } = c.riders[r];
+      if (h.removed) { c.riders.splice(r, 1); continue; }
+      for (let i = 0; i < l.length; i++) { h.j[i].copy(l[i]).applyMatrix4(c.group.matrixWorld); h.lj[i].copy(h.j[i]); h.rag.prev[i].copy(h.j[i]); }
+      h.rag.asleep = true;
+    }
   }
   // wheels
   const ang = -(G.s / 0.44) % (Math.PI * 2);
