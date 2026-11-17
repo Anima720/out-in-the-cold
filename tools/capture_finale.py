@@ -45,7 +45,8 @@ async def main():
         else:
             await ev("__begin(7)")
         await ev("__sim(4.5)"); await st("wake"); await shot("07_wake")
-        await until("__fin.ph==='breach'", 0.2, 12); await ev("__sim(2.0)"); await shot("08_breach")
+        await until("__fin.ph==='breach'", 0.05, 12); await ev("__sim(0.2)"); await shot("08a_blast")  # breaching charge: flash, smoke, leaf in flight
+        await ev("__sim(1.8)"); await shot("08_breach")
         await ev("__sim(1.8)"); await st("kras"); await shot("09_krasin")
         await ev("__sim(2.5)"); await st("grinch"); await shot("10_grinch_shot")
         await until("__fin.ph==='bullet'", 0.1, 6); await ev("__sim(1.2)"); await st("bullet"); await shot("11_bullet")
