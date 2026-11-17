@@ -370,6 +370,7 @@ function startDefend() {
 
 const aliveEnemies = () => { let n = 0; for (const e of G.enemies) if (e.h.alive) n++; return n; };
 export const CAP5 = 16; // never more than this many enemies alive (assault.js holds vehicles back at the same cap)
+G.p5EnemyLimit = () => CAP5;
 // target head-count: busy from the first minute, rising with the upload; lighter while the Hind is the main threat
 function pressureTarget(P5) {
   if (P5.ph === 'hind' || P5.ph === 'igla') return P5.hindDown ? 0 : 8;

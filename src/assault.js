@@ -435,15 +435,15 @@ const JLAB = ['', '重装兵', '重装兵 ×2', '重装兵 ×3'];
 // ---------- scheduling ----------
 function send(rid, troops, o = {}) { return new Charger(rid, { troops, ...o }); }
 function aliveN() { let n = 0; for (const e of G.enemies) if (e.h.alive) n++; return n; }
-// [P5 flag, upload %, extra condition, spawn]
+// [P5 flag, upload %, extra condition, spawn, full passenger count]
 const EV = [
-  ['as_suv1', 20, null, () => send('suvW', 3, { toast: '敌军越野车从西侧缺口冲进来了！' })],
-  ['as_truck1', 28, null, () => send('truckW', 5, { toast: '敌军卡车正从大门冲进来！' })],
-  ['as_sleds1', 42, null, () => { send('sledSW', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledSE', 2); }],
-  ['as_suv2', 50, null, () => send('suvE', 2, { toast: '又一辆越野车从东侧冲进来了！' })],
-  ['as_truck2', 60, (P5) => P5.dishDone, () => send('truckE', 4, { toast: '敌军卡车正从大门冲进来！' })],
-  ['as_suv3', 0, (P5) => P5.hindIn && A.t - (P5.as_hindT ?? (P5.as_hindT = A.t)) > 8, () => send('suvNW', 3, { toast: '敌军越野车从西北缺口冲进来了！' })],
-  ['as_sleds2', 0, (P5) => P5.ph === 'igla', () => { send('sledW2', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledNE', 2); }],
+  ['as_suv1', 20, null, () => send('suvW', 3, { toast: '敌军越野车从西侧缺口冲进来了！' }), 3],
+  ['as_truck1', 28, null, () => send('truckW', 5, { toast: '敌军卡车正从大门冲进来！' }), 5],
+  ['as_sleds1', 42, null, () => { send('sledSW', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledSE', 2); }, 4],
+  ['as_suv2', 50, null, () => send('suvE', 2, { toast: '又一辆越野车从东侧冲进来了！' }), 2],
+  ['as_truck2', 60, (P5) => P5.dishDone, () => send('truckE', 4, { toast: '敌军卡车正从大门冲进来！' }), 4],
+  ['as_suv3', 0, (P5) => P5.hindIn && A.t - (P5.as_hindT ?? (P5.as_hindT = A.t)) > 8, () => send('suvNW', 3, { toast: '敌军越野车从西北缺口冲进来了！' }), 3],
+  ['as_sleds2', 0, (P5) => P5.ph === 'igla', () => { send('sledW2', 2, { toast: '雪地摩托从两翼包抄过来了！' }); send('sledNE', 2); }, 4],
 ];
 
 // ---------- hooks called from part5.js ----------
@@ -455,15 +455,19 @@ export function assaultEvents(P5) {
     if (!P5[e[0]] && P5.up >= e[1] && (!e[2] || e[2](P5))) { P5[e[0]] = true; A.q.push(e); }
   }
 }
-// ~70% upload: three Juggernauts walk in from the north, ~13 s apart (not queued: the story beat plays right away)
+// ~70% upload: three Juggernauts walk in from the north, at least 13 s apart; wait if the live cap is full.
 export function sendJuggernauts() { if (G.lvl !== 5) return; A.jq.push(0, 13, 26); A.jt = 0; A.near = false; }
 export const JUGG_COUNT = 3;
 // called every frame while Part 4 runs
 export function updateAssault(dt, P5) {
   A.t += dt;
-  // hold queued arrivals while the yard is crowded (> 16 alive); every vehicle has its own lane, so no road lock is needed
-  if (A.q.length && (A.gap -= dt) <= 0 && aliveN() <= 16) { A.q.shift()[3](); A.gap = 3; }
-  if (A.jq.length) { A.jt += dt; while (A.jq.length && A.jt >= A.jq[0]) { A.jq.shift(); spawnJugg(); } }
+  // Count seated/incoming soldiers too. Reserve the whole batch before creating either sled/vehicle.
+  const cap = G.p5EnemyLimit?.() ?? 16;
+  if (A.jq.length) {
+    A.jt += dt;
+    if (A.jt >= A.jq[0] && aliveN() < cap) { const due = A.jq.shift(), delay = Math.max(0, A.jt - due); spawnJugg(); for (let i = 0; i < A.jq.length; i++) A.jq[i] += delay; }
+  }
+  if (A.q.length && (A.gap -= dt) <= 0 && aliveN() + A.q[0][4] + A.jq.length <= cap) { A.q.shift()[3](); A.gap = 3; }
   // threat marker on the nearest living Juggernaut (live position above his head), label counts the living ones
   let best = null, bd = 1e18, n = 0;
   for (const r of A.juggs) { const h = r.h; if (!h.alive || h.removed) continue; n++; const d = h.pos.distanceToSquared(P.pos); if (d < bd) { bd = d; best = r; } }

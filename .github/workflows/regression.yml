@@ -22,6 +22,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci && node build.mjs
+      - name: Combat, route and reinforcement contracts
+        run: node tools/test_combat_logic.mjs
       - run: pip install playwright && python -m playwright install --with-deps chromium
       - name: Use isolated headless renderer
         run: echo "CHROME=$(find ~/.cache/ms-playwright -name headless_shell -type f | head -1)" >> "$GITHUB_ENV"

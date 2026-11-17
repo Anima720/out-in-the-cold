@@ -7,6 +7,14 @@ import { addBox } from './physics.js';
 import { W } from './world.js';
 
 export const S = { built: false, cols: [], cover: [], root: null, lights: [], powered: false };
+// Fence geometry and pedestrian gateways share one definition. Wide gates expose several lanes.
+const GAPS = { n: [[-5, 5], [-22, -19]], s: [[-3, 3]], w: [[-14, -11], [3, 6], [18, 21]], e: [[-29, -26], [-6, -3], [14, 17]] };
+const ENTRIES = [];
+for (const side of ['n', 's', 'w', 'e']) for (const [a, b] of GAPS[side]) {
+  const mid = (a + b) / 2, lanes = b - a >= 9 ? [mid - 3, mid, mid + 3] : [mid];
+  for (const c of lanes) ENTRIES.push(side === 'n' ? { o: [c, -34], i: [c, -26.5] } : side === 's' ? { o: [c, 30], i: [c, 22.5] } : side === 'w' ? { o: [-34, c], i: [-26.5, c] } : { o: [34, c], i: [26.5, c] });
+}
+G.stationEntries = () => ENTRIES;
 const _sv = new THREE.Vector3(), _sm = new THREE.Vector3(), _sy = new THREE.Vector3(0, 1, 0), _ss = new THREE.Vector3(1, 1, 1), _sq = new THREE.Quaternion(), _sf = new THREE.Vector3();
 
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -234,10 +242,10 @@ export function buildStation() {
   solid(5.5, 0, -32.2, 7.7, 2.5, -30.2, 'concrete', 0x8c8a82);
   B.boxC(6.6, 2.6, -31.2, 2.6, 0.15, 2.6, 'steel', 0x5a5d58);
   coverFor(6.6, -31.2, 1.1, 1);
-  // --- perimeter fence (gate north x -4..4, south gap x -3..3, breaches)
+  // --- perimeter fence (10 m north gate, 6 m south gap and side breaches)
   const FX0 = -30, FX1 = 30, FZ0 = -30, FZ1 = 26;
   // gate x -5..5 (two truck lanes); breaches: NW, W, E as before + SW, W2, SE and NE-east (snowmobile lanes, assault.js)
-  const gaps = { n: [[-5, 5], [-22, -19]], s: [[-3, 3]], w: [[-14, -11], [3, 6], [18, 21]], e: [[-29, -26], [-6, -3], [14, 17]] };
+  const gaps = GAPS;
   const fenceRun = (ax, az, bx, bz, side) => {
     const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 3), dx = (bx - ax) / L, dz = (bz - az) / L;
     for (let i = 0; i <= n; i++) {

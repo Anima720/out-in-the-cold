@@ -237,7 +237,7 @@ export function tryDown(e, dir, part, o) {
 function lieRoom(h, yaw, back, front) {
   const f = fwdYaw(yaw, _q); _o.copy(h.pos); _o.y += 0.28;
   if (rayBoxes(_o, _e.copy(f).negate(), back, false) || rayBoxes(_o, f, front, false)) return false;
-  for (const s of [-back, front]) { const x = h.pos.x + f.x * s, z = h.pos.z + f.z * s; if (Math.abs(supportAt(x, z, 0.05, h.pos.y + 0.3, 0.6).y - h.pos.y) > 0.3) return false; }
+  for (let i = 0; i < 2; i++) { const s = i ? front : -back, x = h.pos.x + f.x * s, z = h.pos.z + f.z * s; if (Math.abs(supportAt(x, z, 0.05, h.pos.y + 0.3, 0.6).y - h.pos.y) > 0.3) return false; }
   return true;
 }
 export function downedUpdate(e, dt) {

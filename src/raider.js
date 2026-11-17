@@ -11,9 +11,11 @@ import { play } from './audio.js';
 import { S, ground5 } from './station.js';
 
 const _o = new THREE.Vector3(), _t = new THREE.Vector3(), _e = new THREE.Vector3(), _d = new THREE.Vector3();
+const faceYaw = (h, y, dt, r = 4) => { h.yaw += clamp(angDiff(h.yaw, y), -r * dt, r * dt); };
+const faceTarget = (h, dir, dt) => { h.aim.copy(dir).normalize(); faceYaw(h, yawOf(h.aim), dt, 5); };
 export const INSIDE = (x, z) => Math.abs(x) < 29.8 && z > -29.8 && z < 25.8;
 export const IN_BLDG = (x, z) => Math.abs(x) < 7.9 && Math.abs(z) < 4.9;
-export const ENTRY = [{ o: [0, -34], i: [0, -26.5] }, { o: [-20.5, -34], i: [-20.5, -26.5] }, { o: [-34, -12.5], i: [-26.5, -12.5] }, { o: [34, -4.5], i: [26.5, -4.5] }];
+export const ENTRY = G.stationEntries?.() || [{ o: [0, -34], i: [0, -26.5] }];
 
 export function route(from, to) {
   const pts = [];
@@ -26,7 +28,7 @@ export function route(from, to) {
       if (d < bd) { bd = d; best = e; }
     }
     const a = fin ? best.i : best.o, b = fin ? best.o : best.i;
-    if (Math.hypot(a[0] - from.x, a[1] - from.z) > 4) pts.push({ x: a[0], z: a[1] }); // already at the gap: go straight through
+    if (Math.hypot(a[0] - from.x, a[1] - from.z) > 0.45) pts.push({ x: a[0], z: a[1] }); // match walk arrival radius; don't cut across a narrow gap's fence edge
     pts.push({ x: b[0], z: b[1] });
   }
   pts.push({ x: to.x, z: to.z });
@@ -199,7 +201,6 @@ export class Raider {
       return;
     }
     const w = this.w;
-    const faceP = () => { h.aim.copy(toP).normalize(); h.yaw += clamp(angDiff(h.yaw, yawOf(h.aim)), -5 * dt, 5 * dt); };
     switch (this.state) {
       case 'advance': {
         const fast = this.flank || this.retreat;
@@ -218,14 +219,14 @@ export class Raider {
         break;
       }
       case 'rush': { // shotgunner closing in on the player, weapon up
-        h.crouchT = 0.1; h.aimTarget = 0.8; faceP();
+        h.crouchT = 0.1; h.aimTarget = 0.8; faceTarget(h, toP, dt);
         if (dist < 5.5 || this.t <= 0 || !this.seen) { this.state = 'aim'; this.t = 0.15; this.lowFire = false; this.coverT = Math.min(this.coverT, rr(3, 5)); h.vel.x = h.vel.z = 0; moveChar(h, dt, false); break; }
         walk(this, h, P.pos.x, P.pos.z, 4.6, dt);
         break;
       }
       case 'cover':
         h.vel.x = h.vel.z = 0; moveChar(h, dt, false);
-        h.crouchT = 1; h.aimTarget = 0.3; faceP();
+        h.crouchT = 1; h.aimTarget = 0.3; faceTarget(h, toP, dt);
         this.coverT -= dt;
         if (this.coverT <= 0 || this.hurtMove) {
           const hurt = this.hurtMove; this.hurtMove = false;
@@ -237,12 +238,12 @@ export class Raider {
         break;
       case 'aim':
         h.vel.x = h.vel.z = 0; moveChar(h, dt, false);
-        h.crouchT = this.lowFire ? 0.85 : 0; h.aimTarget = 1; faceP();
+        h.crouchT = this.lowFire ? 0.85 : 0; h.aimTarget = 1; faceTarget(h, toP, dt);
         if (w.gk === 'dmr') glint(this, dist);
         if (this.t <= 0) { this.state = 'fire'; this.burst = burstOf(this); this.t = 0; }
         break;
       case 'fire':
-        h.crouchT = this.lowFire ? 0.85 : 0; h.aimTarget = 1; faceP();
+        h.crouchT = this.lowFire ? 0.85 : 0; h.aimTarget = 1; faceTarget(h, toP, dt);
         if (this.t <= 0) {
           this.t = w.rate * rr(0.9, 1.15); this.burst--; h.recoil = 1;
           enemyFire(this, _e.copy(h.j[J.W1]), dist);
@@ -273,7 +274,7 @@ export class Raider {
       }
       case 'throw':
         h.vel.x = h.vel.z = 0; moveChar(h, dt, false);
-        h.crouchT = 0; h.aimTarget = 0; faceP();
+        h.crouchT = 0; h.aimTarget = 0; faceTarget(h, toP, dt);
         if (this.t <= 0) {
           const from = _e.copy(h.j[J.HR]).setY(h.j[J.HR].y + 0.35);
           const tgt = _d.copy(P.pos).add(_o.set(rr(-1.5, 1.5), 0.1, rr(-1.5, 1.5)));
@@ -350,10 +351,9 @@ export function mateCustom(m) {
     if ((fight || m.p5 === 'console' || m.p5 === 'kneel') && mateMelee(m, dt)) { moveChar(h, dt, false); return; }
     h.vel.x = h.vel.z = 0;
     if (!(fight && mateYield(m, dt, mateMove))) moveChar(h, dt, false);
-    const faceYaw = (y, r = 4) => { h.yaw += clamp(angDiff(h.yaw, y), -r * dt, r * dt); };
     switch (m.p5) {
-      case 'idle': h.crouchT = 0; h.aimTarget = 0.2; if (m.yaw0 !== undefined) faceYaw(m.yaw0); break;
-      case 'console': h.crouchT = 0; h.aimTarget = 0; h.noWeapon = true; faceYaw(Math.PI / 2); break;
+      case 'idle': h.crouchT = 0; h.aimTarget = 0.2; if (m.yaw0 !== undefined) faceYaw(h, m.yaw0, dt); break;
+      case 'console': h.crouchT = 0; h.aimTarget = 0; h.noWeapon = true; faceYaw(h, Math.PI / 2, dt); break;
       case 'defend': { // crouch behind the post, rise (or fire crouched over low cover) when there is a target
         h.noWeapon = false;
         m.ct -= dt;
@@ -363,9 +363,9 @@ export function mateCustom(m) {
           m.repoT = G.t; const p = newPost(m);
           if (p) { goMate(m, [[p.x, p.z]], 'defend', 3.6); m.lastTgtT = G.t; break; }
         }
-        if (m.reloadT > 0) { m.reloadT -= dt; h.crouchT = 1; h.aimTarget = 0.25; faceYaw(m.yaw0 ?? 0); break; }
+        if (m.reloadT > 0) { m.reloadT -= dt; h.crouchT = 1; h.aimTarget = 0.25; faceYaw(h, m.yaw0 ?? 0, dt); break; }
         if (m.cs === 'crouch') {
-          h.crouchT = 1; h.aimTarget = 0.3; faceYaw(m.yaw0 ?? 0);
+          h.crouchT = 1; h.aimTarget = 0.3; faceYaw(h, m.yaw0 ?? 0, dt);
           if (m.ct <= 0) {
             m.cs = 'peek'; m.ct = rr(2.4, 4.2);
             m.low = !!m.pickTarget(_e.set(h.pos.x, h.pos.y + 1.05, h.pos.z)); // a target visible from a crouch: stay low
@@ -373,13 +373,13 @@ export function mateCustom(m) {
         } else {
           const tgt = m.pickTarget();
           h.crouchT = m.low ? 0.85 : 0;
-          if (tgt) m.fireAt(tgt, dt); else { h.aimTarget = 0.6; faceYaw(m.yaw0 ?? 0); }
+          if (tgt) m.fireAt(tgt, dt); else { h.aimTarget = 0.6; faceYaw(h, m.yaw0 ?? 0, dt); }
           if (m.ct <= 0 || (!tgt && m.ct > 1.2)) { m.cs = 'crouch'; m.ct = tgt ? rr(0.8, 1.6) : rr(0.6, 1.2); }
         }
         break;
       }
       case 'wounded': h.noWeapon = true; h.aimTarget = 0; h.crouchT = 0; break;
-      case 'kneel': h.crouchT = 1; h.aimTarget = 0; if (m.look) faceYaw(yawOf(_e.subVectors(m.look, h.pos))); break;
+      case 'kneel': h.crouchT = 1; h.aimTarget = 0; if (m.look) faceYaw(h, yawOf(_e.subVectors(m.look, h.pos)), dt); break;
       case 'sitTalk': h.noWeapon = true; h.aimTarget = 0; break;
     }
   };

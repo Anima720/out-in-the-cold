@@ -4,12 +4,12 @@
 #  - surface ck 20 (after the cage ride): 40 s, flank / suppression / retreat counters
 #  - downed: forced down -> pistol fire -> bleed out; finished off by a second hit
 #  - melee: enemy on the player (damage with god off), mate on an enemy
-# usage: timeout 900 python3 tools/test_ai.py [phases...]   (phases: train station surface downed melee mine)
+# usage: timeout 900 python3 tools/test_ai.py [phases...]   (phases: train station surface downed melee contracts mine)
 import asyncio, json, sys, os, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
 CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
-PH = sys.argv[1:] or ["downed", "melee", "train", "station", "surface"]
+PH = sys.argv[1:] or ["downed", "melee", "contracts", "train", "station", "surface"]
 from playwright.async_api import async_playwright
 from runtime import CHROME, assert_clean
 
@@ -98,6 +98,90 @@ async def main():
             show("mate melee", r)
             assert json.loads(r)["startedMelee"] and not json.loads(r)["enemyAlive"], r
             print("errors:", await ev("window.__errors.slice(0,3)"))
+
+        if "contracts" in PH:
+            await ev("__begin(4); __sim(0.2)")
+            # Exercise production AI/animation with a fixed timestep, isolated from story timers and unrelated shooters.
+            # Temporary colliders are ordinary Box instances; no combat/LOS/damage method is replaced.
+            await ev("""window.__actStep=(a,n=1)=>{for(let i=0;i<n;i++){__G.dt=1/60;__G.t+=1/60;a.update(1/60);a.h.update(1/60);}};
+              window.__testPlayer=(x,y,z)=>{__P.pos.set(x,y,z);__P.eye.set(x,y+1.62,z);__P.chest.set(x,y+1.1,z);__P.vel.set(0,0,0);__P.alive=true;__P.mounted=false;__P.health=100;};
+              window.__testClear=()=>{for(const e of __G.enemies)e.h.remove();__G.enemies.length=0;for(const m of __G.mates)m.h.hidden=true;__G.resetCombat?.();__P.god=true;};
+              window.__testRaider=(x=-3,z=38,o={})=>{const e=__mk(x,z,{wk:'ak',maxTier:0,...o});e.freeSpot();e.path.length=0;e.state=e.jugg?'pause':'cover';e.t=e.coverT=e.repathT=999;e.h.pos.y=__G.groundFn(x,z);e.h.yaw=Math.PI;e.h.aim.set(0,0,1);e.h.aimTarget=1;e.h.firstPose=true;e.h.update(0.1);return e;};""")
+            r = await ev("""(()=>{const out=[],Box=__G.boxes[0].constructor,wall=new Box(-4,-0.2,38.6,-2,3.5,38.8,'concrete','ai_test');wall.enabled=false;__G.boxes.push(wall);
+              try{for(const kind of ['enemy','mate','jugg'])for(const barrier of ['clear','wall','height'])for(const timing of (barrier==='clear'?['control']:['start','strike'])){
+                __testClear();wall.enabled=false;const e=__testRaider(-3,kind==='mate'?39.4:38,{jugg:kind==='jugg'});let a=e,target=__P;
+                if(kind==='mate'){a=__G.mates[0];const h=a.h;h.hidden=false;h.pos.set(-3,__G.groundFn(-3,38),38);h.vel.set(0,0,0);h.sit=null;h.grips=null;h.noWeapon=false;h.meleeT=-1;a.mel=null;a.meleeCD=0;a.home=h.pos.clone();a.p5='idle';a.arc=null;h.firstPose=true;h.update(0.1);target=e.h;__testPlayer(12,0,42);}
+                else __testPlayer(-3,e.h.pos.y,39.4);
+                __P.god=false;const hp0=kind==='mate'?target.hp:target.health;
+                const block=()=>{if(barrier==='wall')wall.enabled=true;else if(barrier==='height'){target.pos.y=a.h.pos.y+2;if(target===__P){__P.eye.y=target.pos.y+1.62;__P.chest.y=target.pos.y+1.1;}}};
+                if(timing==='start')block();let started=false;
+                if(timing!=='start'){for(let i=0;i<24&&!a.mel;i++)__actStep(a);started=!!a.mel;if(!started)throw Error(kind+' did not start clear-path control');while(a.h.meleeT<0.34)__actStep(a);if(timing==='strike')block();}
+                let hitFrame=false;for(let i=0;i<(timing==='start'?50:18);i++){__actStep(a);started=started||!!a.mel;hitFrame=hitFrame||!!a.mel?.hit;}
+                const hp1=kind==='mate'?target.hp:target.health,ok=barrier==='clear'?started&&hitFrame&&hp1<hp0:timing==='start'?!started&&hp1===hp0:started&&hitFrame&&hp1===hp0;
+                out.push({kind,barrier,timing,started,hitFrame,hp0,hp1,ok});if(!ok)throw Error('melee contract '+JSON.stringify(out[out.length-1]));
+              }}finally{wall.enabled=false;__G.boxes.splice(__G.boxes.indexOf(wall),1);__P.god=true;__testClear();}return out;})()""")
+            show("melee obstruction contracts", r)
+            assert len(r)==15 and all(x['ok'] for x in r), r
+
+            # Choose a naturally generated 14.0–14.8 s lifetime from the checkpoint's seeded stream.
+            # Never overwrite bleedT/death state; measure from the lethal hit, including both animations.
+            await ev("__begin(4); __sim(0.2)")
+            r = await ev("""(()=>{__testClear();__testPlayer(-3,0,46);const rnd=Math.random,muzzle=__G.fx.muzzle;let e,shots=0,maxError=0,minNorm=1e9;
+              __G.fx.muzzle=function(p,d,s){shots++;maxError=Math.max(maxError,p.distanceTo(e.h.j[16]));minNorm=Math.min(minNorm,p.length());return muzzle.call(this,p,d,s);};
+              try{__ai.forceDown=1;Math.random=()=>0.96;for(let i=0;i<64;i++){e=__testRaider();e.h.hurt(e.h.hp+1,new __THREE.Vector3(0,0,-1),'torso',2,{bullet:true});if(e.downed&&e.bleedT>=14&&e.bleedT<=14.8)break;e.h.remove();__G.enemies.splice(__G.enemies.indexOf(e),1);}Math.random=rnd;__ai.forceDown=undefined;
+                const down=e.downed&&e.h.downed&&e.h.alive&&__G.enemies.includes(e),life=e.bleedT,start=__G.t;let n=0;
+                while(e.h.alive&&n++<894)__actStep(e);
+                return {down,life,elapsed:+(__G.t-start).toFixed(6),alive:e.h.alive,shots,maxError,minNorm,rag:!!e.h.rag};
+              }finally{Math.random=rnd;__ai.forceDown=undefined;__G.fx.muzzle=muzzle;__P.god=true;}})()""")
+            show("downed lifetime and muzzle", r)
+            assert r['down'] and 14<=r['life']<=14.8 and not r['alive'] and r['rag'] and r['elapsed']<=14.9, r
+            assert r['shots']>0 and r['maxError']<1e-7 and r['minNorm']>10, r
+
+            # Enemy firearm hit/miss and shotgun pellets must not mutate the caller's muzzle vector.
+            r = await ev("""(()=>{__testClear();__testPlayer(-3,0,46);const out=[],muzzle=__G.fx.muzzle,rnd=Math.random;let current,shots,maxError,minNorm;
+              __G.fx.muzzle=function(p,d,s){shots++;maxError=Math.max(maxError,p.distanceTo(current.h.j[16]));minNorm=Math.min(minNorm,p.length());return muzzle.call(this,p,d,s);};
+              try{for(const key of ['ak','ak12','smg','saiga','svd','pkm'])for(const chance of [0,0.99]){current=__testRaider(-3,38,{wk:key});current.state='fire';current.t=0;current.burst=2;current.seen=true;current.losT=999;shots=0;maxError=0;minNorm=1e9;Math.random=()=>chance;__actStep(current);Math.random=rnd;
+                out.push({key,chance,shots,maxError,minNorm});current.h.remove();__G.enemies.splice(__G.enemies.indexOf(current),1);}
+              }finally{Math.random=rnd;__G.fx.muzzle=muzzle;}return out;})()""")
+            show("weapon muzzle contracts", r)
+            assert len(r)==12 and all(x['shots']==1 and x['maxError']<1e-7 and x['minNorm']>10 for x in r), r
+
+            r = await ev("""(()=>{__testClear();const out=[],want={ak:'rifle',ak12:'rifle',smg:'smg',saiga:'shotgun',svd:'dmr',pkm:'pkm',rpg:'rpg'};
+              for(const [key,gk] of Object.entries(want)){const e=__testRaider(-3,38,{wk:key,rpg:key==='rpg'}),h=e.h,att=JSON.stringify(h.dropAtt);
+                h.hurt(h.hp+1,new __THREE.Vector3(0,0,-1),'torso',2,{melee:true});const drop=__G.pickups.find(k=>k.h===h);
+                out.push({key,gk:h.gunKind,known:!!__G.weaponDef?.(key),att:h.dropAtt,dead:!h.alive,drop:drop?.w,kept:!!drop&&JSON.stringify(drop.att)===att,model:h.gunKind===gk});h.remove();}
+              return out;})()""")
+            show("loadout and corpse attachments", r)
+            assert len(r)==7 and all(x['known'] and x['dead'] and x['drop']==x['key'] and x['kept'] and x['model'] for x in r), r
+            for x in r:
+                assert x['att'] and x['att']['optic'] in ('iron','reddot','holo','x2','pso'), x
+                assert x['att']['under'] in (None,'gl','shotgun'), x
+                assert x['att']['under'] is None or x['key'] in ('ak','ak12'), x
+                assert x['att']['optic']!='pso' or x['key']=='svd', x
+
+            # Actual truck script reaches the unseated walking phase. Put both test bodies on the same
+            # clear floor before hitting them, so geometry cannot conceal a missing dismount-state guard.
+            # The second man must complete the real handover first.
+            await ev("__begin(4); __sim(0.2); __testClear(); __testPlayer(12,0,42)")
+            r = await ev("""(()=>{const v=__assault().send('truckW',2),a=v.pax[0],b=v.pax[1],dir=new __THREE.Vector3(0,0,-1);let n=0;
+              const step=()=>{__G.dt=1/60;__G.t+=1/60;v.update(1/60);for(const e of v.pax){e.update(1/60);e.h.update(1/60);}};
+              try{while(a.ride.st!=='walk'&&n++<3600)step();const state=a.ride.st,unseated=!a.h.sit;a.h.pos.set(-3,__G.groundFn(-3,38),38);a.h.firstPose=true;a.h.update(0.1);__ai.forceDown=1;a.h.hurt(a.h.hp+1,dir,'torso',2,{bullet:true});
+                const transitDead=!a.h.alive,transitDown=!!a.downed;while(b.ride.st!=='done'&&n++<4200)step();
+                const handed=b.ride.st==='done'&&!Object.hasOwn(b,'update')&&!b.h.sit&&!b.h.noCrowd;
+                b.h.pos.set(-3,__G.groundFn(-3,38),38);b.h.firstPose=true;b.h.update(0.1);b.h.hurt(b.h.hp+1,dir,'torso',2,{bullet:true});
+                return {state,unseated,transitDead,transitDown,handed,downAfterHandover:!!b.downed&&b.h.downed&&b.h.alive};
+              }finally{__ai.forceDown=undefined;v.remove();}})()""")
+            show("dismount downed exclusion", r)
+            assert r['state']=='walk' and r['unseated'] and r['transitDead'] and not r['transitDown'] and r['handed'] and r['downAfterHandover'], r
+
+            await ev("__begin(1); __sim(0.2)")
+            r = await ev("""(()=>{const e=__G.enemies.find(x=>x.kind==='c'),rnd=Math.random,muzzle=__G.fx.muzzle;let shots=0,maxError=0,minNorm=1e9;
+              for(const m of __G.mates)m.h.hidden=true;__testPlayer(e.h.pos.x,e.h.pos.y,e.h.pos.z+8);__P.god=true;e.active=true;e.state='fire';e.t=0;e.burst=3;e.seen=true;e.losT=999;e.relT=999;e.wantMove=false;e.h.aimTarget=1;e.h.update(0.1);
+              __G.fx.muzzle=function(p,d,s){shots++;maxError=Math.max(maxError,p.distanceTo(e.h.j[16]));minNorm=Math.min(minNorm,p.length());return muzzle.call(this,p,d,s);};
+              try{for(const chance of [0,0.99]){Math.random=()=>chance;e.t=0;__actStep(e);}return {shots,maxError,minNorm};}finally{Math.random=rnd;__G.fx.muzzle=muzzle;}})()""")
+            show("train muzzle contract", r)
+            assert r['shots']==2 and r['maxError']<1e-7 and r['minNorm']>5, r
+            await assert_clean(pg, logs)
 
         if "train" in PH:
             await ev("__begin(1)"); await ev("__sim(0.5)"); await ev(RESET)

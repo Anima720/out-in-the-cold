@@ -116,7 +116,7 @@ function showTitle() {
     <div class="chapters">${CHAPTERS.map(([k, n, t, d]) => `<button class="chap" data-k="${k}"><small>${n}</small><b>${t}</b><span>${d}</span></button>`).join('')}</div>
     ${settingsHTML()}
     <div class="m-legend">${CONTROLS}</div>
-    <p class="m-note">英文配音 + 中文字幕；模型、贴图、音效全部由代码实时生成。建议用电脑浏览器、戴耳机游玩。</p>
+    <p class="m-note">中文字幕（配音已关闭）；模型、贴图、音效全部由代码实时生成。建议用电脑浏览器、戴耳机游玩。</p>
   </div>`, {
     '[data-a=new]': () => begin(10),
     '[data-a=cont]': () => begin(last),

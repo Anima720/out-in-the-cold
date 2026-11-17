@@ -22,7 +22,7 @@ async def shot(pg, name):
     print("shot", name, flush=True)
 
 async def assert_clean(pg, logs=()):
-    errs = await pg.evaluate("({errors:window.__errors||[],fatal:window.__fatal||null})")
+    errs = await pg.evaluate("({tracking:Array.isArray(window.__errors),errors:window.__errors,fatal:window.__fatal||null})")
     page_errors = [x for x in logs if x.startswith("PAGEERR:")]
     print("runtime", errs, "pageErrors", page_errors, flush=True)
-    assert not errs["fatal"] and not errs["errors"] and not page_errors, str((errs, page_errors))
+    assert errs["tracking"] and not errs["fatal"] and not errs["errors"] and not page_errors, str((errs, page_errors))
