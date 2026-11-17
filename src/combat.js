@@ -387,6 +387,6 @@ export function callout(m, id, urgent) {
   if (G.t - AI.callT < (urgent ? 5 : 11) || G.t - (AI.callIds[id] ?? -99) < 28) return false;
   const key = `${id}_${m.name}`;
   if (!LINES[key]) LINES[key] = [m.name, CALL[id][0], CALL[id][1]];
-  AI.callT = G.t; AI.callIds[id] = G.t; say(key, 0);
+  AI.callT = G.t; AI.callIds[id] = G.t; say(key, 0); AI.stats.calls = (AI.stats.calls || 0) + 1;
   return true;
 }
