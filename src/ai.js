@@ -253,7 +253,7 @@ export class Mate {
     let best = null, bd = 60, be = null;
     for (const e of G.enemies) {
       if (!e.h.alive || !e.active) continue;
-      const d = e.h.j[J.P].distanceTo(eye) + (e.downed ? 14 : 0) - (e.state === 'fire' || e.state === 'aim' || e.state === 'supp' ? 6 : 0);
+      const d = e.h.j[J.P].distanceTo(eye) + (e.downed ? 14 : 0) - (e.state === 'fire' || e.state === 'aim' || e.state === 'supp' ? 6 : 0) - (e === this.tgtE ? 8 : 0); // stay on one man until he drops
       if (d < bd && los(eye, e.h.j[J.Ne])) { bd = d; best = e.h.j[J.Ne]; be = e; }
     }
     for (const s of G.sleds) {
@@ -271,6 +271,7 @@ export class Mate {
       else if (be.w && be.w.gk === 'shotgun' && be.state === 'rush' && !AI.seen.sg) { AI.seen.sg = 1; callout(this, 'MC_SHOTGUN'); }
     }
     if (!fromEye) { this.tgtE = be; this.ptC = best; }
+    if (best) this.lastTgtT = G.t;
     return best;
   }
   fireAt(tgt, dt) {
@@ -285,7 +286,9 @@ export class Mate {
       this.burst--; this.fireT = this.burst > 0 ? 0.11 : rr(0.7, 1.6);
       h.recoil = 1;
       const isHind = G.hind && tgt === G.hind.pos;
-      shootAt(h, _e.copy(h.j[J.W1]), isHind ? _t.copy(tgt).add(_o.set(rr(-2, 2), rr(-1, 1), rr(-2, 2))) : _t.set(tgt.x, tgt.y - 0.12, tgt.z), { dmg: isHind ? 0 : 30, hitChance: 0.4, skip: 'us', snd: 'm4', vol: 0.75, spread: 0.016, by: isHind ? null : this });
+      // aim error ~0.3 m at the target whatever the range (a trained shooter), capped up close
+      const sp = clamp(0.3 / Math.max(1, tgt.distanceTo(h.j[J.W1])), 0.005, 0.02);
+      shootAt(h, _e.copy(h.j[J.W1]), isHind ? _t.copy(tgt).add(_o.set(rr(-2, 2), rr(-1, 1), rr(-2, 2))) : _t.set(tgt.x, tgt.y - 0.12, tgt.z), { dmg: isHind ? 0 : 34, hitChance: 0.45, skip: 'us', snd: 'm4', vol: 0.75, spread: sp, by: isHind ? null : this });
       if (isHind && Math.random() < 0.4) G.hind.hurt(4, null);
       this.mag = (this.mag ?? 30) - 1;
       if (this.mag <= 0) { this.mag = 30; this.burst = 0; this.reloadT = rr(1.8, 2.4); play('magout', { pos: h.pos, vol: 0.4, ref: 3 }); if (Math.random() < 0.35) callout(this, 'MC_RELOAD'); }

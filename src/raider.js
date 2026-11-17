@@ -157,7 +157,8 @@ export class Raider {
     if (this.tryFlank(dist) || this.tryRetreat(dist)) return;
     if (nadeOk(this, dist) && Math.random() < 0.45) { this.state = 'throw'; this.t = 0.45; this.hiddenT = 0; return; }
     // close-quarters guns rush a visible player across open ground
-    if (w.gk === 'shotgun' && this.seen && dist > 6 && dist < 17 && AI.rushT <= 0 && los(_e.copy(this.h.pos).setY(this.h.pos.y + 0.6), _d.copy(P.pos).setY(P.pos.y + 0.6))) {
+    const sameSide = G.lvl !== 5 || (INSIDE(this.h.pos.x, this.h.pos.z) === INSIDE(P.pos.x, P.pos.z) && !IN_BLDG(P.pos.x, P.pos.z) && P.pos.y < 2);
+    if (w.gk === 'shotgun' && sameSide && this.seen && dist > 6 && dist < 17 && AI.rushT <= 0 && los(_e.copy(this.h.pos).setY(this.h.pos.y + 0.6), _d.copy(P.pos).setY(P.pos.y + 0.6))) {
       AI.rushT = rr(7, 11); this.state = 'rush'; this.t = 3; releaseToken(this); return;
     }
     const close = dist < 6;
@@ -206,7 +207,14 @@ export class Raider {
         h.crouchT = fast ? 0.15 : 0.3; h.aimTarget = 0.35;
         const wp = this.path[0];
         if (!wp) { this.arrive(); break; }
-        if (walk(this, h, wp.x, wp.z, (fast ? 5.0 : 4.3) * w.spd, dt)) this.path.shift();
+        if (walk(this, h, wp.x, wp.z, (fast ? 5.0 : 4.3) * w.spd, dt)) { this.path.shift(); this.stkN = 0; }
+        if ((this.stkT = (this.stkT ?? 2) - dt) <= 0) { // no headway for a while: re-plan, then give up on that spot
+          this.stkT = 2;
+          if (!this.stkP) this.stkP = h.pos.clone();
+          this.stkN = h.pos.distanceTo(this.stkP) < 0.6 ? (this.stkN || 0) + 1 : 0; this.stkP.copy(h.pos);
+          if (this.stkN === 3 && this.spot) { this.path = this.noRoute ? [{ x: this.spot.x, z: this.spot.z }] : route(h.pos, this.spot); this.side = -this.side; }
+          else if (this.stkN >= 5) { this.stkN = 0; this.freeSpot(); this.arrive(); this.coverT = rr(2, 4); }
+        }
         if (Math.abs(h.vel.x) + Math.abs(h.vel.z) > 0.3) { h.aim.set(h.vel.x, 0, h.vel.z).normalize(); h.yaw += clamp(angDiff(h.yaw, yawOf(h.aim)), -7 * dt, 7 * dt); }
         break;
       }
@@ -346,7 +354,7 @@ export function mateCustom(m) {
       return;
     }
     const fight = m.p5 === 'defend' || m.p5 === 'idle';
-    if (fight && !h.noWeapon && mateMelee(m, dt)) { moveChar(h, dt, false); return; }
+    if ((fight || m.p5 === 'console' || m.p5 === 'kneel') && mateMelee(m, dt)) { moveChar(h, dt, false); return; }
     h.vel.x = h.vel.z = 0;
     if (!(fight && mateYield(m, dt, mateMove))) moveChar(h, dt, false);
     const faceYaw = (y, r = 4) => { h.yaw += clamp(angDiff(h.yaw, y), -r * dt, r * dt); };
@@ -356,6 +364,12 @@ export function mateCustom(m) {
       case 'defend': { // crouch behind the post, rise (or fire crouched over low cover) when there is a target
         h.noWeapon = false;
         m.ct -= dt;
+        if (m.lastTgtT === undefined) m.lastTgtT = G.t;
+        // Parts 1-2: nothing to shoot at from this post for a while -> shift to a nearby spot with a line of fire
+        if ((G.lvl === 1 || G.lvl === 3) && AI.n > 0 && G.t - m.lastTgtT > 7 && G.t - (m.repoT ?? -99) > 10 && !m.reloadT) {
+          m.repoT = G.t; const p = newPost(m);
+          if (p) { goMate(m, [[p.x, p.z]], 'defend', 3.6); m.lastTgtT = G.t; break; }
+        }
         if (m.reloadT > 0) { m.reloadT -= dt; h.crouchT = 1; h.aimTarget = 0.25; faceYaw(m.yaw0 ?? 0); break; }
         if (m.cs === 'crouch') {
           h.crouchT = 1; h.aimTarget = 0.3; faceYaw(m.yaw0 ?? 0);
@@ -376,6 +390,23 @@ export function mateCustom(m) {
       case 'sitTalk': h.noWeapon = true; h.aimTarget = 0; break;
     }
   };
+}
+// a spot within ~7 m of the mate's post (straight walk, level floor) that sees at least one active enemy
+function newPost(m) {
+  const h = m.h, home = m.home || h.pos;
+  _o.set(h.pos.x, h.pos.y + 1.5, h.pos.z);
+  for (const r of [2.5, 4.5, 7]) for (let k = 0; k < 8; k++) {
+    const a = k * Math.PI / 4 + r, x = home.x + Math.sin(a) * r, z = home.z + Math.cos(a) * r;
+    const gy = (G.groundFn || ground5)(x, z);
+    if (Math.abs(gy - h.pos.y) > 0.6) continue;
+    _t.set(x, gy + 1.5, z);
+    if (!los(_o, _t) || !los(_d.set(h.pos.x, h.pos.y + 0.5, h.pos.z), _e.set(x, gy + 0.5, z))) continue;
+    for (const e of G.enemies) {
+      if (!e.h.alive || e.downed || e.h.pos.distanceTo(_t) > 55) continue;
+      if (los(_t, e.h.j[J.Ne])) return { x, z };
+    }
+  }
+  return null;
 }
 export function goMate(m, pts, next, speed) { m.path = pts.map(([x, z]) => ({ x, z })); m.next = next; m.p5 = 'walk'; m.walkSpeed = speed; m.chk = 1; m.lastD = 1e9; m.home = null; }
 

@@ -13,7 +13,7 @@ import { WDEF } from './weapon.js';
 export const AI = {
   anchor: new THREE.Vector3(), stillT: 0, lastFireT: -99, flankT: 6, suppT: 0, rushT: 0, cT: 0, cx: 0, cz: 0, n: 0, quietT: 99,
   callT: -99, callIds: {}, seen: {},
-  stats: { mateKills: {}, mateShots: {}, downs: 0, downKills: 0, bleedOuts: 0, melee: { enemy: 0, enemyHits: 0, mate: 0, mateKills: 0 }, flanks: 0, retreats: 0, supp: 0, nades: 0, loadouts: {} },
+  stats: { mateKills: {}, mateShots: {}, mateHit: {}, downs: 0, downKills: 0, bleedOuts: 0, melee: { enemy: 0, enemyHits: 0, mate: 0, mateKills: 0 }, flanks: 0, retreats: 0, supp: 0, nades: 0, loadouts: {} },
 };
 if (typeof window !== 'undefined') window.__ai = AI;
 
@@ -86,7 +86,11 @@ export function shootAt(shooter, muzzle, target, o = {}) {
   if (Math.random() < (o.tracer ?? 0.35)) G.fx.tracer(muzzle, end, { start: 1, speed: 300 });
   G.fx.muzzle(muzzle, _d, o.flash || 1);
   play(o.snd || 'ak_far', { pos: muzzle, vol: o.vol ?? 0.7, ref: 6, rev: 0.5, rate: o.rate });
-  if (o.by) { const n = o.by.name; AI.stats.mateShots[n] = (AI.stats.mateShots[n] || 0) + 1; if (killed && h.ent.faction !== 'us') mateKill(o.by); }
+  if (o.by) {
+    const n = o.by.name, k = !h ? 'miss' : h.ent ? (h.ent.faction === 'ru' || h.ent.faction === 'jg' ? 'enemy' : 'other') : h.box ? 'box' : 'ground';
+    AI.stats.mateShots[n] = (AI.stats.mateShots[n] || 0) + 1; AI.stats.mateHit[k] = (AI.stats.mateHit[k] || 0) + 1;
+    if (killed && h.ent.faction !== 'us') mateKill(o.by);
+  }
   return killed;
 }
 function mateKill(m) {
@@ -284,7 +288,7 @@ export function enemyMelee(e, dt) {
       if (d < 2.35 && dy < 1.2 && (isP ? P.alive : m.tgt.h.alive)) {
         _d.subVectors(isP ? P.pos : m.tgt.h.pos, h.pos).setY(0.2).normalize();
         if (isP) { P.damage(h.meleeKind === 'knife' ? 50 : 38, h.pos); P.addShake(0.7); AI.stats.melee.enemyHits++; }
-        else m.tgt.h.hurt(35, _d, 'torso', J.Ne, { force: 4, melee: true });
+        else { m.tgt.h.hurt(35, _d, 'torso', J.Ne, { force: 4, melee: true }); m.tgt.meleeCD = 0; AI.stats.melee.enemyOnMate = (AI.stats.melee.enemyOnMate || 0) + 1; }
         play('thud', { pos: h.pos, vol: 0.95, ref: 4, rev: 0.1 }); play('flesh', { pos: h.pos, vol: 0.8, ref: 4, rev: 0.1 });
       } else play('rustle', { pos: h.pos, vol: 0.6, ref: 4 });
     }
@@ -294,7 +298,7 @@ export function enemyMelee(e, dt) {
   if ((e.meleeCD = (e.meleeCD || 0) - dt) > 0 || h.sit || h.grips) return false;
   let tgt = null, bd = 1.9;
   if (P.alive && G.state === 'play' && !P.mounted) { const d = Math.hypot(P.pos.x - h.pos.x, P.pos.z - h.pos.z); if (d < bd && Math.abs(P.pos.y - h.pos.y) < 1.0) { bd = d; tgt = P; } }
-  for (const m of G.mates) { const mh = m.h; if (!mh.alive || mh.hidden || mh.sit || m.arc) continue; const d = Math.hypot(mh.pos.x - h.pos.x, mh.pos.z - h.pos.z); if (d < bd - 0.25 && Math.abs(mh.pos.y - h.pos.y) < 1.0) { bd = d; tgt = m; } }
+  for (const m of G.mates) { const mh = m.h; if (!mh.alive || mh.hidden || mh.sit || m.arc) continue; const d = Math.hypot(mh.pos.x - h.pos.x, mh.pos.z - h.pos.z); if (d < Math.min(bd - 0.25, 1.55) && Math.abs(mh.pos.y - h.pos.y) < 1.0) { bd = d; tgt = m; } }
   if (!tgt) return false;
   if (!los(_o.copy(h.pos).setY(h.pos.y + 1.2), _e.copy(tgt === P ? P.pos : tgt.h.pos).setY((tgt === P ? P.pos.y : tgt.h.pos.y) + 1.2))) { e.meleeCD = 0.5; return false; }
   e.mel = { tgt, hit: false }; h.meleeT = 0; h.meleeKind = h.gunKind === 'smg' || h.gunKind === 'rpg' || Math.random() < 0.3 ? 'knife' : 'butt';
@@ -324,14 +328,14 @@ export function mateMelee(m, dt) {
     return true;
   }
   if ((m.meleeCD = (m.meleeCD || 0) - dt) > 0 || h.sit || h.hidden || m.arc) return false;
-  let best = null, bd = 1.75;
+  let best = null, bd = 2.05;
   for (const e of G.enemies) {
     const eh = e.h; if (!eh.alive || e.kind === 'gunner' || eh.sit) continue;
     const d = Math.hypot(eh.pos.x - h.pos.x, eh.pos.z - h.pos.z);
     if (d < bd && Math.abs(eh.pos.y - h.pos.y) < 1.0) { bd = d; best = e; }
   }
   if (!best) return false;
-  m.mel = { tgt: best, hit: false }; h.meleeT = 0; h.meleeKind = Math.random() < 0.5 ? 'knife' : 'butt';
+  m.mel = { tgt: best, hit: false }; h.meleeT = 0; h.meleeKind = h.noWeapon || Math.random() < 0.5 ? 'knife' : 'butt';
   AI.stats.melee.mate++;
   if (Math.random() < 0.5) callout(m, 'MC_MELEE');
   return true;

@@ -22,8 +22,8 @@ SAMPLE = """(()=>{const P=__P, S=window.__ais||(window.__ais={n:0,cover:0,move:0
   else S.last.set(e,{x:p.x,z:p.z,t:0,st});
  } return 0})()"""
 REPORT = """JSON.stringify({n:__ais.n, cover:+(__ais.cover/Math.max(1,__ais.n-__ais.down)).toFixed(2), move:+(__ais.move/Math.max(1,__ais.n-__ais.down)).toFixed(2), shoot:+(__ais.shoot/Math.max(1,__ais.n-__ais.down)).toFixed(2), other:+(__ais.other/Math.max(1,__ais.n-__ais.down)).toFixed(2), stuck:__ais.stuck,
-  stats:__ai.stats, alive:__G.enemies.filter(e=>e.h.alive).length, total:__G.enemies.length, kills:__G.stats.kills, err:window.__errors.slice(0,3)})"""
-RESET = "window.__ais=null; __ai.stats.mateKills={}; __ai.stats.mateShots={}; __ai.stats.downs=0; __ai.stats.bleedOuts=0; __ai.stats.flanks=0; __ai.stats.retreats=0; __ai.stats.supp=0; __ai.stats.nades=0; __ai.stats.melee={enemy:0,enemyHits:0,mate:0,mateKills:0}; __ai.stats.loadouts={}"
+  stats:__ai.stats, mates:__G.mates.map(m=>[m.name[0], m.p5||m.mode, m.cs, +m.h.pos.x.toFixed(1), +m.h.pos.z.toFixed(1)]), alive:__G.enemies.filter(e=>e.h.alive).length, total:__G.enemies.length, kills:__G.stats.kills, err:window.__errors.slice(0,3)})"""
+RESET = "window.__ais=null; __ai.stats.mateKills={}; __ai.stats.mateShots={}; __ai.stats.mateHit={}; __ai.stats.downs=0; __ai.stats.bleedOuts=0; __ai.stats.flanks=0; __ai.stats.retreats=0; __ai.stats.supp=0; __ai.stats.nades=0; __ai.stats.melee={enemy:0,enemyHits:0,mate:0,mateKills:0}; __ai.stats.loadouts={}"
 
 async def main():
     async with async_playwright() as p:
