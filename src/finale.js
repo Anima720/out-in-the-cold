@@ -274,21 +274,26 @@ function updateDrag(dt, rdt) {
   const move = _drag.subVectors(s.b, s.a).setY(0), L = move.length(); move.normalize();
   P.pos.copy(s.a).addScaledVector(move, L * Math.min(1, w)); P.pos.y = floorY(P.pos.x, P.pos.z);
   P.vel.set(0, 0, 0);
-  P.yaw = yawOf(move) + 0.24; P.pitch = 0.32 + Math.sin(T * 1.7) * 0.025; P.lockLook = true; P.autoLook = null;
+  // lying on the back, dragged head-first: the camera sits low and looks back past the own legs at the yard; each pull jerks it
+  const pl = Math.sin(clamp((pu % 1) / 0.55, 0, 1) * Math.PI);
+  P.downed.eye = 0.4 - pl * 0.03;
+  P.yaw = yawOf(_b.copy(move).negate()) + 0.1 + Math.sin(T * 0.9) * 0.04 + pl * 0.03; P.pitch = 0.2 + pl * 0.05 + Math.sin(T * 1.7) * 0.02; P.lockLook = true; P.autoLook = null;
   if ((pu % 1) < 0.05) P.addShake(0.05);
-  // Grinch backs toward the door, hauling the raised forearm; both hands meet in view below his chest.
+  reach(0);
+  // Grinch backs toward the door at the player's head, facing the yard, left fist in the vest collar (arm kept within reach), pistol in the right.
   const g = D.grinch;
   if (g) {
     const h = g.h, side = _c.set(-move.z, 0, move.x);
     const sp = (L / s.dur) * 1.4;
-    h.pos.copy(P.pos).addScaledVector(move, 0.85).addScaledVector(side, -0.48); h.pos.y = floorY(h.pos.x, h.pos.z);
+    h.pos.copy(P.pos).addScaledVector(move, 0.3).addScaledVector(side, -0.19); h.pos.y = floorY(h.pos.x, h.pos.z);
     h.vel.copy(move).multiplyScalar(sp);
-    h.handL.copy(P.pos).addScaledVector(move, 0.43).addScaledVector(side, -0.14).setY(P.pos.y + 0.6);
-    _ag.subVectors(h.handL, h.j[J.EL]).normalize().multiplyScalar(0.055).add(h.handL); reach(1, _ag);
+    h.handL.copy(P.pos).addScaledVector(move, -0.18).setY(P.pos.y + 0.5);
+    _ag.subVectors(h.handL, h.j[J.SL]); { const d = _ag.length(); if (d > 0.5) h.handL.copy(h.j[J.SL]).addScaledVector(_ag, 0.5 / d); }
+    h.crouchT = 0.85;
     let tgt = null; for (const a of F.actors) if (a.h.alive) { tgt = a; break; }
     h.aimTarget = 1;
     if (tgt) h.aim.subVectors(tgt.h.j[J.Ne], h.j[J.SR]).normalize(); else h.aim.copy(move).negate();
-    h.yaw = yawOf(_b.copy(move).negate()) - 0.35;
+    h.yaw = yawOf(_b.copy(move).negate());
     if ((F.fireT -= rdt) <= 0 && tgt) {
       F.fireT = rr(0.5, 0.9);
       shot(h, tgt.h.j[J.Ne].clone(), { pistol: true });

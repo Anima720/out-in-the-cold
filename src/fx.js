@@ -123,7 +123,7 @@ export function initFX() {
   // flash lights pool
   FX.lights = [];
   for (let i = 0; i < 3; i++) { const l = new THREE.PointLight(0xffb060, 0, 18, 2); G.scene.add(l); FX.lights.push({ l, t: 0, max: 0.05, I: 0 }); }
-  initBlood(); FX.bloodPool = BLOOD.bloodPool; FX.bloodSplat = BLOOD.bloodSplat;
+  initBlood(); FX.bloodPool = BLOOD.bloodPool; FX.bloodCar = BLOOD.bindCar; FX.bloodSplat = BLOOD.bloodSplat;
   G.fx = FX;
   FX.shakeCB = null;
 }
