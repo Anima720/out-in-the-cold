@@ -251,7 +251,7 @@ function sledWave() {
       });
     }
   }
-  if (D.wave > 0 && !D.cur && D.q.length === 0) say(D.wave === 1 ? 'GRIN_06' : D.wave === 2 ? 'TRUCK_08' : 'TRUCK_07', 1.5);
+  if (D.wave > 0 && !D.cur && D.q.length === 0) say(D.wave >= 3 ? 'TRUCK_07' : first < 0 ? 'GRIN_06' : 'TRUCK_08', 1.5);
   D.wave++;
 }
 
@@ -452,7 +452,7 @@ export function updateDirector(dt, rdt) {
     if (D.f.hitT && D.t - D.f.hitT < 7 && Math.random() < 0.55) { // the blown span keeps burning: a tall smoke column readable from the train
       const u = Math.random();
       _sp.set(rr(-2.5, 2.5), rr(-3, 2), spanZ(0.15 + u * 0.5));
-      G.fx.smoke(_sp, { size: rr(2.5, 4.5), grow: 6, life: rr(4, 6), color: u < 0.5 ? 0x1c1a18 : 0x2e2a26, alpha: 0.6, vy: rr(4, 7), wind: 1 });
+      G.fx.smoke(_sp, { size: rr(2.5, 4.5), grow: 6, life: rr(4, 6), color: u < 0.5 ? 0x24211e : 0x38332e, alpha: 0.45, vy: rr(4, 7), wind: 1 });
       if (Math.random() < 0.3) G.fx.add.spawn(_sp.x, _sp.y + 1, _sp.z, rr(-2, 2), rr(3, 8), rr(-2, 2), { life: rr(0.3, 0.7), size: rr(1.2, 2.2), c: [1, 0.55, 0.2], alpha: 1, wind: 1 });
     }
     if (D.f.brakeAt && D.rt > D.f.brakeAt) { D.f.brakeAt = 0; D.f.braking = true; G.vTarget = 13; G.vRate = 1.5; D.screech = loop('screech', { vol: 0.5, rev: 0.3 }); play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 0.8, ref: 30 }); }
