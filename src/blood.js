@@ -105,7 +105,7 @@ function bloodPool(pos, radius = 0.6) {
   const b = BL.inst[i];
   let r = radius;
   if (S.box) { const bx = S.box; r = Math.min(r, Math.max(0.2, Math.min(pos.x - bx.min.x, bx.max.x - pos.x, pos.z - bx.min.z, bx.max.z - pos.z) + 0.12)); }
-  b.on = true; b.t = 0; b.ground = S.ground; b.splat = false; b.s = r * 2; b.g0 = clamp(0.05 / r, 0.04, 0.3); b.gt = GROW * (0.8 + Math.random() * 0.4);
+  b.on = true; b.car = null; b.t = 0; b.ground = S.ground; b.splat = false; b.s = r * 2; b.g0 = clamp(0.05 / r, 0.04, 0.3); b.gt = GROW * (0.8 + Math.random() * 0.4);
   b.v = ((Math.random() * 2) | 0) + ((Math.random() * 2) | 0) * 4;
   b.pos.set(pos.x, S.y + (S.box ? 0.006 : 0.02), pos.z);
   orient(b, S.n); place(i);
@@ -116,7 +116,7 @@ function bloodSplat(pos, normal, size = 0.5) {
   const i = NP + BL.is; BL.is = (BL.is + 1) % NS;
   const b = BL.inst[i];
   _t.copy(normal || _ny); if (_t.lengthSq() < 1e-6) _t.copy(_ny); _t.normalize();
-  b.on = true; b.t = 0; b.splat = true; b.s = size; b.g0 = 0.55; b.gt = 0.25;
+  b.on = true; b.car = null; b.t = 0; b.splat = true; b.s = size; b.g0 = 0.55; b.gt = 0.25;
   b.v = 2 + ((Math.random() * 2) | 0) + ((Math.random() * 2) | 0) * 4;
   b.ground = G.lvl === 2 && !G.groundFn && _t.y > 0.7 && !supportAt(pos.x, pos.z, 0.04, pos.y + 0.1, 0).box && pos.y - groundY(pos.x, pos.z) < 0.3;
   b.pos.copy(pos).addScaledVector(_t, 0.008);
@@ -152,8 +152,9 @@ export function updateBlood(dt) {
   for (let i = 0; i < N; i++) {
     const b = BL.inst[i]; if (!b.on) continue;
     b.t += dt; dirty = true;
-    if (b.t > LIFE) { b.on = false; BL.mesh.setMatrixAt(i, BL.Z); BL.mesh.instanceMatrix.needsUpdate = true; A[i * 4 + 1] = 0; continue; }
-    if (b.ground && G.v) { b.pos.z += G.v * dt; if (b.pos.z > 300) { b.t = LIFE; } place(i); }
+    if (b.t > LIFE) { b.on = false; b.car = null; BL.mesh.setMatrixAt(i, BL.Z); BL.mesh.instanceMatrix.needsUpdate = true; A[i * 4 + 1] = 0; continue; }
+    if (b.car) { const g = b.car.group; _t.copy(b.lp).applyMatrix4(g.matrixWorld); b.pos.copy(_t); b.q.copy(g.quaternion).multiply(b.lq); place(i); }
+    else if (b.ground && G.v) { b.pos.z += G.v * dt; if (b.pos.z > 300) { b.t = LIFE; } place(i); }
     const u = Math.min(1, b.t / b.gt), e = 1 - (1 - u) * (1 - u) * (1 - u);
     A[i * 4] = b.g0 + (1 - b.g0) * e;
     A[i * 4 + 1] = clamp((LIFE - b.t) / FADE, 0, 1) * (b.splat ? 0.92 : 1);
@@ -162,11 +163,19 @@ export function updateBlood(dt) {
   if (dirty) BL.aB.needsUpdate = true;
 }
 
+// a train car that goes over the blown bridge takes its blood stains with it
+function bindCar(c) {
+  const g = c.group; _m.copy(g.matrixWorld).invert(); _q2.copy(g.quaternion).invert();
+  for (const b of BL.inst) {
+    if (!b.on || b.ground || b.car || b.pos.z < c.z0 - 0.1 || b.pos.z > c.z1 + 0.1 || Math.abs(b.pos.x) > 2.9 || b.pos.y < 0.9 || b.pos.y > 5) continue;
+    b.car = c; b.lp = b.pos.clone().applyMatrix4(_m); b.lq = b.q.clone().premultiply(_q2);
+  }
+}
 export function clearBlood() {
   if (!BL.mesh) return;
   for (let i = 0; i < N; i++) { BL.inst[i].on = false; BL.mesh.setMatrixAt(i, BL.Z); BL.aB.array[i * 4 + 1] = 0; }
-  BL.mesh.instanceMatrix.needsUpdate = true; BL.aB.needsUpdate = true; BL.ip = BL.is = 0;
+  BL.mesh.instanceMatrix.needsUpdate = true; BL.aB.needsUpdate = true; BL.ip = BL.is = 0; for (const b of BL.inst) b.car = null;
 }
 
-export const BLOOD = { bloodPool, bloodSplat, BL };
+export const BLOOD = { bloodPool, bloodSplat, bindCar, BL };
 if (typeof window !== 'undefined') window.__blood = BL;
