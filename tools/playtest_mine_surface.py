@@ -25,9 +25,18 @@ async def main():
         await ev("__P.pos.set(8.2,0,-61.2); __P.yaw=Math.PI; __input.down.add('KeyF'); __sim(2); __input.down.delete('KeyF')"); print('intel', await ev(S)); await shot("office")
         await ev("__sim(6); __P.pos.set(0,0,-90); __P.yaw=0; __sim(3)"); print('encB', await ev(S)); await shot("cavern")
         await ev("__killAll(); __sim(6)"); print('board', await ev(S))
+        # laptop can't be taken twice (#15): no prompt / no re-trigger after the intel is taken
+        lap = json.loads(await ev("JSON.stringify({intel:__D.cv.intel, q:__D.q.length})"))
+        print('laptop', lap)
         await ev("__P.pos.set(0,0,-121.5); __sim(4)"); print('ride', await ev(S)); await shot("ride")
-        await ev("__sim(14)"); print('top', await ev(S)); await shot("top")
-        await ev("__P.pos.set(0,0,-8); __P.yaw=0; __sim(10)"); print('btr', await ev(S)); await shot("btr")
+        # the cage really travels up the shaft (#16): player and mates ride with it, gate opens at the top
+        ys = []
+        for i in range(24):
+            await ev("__sim(1)"); r = json.loads(await ev("JSON.stringify({ph:__D.cv.ph, y:+__P.pos.y.toFixed(2), my:__G.mates.map(m=>+m.h.pos.y.toFixed(2))})")); ys.append(r['y'])
+            if r['ph'] == 'top': break
+        print('ride ys', ys[::3], 'top', r)
+        await ev("__sim(2)"); print('top', await ev(S)); await shot("top")
+        await ev("__P.pos.set(0,0,-8); __P.yaw=0; __sim(16)"); print('btr', await ev(S)); await shot("btr")
         await ev("__P.pos.set(5.3,0,-3.6); __input.pressed.add('KeyF'); __sim(1.5)"); print('rpg', await ev(S))
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); if(!t) return; __P.pos.set(t.pos.x+12, 0.2, t.pos.z+14); })(); __sim(0.3)")
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); const c=__G.camera.position; const d=t.pos.clone().setY(t.pos.y+1.5).sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y);})(); __sim(0.05); __input.lmb=true; __input.lmbPressed=true; __sim(0.05); __input.lmb=false; __sim(3)")
