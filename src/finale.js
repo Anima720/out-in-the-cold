@@ -285,9 +285,9 @@ function updateDrag(dt, rdt) {
   if (g) {
     const h = g.h, side = _c.set(-move.z, 0, move.x);
     const sp = (L / s.dur) * 1.4;
-    h.pos.copy(P.pos).addScaledVector(move, 0.5).addScaledVector(side, -0.3); h.pos.y = floorY(h.pos.x, h.pos.z);
+    h.pos.copy(P.pos).addScaledVector(move, 0.22).addScaledVector(side, -0.36); h.pos.y = floorY(h.pos.x, h.pos.z);
     h.vel.copy(move).multiplyScalar(sp);
-    h.handL.copy(P.pos).addScaledVector(move, 0.18).addScaledVector(side, -0.1).setY(P.pos.y + 0.42);
+    h.handL.copy(P.pos).addScaledVector(move, 0.1).addScaledVector(side, -0.17).setY(P.pos.y + 0.42);
     _ag.subVectors(h.handL, h.j[J.SL]); { const d = _ag.length(); if (d > 0.5) h.handL.copy(h.j[J.SL]).addScaledVector(_ag, 0.5 / d); }
     h.crouchT = 0.85;
     let tgt = null; for (const a of F.actors) if (a.h.alive) { tgt = a; break; }
