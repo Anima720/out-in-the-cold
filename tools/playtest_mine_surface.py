@@ -37,18 +37,39 @@ async def main():
         print('ride ys', ys[::3], 'top', r)
         await ev("__sim(2)"); print('top', await ev(S)); await shot("top")
         await ev("__P.pos.set(0,0,-8); __P.yaw=0; __sim(16)"); print('btr', await ev(S)); await shot("btr")
+        # Reaching the exit before destroying the BTR must not skip the encounter.
+        await ev("__P.pos.set(0,0,-129); __sim(2)")
+        assert await ev("__G.lvl===3 && !__D.cv.done && !__D.cv.yardGo"), 'live BTR did not block the handoff'
         await ev("__P.pos.set(5.3,0,-3.6); __input.pressed.add('KeyF'); __sim(1.5)"); print('rpg', await ev(S))
+        assert await ev("__WP.cur==='rpg' && __WP.ammo===1"), 'RPG pickup failed'
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); if(!t) return; __P.pos.set(t.pos.x+12, 0.2, t.pos.z+14); })(); __sim(0.3)")
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); const c=__G.camera.position; const d=t.pos.clone().setY(t.pos.y+1.5).sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y);})(); __sim(0.05); __input.lmb=true; __input.lmbPressed=true; __sim(0.05); __input.lmb=false; __sim(3)")
         print('hit1', await ev(S))
         await ev("(()=>{const t=__G.sleds.find(s=>s.kind==='btr'); const c=__G.camera.position; const d=t.pos.clone().setY(t.pos.y+1.5).sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y);})(); __sim(0.05); __input.lmb=true; __input.lmbPressed=true; __sim(0.05); __input.lmb=false; __sim(4)")
         print('hit2', await ev(S))
-        await ev("__killAll(); __sim(6); __P.pos.set(0,0,-129); __sim(4)"); print('end', await ev(S))
+        r = await ev("({dead:__D.cv.btr.dead,down:__D.cv.btrDown,go:__D.cv.yardGo,obj:document.querySelector('.obj-t').textContent,mates:__G.mates.map(m=>({state:m.p5,path:m.path}))})")
+        print('BTR progression', r, flush=True)
+        assert r['dead'] and r['down'] and r['go'] and r['obj']=='赶往铁路货场', r
+        assert all(m['state']=='walk' and m['path'][-1]['z']==-132 for m in r['mates']), r
+        await shot('btr_destroyed')
+        # Walk the actual road and let the normal exit trigger run; no teleport across it.
+        await ev("__killAll(); __sim(5); __P.pitch=0; __input.down.add('KeyW')")
+        walk = await ev("""(()=>{let t=0; for(;t<60 && __G.lvl===3;t+=.1){
+          const p=__P.pos, x=p.z>-90?8:0; __P.yaw=Math.atan2(-(x-p.x),-(-139-p.z)); __sim(.1);
+        } __input.down.delete('KeyW'); return {seconds:t,lvl:__G.lvl,pos:__P.pos.toArray()};})()""")
+        print('walk to yard', walk, flush=True)
+        await ev("__sim(2)"); print('end', await ev(S))
         r = json.loads(await ev("JSON.stringify({lvl:__G.lvl, ph:__D.phase, ck:__D.ck, n:__G.mates.length, err:window.__errors.length})"))
         print('handoff', r, 'RESULT', 'PASS' if r['lvl']==2 and r['ck']==0 and r['n']==2 and r['err']==0 else 'FAIL')
         assert r['lvl']==2 and r['ck']==0 and r['n']==2 and r['err']==0, f"mine/surface handoff failed: {r}"
         assert lap['intel'], "laptop intel was not acquired"
         assert max(ys)-min(ys)>10, f"cage did not rise: {ys}"
+        # Fast kill before the delayed RPG prompt: it must never restore an obsolete objective.
+        await ev("__begin(20); for(let i=0;i<600 && !__D.cv.btr;i++) __sim(.1)")
+        assert await ev("!!__D.cv.btr && __D.cv.t-__D.cv.btrT<.12"), 'BTR did not spawn in the fast-kill fixture'
+        await ev("__D.cv.btr.hurt(3000); __sim(5)")
+        assert await ev("__D.cv.btrDown && __D.cv.yardGo && document.querySelector('.obj-t').textContent==='赶往铁路货场'"), 'late RPG prompt overwrote the completed objective'
+        print('early BTR kill objective PASS', flush=True)
         print("\n".join(logs))
         await assert_clean(pg, logs); await b.close()
 asyncio.run(main())

@@ -636,9 +636,9 @@ function updateSurface(dt) {
       if (CV.gateK >= 1) { C.gateShut = true; tr.h.handL = null; play('bolt', { pos: CV.cageGrp.position, vol: 0.8, ref: 4 }); play('metal', { pos: CV.cageGrp.position, vol: 0.5, ref: 3 }); tr.yaw0 = 2.8; }
     }
     if (C.gateShut && !C.bells) { C.bells = 1; for (let i = 0; i < 3; i++) after(0.5 + i * 0.38, () => play('clink', { vol: 0.55, rate: 0.75, rev: 0.6 })); }
-    if (rt > 4.5 && !C.go) { C.go = true; P.addShake(0.35); play('clack', { vol: 0.8, rev: 0.3 }); play('metal', { vol: 0.5, rev: 0.3 }); }
+    if (rt > 4.5 && !C.rideGo) { C.rideGo = true; P.addShake(0.35); play('clack', { vol: 0.8, rev: 0.3 }); play('metal', { vol: 0.5, rev: 0.3 }); }
     let sway = 0;
-    if (C.go) {
+    if (C.rideGo) {
       const rem = -CV.cageY, vT = Math.min(4.2, Math.sqrt(2 * 1.5 * Math.max(0, rem)) + 0.1);
       C.v = C.v < vT ? Math.min(vT, C.v + 2.0 * dt) : vT;
       const yPrev = CV.cageY, y = Math.min(0, CV.cageY + C.v * dt);
@@ -680,7 +680,7 @@ function updateSurface(dt) {
   if (C.ph === 'top' && C.t - C.topT > 14 && !C.btr) {
     C.btr = new BTR([[2, -130], [0, -90], [3, -55], [0, -28]]); C.btrT = C.t; C.reinf = 0;
     say('P2_TRUCK_02', 2.0); say('P2_GRIN_02', 0.4);
-    after(4, () => { HUD.objective('用 RPG 摧毁 BTR'); HUD.setMarker(CV.rpgPos.clone().setY(1.2), 'RPG'); });
+    after(4, () => { if (D.cv === C && G.lvl === 3 && !C.btrDown) { HUD.objective('用 RPG 摧毁 BTR'); if (WP.launch !== 'rpg') HUD.setMarker(CV.rpgPos.clone().setY(1.2), 'RPG'); } });
   }
   // reinforcements arrive from the flanks while the BTR is still alive (staggered, capped)
   if (C.btr && !C.btr.dead && C.reinf < 3 && C.t - C.btrT > 7 + C.reinf * 11 && alive() < 9) {
@@ -693,12 +693,12 @@ function updateSurface(dt) {
     if (hit('KeyF')) { giveWeapon('rpg', 1, 4); play('magin', { vol: 0.6, rev: 0 }); HUD.setMarker(null); HUD.toast('按 3 切换 RPG，直接瞄准 BTR 发射'); }
   }
   if (C.btrDown && !C.wave2) { C.wave2 = true; squad([[-14, -112], [12, -120], [-2, -128]], CV.coverS, 1); after(4, () => { if (G.lvl === 3) squad([[-30, -128], [28, -132]], CV.coverS, 1); }); }
-  if (C.btrDown && !C.go && C.t - C.btrDownT > 3) {
-    C.go = true; say('P2_SAND_03', 0.3);
+  if (C.btrDown && !C.yardGo && C.t - C.btrDownT > 3) {
+    C.yardGo = true; say('P2_SAND_03', 0.3);
     HUD.objective('赶往铁路货场'); HUD.setMarker(new THREE.Vector3(0, 1.5, -138), '货场');
     goMate(D.truck, [[3, -60], [3, -132]], 'defend', 5.5); goMate(D.grinch, [[-3, -60], [-2, -132]], 'defend', 5.5);
   }
-  if (C.go && P.pos.z < -128 && !C.done) {
+  if (C.btrDown && C.yardGo && P.pos.z < -128 && !C.done) {
     C.done = true; HUD.objective(null); HUD.setMarker(null);
     HUD.fade(1, 1.4);
     afterReal(1.8, () => { HUD.fade(0, 0.01); G.keepStats = true; startCheckpoint(0); });
