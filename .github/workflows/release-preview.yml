@@ -1,0 +1,37 @@
+name: Publish playable preview
+on:
+  push:
+    branches: [v6-sandman]
+    paths: [.github/workflows/release-preview.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/v6-sandman'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && node build.mjs
+      - name: Verify preview before publishing
+        run: |
+          node tools/test_combat_logic.mjs
+          node tools/test_ragdoll.mjs
+          test -s assets/music/END_CREDITS.mp3
+          grep -q 'window.__VO={};' dist/index.html
+          cp dist/index.html dist/out-in-the-cold-v6-sandman.html
+          cd dist
+          sha256sum out-in-the-cold-v6-sandman.html > SHA256SUMS.txt
+      - name: Publish user-authorized playtest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAYTEST_TAG: v6-sandman-playtest-20261117
+        run: |
+          gh release create "$PLAYTEST_TAG" dist/out-in-the-cold-v6-sandman.html dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title "弃于寒冬 · v6-sandman 试玩版（2026-11-17）" --notes-file docs/v7/PREVIEW_RELEASE.md --prerelease --latest=false
