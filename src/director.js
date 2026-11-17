@@ -93,6 +93,7 @@ function makeMates() {
 }
 
 export function startCheckpoint(k) {
+  G.resetCombat?.();
   if (G.saveCk) G.saveCk(k);
   if (k >= 10 && G.startCave) return G.startCave(k);
   if (k >= 4 && G.startPart5) return G.startPart5(k);

@@ -4,15 +4,15 @@
 import asyncio, json, sys, os, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
+from runtime import CHROME, assert_clean
 MODE = sys.argv[1] if len(sys.argv) > 1 else "logic"
-os.makedirs("shots", exist_ok=True)
+os.makedirs(ROOT / "shots", exist_ok=True)
 from playwright.async_api import async_playwright
 
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME, args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"])
-        vw, vh, q = (480, 270, "low") if MODE == "logic" else (640, 360, "medium")
+        vw, vh, q = (480, 270, "low") if MODE in ("logic", "npc") else (640, 360, "medium")
         pg = await b.new_page(viewport={"width": vw, "height": vh})
         logs = []
         pg.on("pageerror", lambda e: logs.append("PAGEERR: " + str(e)[:600]))
@@ -23,10 +23,11 @@ async def main():
         await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
           window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
         async def snap(path):
-            await ev("window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
+            await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
-            await pg.screenshot(path=path, timeout=200000)
             await ev("window.__rafHold=true")
+            await pg.screenshot(path=str(ROOT / path), timeout=200000)
+            await ev("window.__rafHold=true; window.__freeze=false")
             print("shot", path, flush=True)
         async def out(tag, js):
             r = await ev(js)
@@ -169,6 +170,6 @@ async def main():
                 await ev("__sim(3)")
         print("errors", await ev("window.__errors"), flush=True)
         for l in logs[:20]: print(l)
-        await b.close()
+        await assert_clean(pg, logs); await b.close()
 
 asyncio.run(main())

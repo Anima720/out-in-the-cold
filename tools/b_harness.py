@@ -3,7 +3,7 @@ import asyncio, os, pathlib, sys, json
 from playwright.async_api import async_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
+from runtime import CHROME, hold, shot as stable_shot
 ARGS = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"]
 SHOTS = ROOT / "shots"; SHOTS.mkdir(exist_ok=True)
 
@@ -11,8 +11,8 @@ SHOTS = ROOT / "shots"; SHOTS.mkdir(exist_ok=True)
 HELPERS = r"""
 window.__bodies = () => { const L = []; const P = __P;
   if (P.alive) L.push([P.pos.x, P.pos.y, P.pos.z, 'P', 0.32]);
-  for (const m of __G.mates) { const h = m.h; if (h.alive && !h.hidden && !h.sit && !m.arc && !h.noCrowd) L.push([h.pos.x, h.pos.y, h.pos.z, 'M' + m.name[0], 0.33]); }
-  for (const e of __G.enemies) { const h = e.h; if (h.alive && !h.hidden && !h.sit && e.kind !== 'gunner' && !h.noCrowd) L.push([h.pos.x, h.pos.y, h.pos.z, (e.jugg ? 'J' : 'E') + ':' + e.state + ':' + Math.hypot(h.vel.x,h.vel.z).toFixed(1) + '@' + h.pos.x.toFixed(0) + ',' + h.pos.z.toFixed(0), e.jugg ? 0.42 : 0.33]); }
+  for (const m of __G.mates) { const h = m.h; if (h.alive && !h.hidden && !h.sit && !m.arc && !h.noCrowd && !h.downed) L.push([h.pos.x, h.pos.y, h.pos.z, 'M' + m.name[0], 0.33]); }
+  for (const e of __G.enemies) { const h = e.h; if (h.alive && !h.hidden && !h.sit && e.kind !== 'gunner' && !h.noCrowd && !h.downed) L.push([h.pos.x, h.pos.y, h.pos.z, (e.jugg ? 'J' : 'E') + ':' + e.state + ':' + Math.hypot(h.vel.x,h.vel.z).toFixed(1) + '@' + h.pos.x.toFixed(0) + ',' + h.pos.z.toFixed(0), e.jugg ? 0.42 : 0.33]); }
   return L; };
 // min pairwise XZ distance and min clearance (distance - radius sum) among bodies at similar height
 window.__cm = () => { const L = __bodies(); let md = 9, mc = 9, who = '';
@@ -34,11 +34,9 @@ async def page(w=480, h=270, q="low", extra=""):
     pg.on("console", lambda m: logs.append(m.type + ": " + m.text[:300]) if m.type == 'error' else None)
     await pg.goto(DIST + f"?q={q}&god=1{extra}")
     await pg.wait_for_function("window.__ready || window.__fatal", timeout=300000)
+    await hold(pg)
     await pg.evaluate(HELPERS)
     return p, b, pg, logs
 
 async def shot(pg, name):
-    await pg.evaluate("window.__freeze = true")
-    await pg.wait_for_timeout(150)
-    await pg.screenshot(path=str(SHOTS / name), timeout=200000)
-    print("shot", name, flush=True)
+    await stable_shot(pg, name)

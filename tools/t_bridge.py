@@ -6,7 +6,7 @@ Q = sys.argv[1] if len(sys.argv) > 1 else "medium"
 SHOTS = len(sys.argv) <= 2 or sys.argv[2] != "noshots"
 
 async def main():
-    P = await Page().open(560, 315, Q)
+    P = await Page().open(480 if Q=="low" else 640, 270 if Q=="low" else 360, Q)
     ev, j = P.ev, P.j
     S = """{ph:__D.phase, dL:+(-70-(__G.s-__gorge.D)).toFixed(0), v:+__G.v.toFixed(1), ts:+__G.timeScale.toFixed(2), br:__gorge.broken,
       hind:__G.hind?[__G.hind.state, __G.hind.pos.toArray().map(v=>+v.toFixed(0))]:null, rk:__G.rockets.length,

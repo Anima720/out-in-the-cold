@@ -1,3 +1,4 @@
+from runtime import assert_clean
 # Blood pools/splats (snow ck5, train deck ck1, mine ck10) and the chain-link fence (shoot + LOS through, walk blocked).
 import asyncio, json
 from b_harness import page, shot
@@ -5,7 +6,7 @@ from b_harness import page, shot
 POOLS = "JSON.stringify(__blood.inst.map((b,i)=>b.on?[i,+b.pos.x.toFixed(2),+b.pos.y.toFixed(3),+b.pos.z.toFixed(2),+b.s.toFixed(2),+__blood.aB.array[i*4].toFixed(2),b.ground]:null).filter(Boolean))"
 
 async def main():
-    p, b, pg, logs = await page(800, 450, "medium")
+    p, b, pg, logs = await page(640, 360, "medium")
     ev = pg.evaluate
     try:
         # ---------- fence (station ck5) ----------
@@ -23,13 +24,17 @@ async def main():
           const wallStop = ph.rayBoxes(eye, dd, L, false);
           return { losPE: ph.los(eye, neck), losEP: ph.los(neck, eye), rayHitsEnemy: !!(hit && hit.ent === e.h), rayBackClear: !back, nonBulletRayStopsAtFence: !!(wallStop && wallStop.box.tag === 'fence'), hp0: e.h.hp }; })()""")
         print("fence los", json.dumps(r), flush=True)
+        assert all(r[k] for k in ('losPE','losEP','rayHitsEnemy','rayBackClear','nonBulletRayStopsAtFence')), r
+        hp0=r['hp0']
         r = await ev("""(()=>{ const e = __fe; let seen = false; for (let i = 0; i < 12; i++) { __sim(0.1); seen = seen || !!e.seen; }
           __input.lmb = true; __input.lmbPressed = true; __sim(0.05); __input.lmbPressed = false; __sim(0.6); __input.lmb = false; __sim(0.1);
           return { enemySeesPlayer: seen, hp: Math.round(e.h.hp), alive: e.h.alive, shots: __G.stats.shots, err: window.__errors.length }; })()""")
         print("fence shoot", json.dumps(r), flush=True)
+        assert r['enemySeesPlayer'] and r['hp']<hp0 and r['shots']>0, r
         r = await ev("""(()=>{ __P.pos.set(10, 0, -29.2); __P.yaw = 0; __P.pitch = 0; for (let i = 0; i < 40; i++) { __input.down.add('KeyW'); __sim(0.05); } __input.down.delete('KeyW');
           return { playerZ: +__P.pos.z.toFixed(3), blocked: __P.pos.z > -29.94 }; })()""")
         print("fence walk", json.dumps(r), flush=True)
+        assert r['blocked'], r
         # ---------- blood on snow (the enemy shot above lies outside the fence; plus one in the yard) ----------
         await ev("""(()=>{ const e = __fe; if (e.h.alive) e.h.die(new __THREE.Vector3(0,0.2,-1), 2, 5); })()""")
         await ev("__sim(6)")
@@ -59,6 +64,7 @@ async def main():
         print("errors", await ev("window.__errors.slice(0,3)"))
     finally:
         print("\n".join(logs[-6:]))
+        await assert_clean(pg, logs)
         await b.close(); await p.stop()
 
 asyncio.run(main())

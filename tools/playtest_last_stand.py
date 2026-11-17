@@ -2,13 +2,13 @@ import asyncio, json, sys
 import pathlib, os
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
-os.makedirs("shots", exist_ok=True)
+from runtime import CHROME, assert_clean
+os.makedirs(ROOT / "shots", exist_ok=True)
 from playwright.async_api import async_playwright
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME, args=["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--autoplay-policy=no-user-gesture-required"])
-        pg = await b.new_page(viewport={"width":640,"height":360})
+        pg = await b.new_page(viewport={"width":480,"height":270})
         logs=[]
         pg.on("pageerror", lambda e: logs.append("PAGEERR: "+str(e)[:600]))
         pg.on("console", lambda m: logs.append(m.type+": "+m.text[:300]) if m.type=='error' else None)
@@ -19,10 +19,11 @@ async def main():
         await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
           window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
         async def snap(path):
-            await ev("window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
+            await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
-            await pg.screenshot(path=path, timeout=200000)
             await ev("window.__rafHold=true")
+            await pg.screenshot(path=str(ROOT / path), timeout=200000)
+            await ev("window.__rafHold=true; window.__freeze=false")
         async def st(tag):
             r = await ev("""JSON.stringify({ph:__p5().P5&&__p5().P5.ph, up:__p5().P5&&+__p5().P5.up.toFixed(1), st:__G.state, lvl:__G.lvl, P:__P.pos.toArray().map(v=>+v.toFixed(1)),
               en:__G.enemies.filter(e=>e.h.alive).length, mates:__G.mates.map(m=>[m.name[0],m.p5,m.h.pos.toArray().map(v=>+v.toFixed(1))]), hind: __G.hind? [__G.hind.state, __G.hind.pos.toArray().map(v=>+v.toFixed(0))]:null,
@@ -92,7 +93,8 @@ async def main():
             await ev("__sim(1)")
             if await ev("__G.state")=='cine': break
         await st("epilogue")
+        assert await ev("__G.state==='cine'"), "last stand did not reach epilogue"
         await snap("shots/p5_end.png")
         print("\n".join(logs[-15:]))
-        await b.close()
+        await assert_clean(pg, logs); await b.close()
 asyncio.run(main())

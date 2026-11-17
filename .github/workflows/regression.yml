@@ -1,0 +1,35 @@
+name: Campaign regression
+on:
+  push:
+    branches: [v6-sandman]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci && node build.mjs
+      - run: pip install playwright && python -m playwright install --with-deps chromium
+      - name: Use isolated headless renderer
+        run: echo "CHROME=$(find ~/.cache/ms-playwright -name headless_shell -type f | head -1)" >> "$GITHUB_ENV"
+      - name: Browser regression and fixed-camera captures
+        run: python tools/run_regression.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: campaign-regression-${{ github.sha }}
+          path: shots/
+          retention-days: 14

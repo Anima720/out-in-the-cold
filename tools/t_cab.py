@@ -5,7 +5,7 @@ from t_harness import Page
 Q = sys.argv[1] if len(sys.argv) > 1 else "medium"
 
 async def main():
-    P = await Page().open(640, 360, Q)
+    P = await Page().open(480 if Q=="low" else 640, 270 if Q=="low" else 360, Q)
     ev, j = P.ev, P.j
     G = "{ph:__D.phase, st:__G.grinch_st, g:(()=>{const g=__D.grinch; return [g.mode, g.cab&&g.cab.st, +g.h.pos.x.toFixed(2), +g.h.pos.y.toFixed(2), +g.h.pos.z.toFixed(2)]})(), door:__T.cab.doorOpen, lev:+__T.cab.leverK.toFixed(2), v:+__G.v.toFixed(1), cur:__D.cur&&__D.cur.id, err:window.__errors.length}"
     # gunner visual: player on the flat car looking at the gun car while the gunner fires

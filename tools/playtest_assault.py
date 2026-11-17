@@ -1,17 +1,17 @@
 # Part 4 assault vehicles (assault.js): schedule, parking, dismounts, kills en route, Juggernaut marker, enemy cap.
 #   python3 tools/playtest_assault.py            logic run, 480x270 q=low (+ a few low-res shots)
-#   python3 tools/playtest_assault.py --visual   same run at 800x450 q=medium with the dismount screenshots
+#   python3 tools/playtest_assault.py --visual   same run at 640x360 q=medium with the dismount screenshots
 #   --part 1 | --part 2                          run only one half (each fits the 900 s budget on the shared 2-core box)
 # Wrap in `timeout 900`. One Chrome. Shots go to shots/as_*.png.
 import asyncio, json, os, pathlib, sys
 from playwright.async_api import async_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
+from runtime import CHROME, assert_clean
 SHOTS = ROOT / "shots"; SHOTS.mkdir(exist_ok=True)
 VIS = "--visual" in sys.argv
 PART = sys.argv[sys.argv.index("--part") + 1] if "--part" in sys.argv else "123"   # 1: schedule, Juggernauts, cap, kills  2: all-nine stress, refill pressure  3: ops-room corpses (#6)
-W, H, Q = (800, 450, "medium") if VIS else (480, 270, "low")
+W, H, Q = (640, 360, "medium") if VIS else (480, 270, "low")
 TAG = "" if VIS else "_low"
 
 HELPERS = r"""
@@ -107,6 +107,7 @@ async def main():
                 t = await J(f"__until(() => {json.dumps(rids)}.every(r => __AS().A.veh.some(v => v.rid === r)), 40)")
                 vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
                 check(len(vs) == len(rids) and all(v['npax'] == npax for v in vs), f"{label}: spawned {[v['rid'] for v in vs]} with {[v['npax'] for v in vs]} aboard (want {npax}) after {t}s")
+                check(await J("__AS().aliveN()") <= 16, f"{label}: spawn reserves seats within the 16-enemy cap")
                 if shots and 'drive' in shots: await shots['drive']()
                 t = await J(f"__until(() => __AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).every(v => v.arrived), 45)")
                 vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
@@ -120,6 +121,8 @@ async def main():
                 await ev("__drive(1.0)")
                 bad = await J("(() => { const L = __AS().A.veh.filter(v => v.arrived && !v.dead), o = []; for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) if (__sat(__corners(L[i], 0.15), __corners(L[j], 0.15))) o.push(L[i].rid + '/' + L[j].rid); return o; })()")
                 check(not bad, f"parked vehicles keep distinct spots {bad}")
+                # Keep the next schedule event independent of the cap; cap waiting is exercised below.
+                await ev("__killDone(); __drive(0.2)")
 
             async def suv_shot():
                 await ev("__until(() => { const v = __AS().A.veh.find(v => v.rid === 'suvW'); return v && v.at >= 1.0; }, 5, 1/60)")
@@ -155,11 +158,12 @@ async def main():
                 st = await J("{lab: __G.hud.th && __G.hud.th.label, done: !!__P5().juggDone, kills: __P5().juggKills, el: !!document.querySelector('.threat.on')}")
                 want = ['重装兵 ×2', '重装兵', None][k]
                 check(st['lab'] == want and st['done'] == (k == 2) and (st['el'] == (k < 2)), f"Juggernaut {k + 1} down: marker {st}")
-            # enemy cap: the late SUV waits while > 16 are alive
+            # Strict cap: fill all 16 slots, then verify a queued three-man SUV waits for room.
+            await ev("__killDone(); while(__AS().aliveN()<16){const e=new (__AS().Raider)(32+__AS().aliveN(),-55,{noDown:true,maxTier:0});e.update=()=>{};}")
             n = await J("__AS().aliveN()")
             await ev("__P5().hindIn = true"); await ev("__drive(14)")
             held = await J("{alive: __AS().aliveN(), q: __AS().A.q.length, suv: __AS().A.veh.some(v => v.rid === 'suvNW')}")
-            check(n > 16 and held['q'] == 1 and not held['suv'], f"late SUV held back while {held['alive']} (>16) enemies alive: {held}")
+            check(n == 16 and held['alive'] == 16 and held['q'] == 1 and not held['suv'], f"late SUV waits while all 16 slots are occupied: {held}")
             k = await J("__killDone()"); print("   killed", k)
             await stage("late SUV (Hind phase)", "0", ["suvNW"], 3)
             await J("__killDone()")
@@ -217,10 +221,11 @@ async def main():
             await snap("as_corpses")
         errs = await J("window.__errors")
         check(not errs, f"window.__errors empty: {errs[:3]}")
+        check(not any(x.startswith('PAGEERR:') for x in logs), "browser pageerror list empty")
         print("\n".join(logs[-10:]))
         print("FAILS:", len(FAILS))
         for f in FAILS: print("  -", f)
-        await b.close()
+        await assert_clean(pg, logs); await b.close()
         sys.exit(1 if FAILS else 0)
 
 asyncio.run(main())

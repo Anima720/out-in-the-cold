@@ -1,3 +1,4 @@
+from runtime import assert_clean
 # HUD capture: minimap during the station fight (ck 5) and on the train (ck 1), plus a layout check that
 # turns every HUD element on at 1280x720 and 800x450 and reports overlapping boxes. Shots go to shots/.
 import asyncio, json
@@ -41,6 +42,7 @@ async def main():
         print("errors", await ev("window.__errors.slice(0,3)"))
     finally:
         print("\n".join(logs[-6:]))
+        await assert_clean(pg, logs)
         await b.close(); await p.stop()
 
 asyncio.run(main())

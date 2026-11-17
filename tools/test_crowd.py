@@ -1,3 +1,4 @@
+from runtime import assert_clean
 # Character collision test: min clearance over time per level, head-on lane passing on the train, player pushes.
 import asyncio, json
 from b_harness import page, shot
@@ -46,6 +47,7 @@ async def main():
         print("errors", await ev("window.__errors.slice(0,3)"))
     finally:
         print("\n".join(logs[-8:]))
+        await assert_clean(pg, logs)
         await b.close(); await p.stop()
 
 asyncio.run(main())

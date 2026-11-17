@@ -1,4 +1,4 @@
-import { G, THREE, clamp, damp, lerp, fwdYaw, rightYaw, yawOf, angDiff, UP } from './core.js';
+import { G, THREE, clamp, damp, lerp, smooth, fwdYaw, rightYaw, yawOf, angDiff, UP } from './core.js';
 import { TEX, triUV, mat4, rbox } from './geom.js';
 import { TX } from './mats.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -16,6 +16,7 @@ const BONES = [
 ];
 const MINS = [[J.HL, J.SL, 0.2], [J.HR, J.SR, 0.2], [J.AL, J.HPL, 0.32], [J.AR, J.HPR, 0.32], [J.KL, J.KR, 0.14], [J.AL, J.AR, 0.12], [J.Hc, J.HPL, 0.62], [J.Hc, J.HPR, 0.62], [J.HL, J.P, 0.12], [J.HR, J.P, 0.12]];
 const L_UA = 0.29, L_FA = 0.27, L_TH = 0.44, L_SH = 0.44;
+export const MW = 0.3, MS = 0.42, MD = 0.85; // melee timing: wind-up end, strike (hit) time, end
 
 // ---------- part geometry ----------
 class PB {
@@ -267,13 +268,84 @@ function faction(name) {
     P.rifle = b.geo();
   }
   // sidearm: bone W0 (hand on the grip) -> W1 (muzzle) 0.2; -Z = top of the slide
-  if (kr || !ru) {
+  if (!jg) {
     const b = new PB();
     b.box(0, 0.085, -0.036, 0.027, 0.19, 0.034, 0x1b1c1d, 0);
     b.box(0, 0.07, -0.012, 0.025, 0.15, 0.022, 0x252627, 0);
     b.box(0, 0.006, 0.035, 0.027, 0.05, 0.09, 0x161616, 0, 0.22);
     b.box(0, 0.05, 0.012, 0.006, 0.04, 0.025, 0x111111, 0);
     P.pistol = b.geo();
+    // combat knife: origin in the fist, blade along +Y; -Z = spine of the blade
+    const k = new PB();
+    k.box(0, -0.03, 0, 0.024, 0.11, 0.03, 0x1a1a1a, 0);
+    k.box(0, 0.028, 0, 0.028, 0.012, 0.056, 0x3a3b3c, 0);
+    k.box(0, 0.115, 0.002, 0.005, 0.16, 0.03, 0x9ea4a8, 0);
+    k.box(0, 0.2, 0.008, 0.005, 0.03, 0.018, 0x9ea4a8, 0, 0.5);
+    P.knife = k.geo();
+  }
+  // enemy loadouts (h.gunKind): all along bone W0 (butt / rear grip at the shoulder) -> +Y (muzzle); -Z = top; lengths in GK
+  if (ru && !jg && !kr) {
+    const blk = 0x1d1e1f, wood = C.furn, met = C.metal;
+    const grip = (b, y, c = blk) => b.box(0, y, 0.075, 0.032, 0.05, 0.095, c, 0, -0.32);
+    { // PP-19 Bizon: folding skeleton stock, helical magazine under the barrel
+      const b = new PB();
+      b.box(0, 0.07, 0.025, 0.026, 0.15, 0.022, blk, 0); b.box(0, 0.07, -0.02, 0.026, 0.15, 0.018, blk, 0);
+      b.box(0, 0.28, 0, 0.05, 0.26, 0.07, met, 0);
+      b.cyl(0, 0.41, 0.066, 0.034, 0.034, 0.3, blk, 0);
+      b.cyl(0, 0.56, 0, 0.013, 0.013, 0.14, met, 0);
+      b.box(0, 0.5, -0.045, 0.012, 0.025, 0.03, met, 0); b.box(0, 0.26, -0.045, 0.022, 0.03, 0.02, met, 0);
+      grip(b, 0.22);
+      P.g_smg = b.geo();
+    }
+    { // Saiga-12: AK pattern, polymer furniture, straight box magazine, thick barrel
+      const b = new PB();
+      b.box(0, 0.12, 0.02, 0.045, 0.24, 0.1, blk, 0, -0.08);
+      b.box(0, 0.38, 0, 0.062, 0.28, 0.088, met, 0);
+      b.box(0, 0.6, 0, 0.07, 0.18, 0.08, blk, 0);
+      b.cyl(0, 0.82, 0, 0.02, 0.02, 0.27, met, 0);
+      b.cyl(0, 0.95, 0, 0.026, 0.026, 0.03, met, 0);
+      b.box(0, 0.44, 0.14, 0.055, 0.085, 0.19, blk, 0, 0.12);
+      grip(b, 0.3);
+      P.g_shotgun = b.geo();
+    }
+    { // PKM: skeleton stock, long receiver, 100-round box on the side, fluted barrel, carry handle, folded bipod
+      const b = new PB();
+      b.box(0, 0.11, 0.03, 0.04, 0.22, 0.12, wood, 0, -0.06);
+      b.box(0, 0.42, 0, 0.068, 0.38, 0.092, met, 0);
+      b.box(0.05, 0.44, 0.12, 0.08, 0.15, 0.13, 0x45493a, 0);
+      b.cyl(0, 0.84, 0, 0.017, 0.017, 0.5, met, 0);
+      b.cyl(0, 0.78, 0.035, 0.01, 0.01, 0.36, met, 0);
+      b.cyl(0, 1.1, 0, 0.022, 0.022, 0.06, met, 0);
+      b.box(0, 0.9, 0.045, 0.035, 0.3, 0.016, met, 0);
+      b.box(0, 0.64, -0.065, 0.016, 0.11, 0.022, met, 0);
+      grip(b, 0.3, wood);
+      P.g_pkm = b.geo();
+    }
+    { // RPG-7: tube from behind the shoulder, wooden heat shield, venturi, PG-7 warhead
+      const b = new PB(), olive = 0x3d4a33;
+      b.cyl(0, 0.2, 0, 0.03, 0.03, 1.0, olive, 0);
+      b.cyl(0, 0.2, 0, 0.043, 0.043, 0.26, wood, 0);
+      b.cyl(0, -0.34, 0, 0.034, 0.056, 0.13, met, 0);
+      b.cyl(0, 0.76, 0, 0.045, 0.03, 0.12, olive, 0);
+      b.sph(0, 0.85, 0, 0.052, olive, 0, 1, 0.9, 1);
+      b.cyl(0, 0.95, 0, 0.012, 0.04, 0.12, olive, 0);
+      b.box(-0.045, 0.24, -0.045, 0.028, 0.12, 0.04, blk, 0);
+      b.box(0, 0.12, 0.07, 0.03, 0.04, 0.1, blk, 0, -0.2); b.box(0, 0.32, 0.07, 0.03, 0.04, 0.1, blk, 0, -0.2);
+      P.g_rpg = b.geo();
+    }
+    { // SVD: thumbhole wooden stock, long thin barrel, PSO-1 scope
+      const b = new PB();
+      b.box(0, 0.12, 0.035, 0.04, 0.24, 0.11, wood, 0); b.box(0, 0.16, -0.035, 0.036, 0.13, 0.03, wood, 0);
+      b.box(0, 0.4, 0, 0.05, 0.3, 0.075, met, 0);
+      b.box(0, 0.64, 0, 0.056, 0.22, 0.066, wood, 0);
+      b.cyl(0, 0.93, 0, 0.011, 0.011, 0.46, met, 0);
+      b.cyl(0, 1.15, 0, 0.017, 0.017, 0.05, met, 0);
+      b.cyl(0, 0.42, -0.088, 0.021, 0.021, 0.24, blk, 0); b.cyl(0, 0.555, -0.088, 0.028, 0.026, 0.035, blk, 0);
+      b.box(0, 0.42, -0.052, 0.02, 0.08, 0.03, blk, 0);
+      b.box(0, 0.45, 0.1, 0.04, 0.06, 0.11, met, 0, 0.15);
+      grip(b, 0.3, wood);
+      P.g_dmr = b.geo();
+    }
   }
   const mat = camoMaterial(ru ? TX.camoRU : TX.camoUS);
   if (jg) mat.color.setRGB(0.55, 0.58, 0.55);
@@ -296,9 +368,16 @@ export function initHumans() {
       for (let i = 0; i < n; i++) im.setMatrixAt(i, ZERO);
       G.scene.add(im); meshes[part] = im;
     }
-    HR.f[name] = { meshes, cap, free: Array.from({ length: cap }, (_, i) => cap - 1 - i), used: new Set() };
+    HR.f[name] = { meshes, cap, free: Array.from({ length: cap }, (_, i) => cap - 1 - i), used: new Set(), list: Object.values(meshes), guns: GUNS.filter((g) => meshes[g]) };
   }
 }
+// third-person gun per h.gunKind: instanced part, length W0 -> muzzle (W1), trigger / support hand positions along the gun
+const GUNS = ['rifle', 'g_smg', 'g_shotgun', 'g_pkm', 'g_rpg', 'g_dmr'];
+const GPART = { rifle: 'rifle', smg: 'g_smg', shotgun: 'g_shotgun', pkm: 'g_pkm', rpg: 'g_rpg', dmr: 'g_dmr' };
+export const GK = {
+  rifle: { len: 0.85, g1: 0.24, g2: 0.5, up: 0 }, smg: { len: 0.63, g1: 0.22, g2: 0.4, up: 0 }, shotgun: { len: 0.97, g1: 0.26, g2: 0.55, up: 0 },
+  pkm: { len: 1.13, g1: 0.26, g2: 0.6, up: 0 }, rpg: { len: 1.0, g1: 0.12, g2: 0.32, up: 0.07 }, dmr: { len: 1.17, g1: 0.26, g2: 0.6, up: 0 },
+};
 
 function allocSlot(fname) {
   const f = HR.f[fname];
@@ -357,6 +436,7 @@ export class Human {
     this.weaponUp = V().set(0, 1, 0);
     this.deadT = 0; this.carIdx = -1; this.invuln = !!opts.invuln;
     this.firstPose = true;
+    this.gunKind = opts.gunKind || null; this.meleeT = -1; this.meleeKind = 'butt'; this.downed = false; this.down = null; this.dropM = null;
     G.humans.push(this);
   }
   remove() {
@@ -384,7 +464,14 @@ export class Human {
     const fwd = fwdYaw(this.yaw, _f), right = rightYaw(this.yaw, _r);
     _a.copy(this.aim); if (_a.lengthSq() < 1e-6) _a.copy(fwd); _a.normalize();
     const dy = clamp(angDiff(this.yaw, yawOf(_a)), -1.1, 1.1);
-    const tYaw = this.yaw + dy * 0.8;
+    // melee (rifle butt / knife): wind-up 0-MW, strike MW-MS, hold, recovery MS+0.04-MD (seconds, h.meleeT advanced here)
+    let mk = 0, ms = 0, mw = 0;
+    if (this.meleeT >= 0) {
+      const u = (this.meleeT += dt);
+      if (u >= MD) this.meleeT = -1;
+      else { mw = smooth(u / MW); ms = smooth((u - MW) / (MS - MW)); mk = mw * (1 - smooth((u - MS - 0.04) / (MD - MS - 0.04))); }
+    }
+    const tYaw = this.yaw + dy * 0.8 + mk * lerp(-0.45, 0.3, ms);
     const tf = fwdYaw(tYaw, _tf), tr = rightYaw(tYaw, _tr);
     const surf = this.onGround ? G.v : 0;
     const gvx = this.vel.x, gvz = this.vel.z - surf;
@@ -409,7 +496,7 @@ export class Human {
     if (this.sit) j[J.P].copy(this.sit.seat);
     else j[J.P].set(root.x, root.y + lerp(0.98, 0.56, c) - Math.abs(Math.sin(this.phase * Math.PI * 2)) * 0.045 * walkW, root.z);
     const aimPitch = Math.asin(clamp(_a.y, -1, 1));
-    let pitch = this.sit ? 0.28 : 0.05 + c * 0.2 + run * 0.22 * (1 - this.aimT) - aimPitch * 0.25 * this.aimT - this.flinch * 0.5;
+    let pitch = this.sit ? 0.28 : 0.05 + c * 0.2 + run * 0.22 * (1 - this.aimT) - aimPitch * 0.25 * this.aimT - this.flinch * 0.5 + mk * lerp(-0.12, 0.38, ms);
     _tu.copy(UP).multiplyScalar(Math.cos(pitch)).addScaledVector(tf, Math.sin(pitch));
     if (this.flinch) _tu.addScaledVector(tr, this.flinchSide * this.flinch * 0.3).normalize();
     j[J.Ne].copy(j[J.P]).addScaledVector(_tu, 0.52);
@@ -420,13 +507,25 @@ export class Human {
     j[J.HPL].copy(j[J.P]).addScaledVector(right, -0.1).addScaledVector(UP, -0.05);
     j[J.HPR].copy(j[J.P]).addScaledVector(right, 0.1).addScaledVector(UP, -0.05);
     // weapon
-    const at = this.aimT;
-    _s0.copy(j[J.SR]).addScaledVector(tf, lerp(0.16, 0.04, at)).addScaledVector(_tu, lerp(-0.2, -0.03, at)).addScaledVector(tr, lerp(0.0, -0.06, at));
+    const at = this.aimT, gk = GK[this.gunKind] || GK.rifle;
+    _s0.copy(j[J.SR]).addScaledVector(tf, lerp(0.16, 0.04, at)).addScaledVector(_tu, lerp(-0.2, -0.03, at) + gk.up * at).addScaledVector(tr, lerp(0.0, -0.06, at));
     _dir.copy(tf).multiplyScalar(0.85).addScaledVector(UP, -0.45).addScaledVector(tr, -0.32).normalize();
     _dir.lerp(_a, at).normalize();
     _s0.addScaledVector(_dir, -0.06 * this.recoil);
-    j[J.W0].copy(_s0); j[J.W1].copy(_s0).addScaledVector(_dir, 0.85);
-    _wu.copy(UP).addScaledVector(_dir, -_dir.y).normalize();
+    if (mk > 0) { // melee: blend the gun from the carry pose into the wind-up / strike pose
+      const ne = j[J.Ne];
+      if (this.meleeKind === 'knife') { // rifle hangs in the left hand, low; the right hand stabs (see _g1 below)
+        _t1.copy(ne).addScaledVector(tr, -0.12).addScaledVector(UP, -0.5).addScaledVector(tf, 0.12);
+        _hb.copy(tf).multiplyScalar(0.5).addScaledVector(UP, -0.85).addScaledVector(tr, -0.1).normalize();
+      } else { // butt stroke: rifle cocked back over the right shoulder, then the butt is driven forward at face height
+        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.55, ms)).addScaledVector(tr, lerp(0.3, 0.02, ms)).addScaledVector(UP, lerp(-0.1, -0.04, ms));
+        _hb.copy(UP).multiplyScalar(lerp(0.45, 0.2, ms)).addScaledVector(tf, lerp(-0.55, -0.85, ms)).addScaledVector(tr, lerp(0.7, 0.42, ms)).normalize();
+      }
+      _s0.lerp(_t1, mk); _dir.lerp(_hb, mk).normalize();
+    }
+    j[J.W0].copy(_s0); j[J.W1].copy(_s0).addScaledVector(_dir, gk.len);
+    _wu.copy(UP).addScaledVector(_dir, -_dir.y);
+    if (_wu.lengthSq() < 1e-4) _wu.copy(tf).negate(); _wu.normalize();
     this.weaponUp.copy(_wu);
     if (this.grips) {
       _g1.copy(this.grips.R); _g2.copy(this.grips.L);
@@ -435,8 +534,13 @@ export class Human {
       j[J.W0].copy(j[J.Ne]).addScaledVector(tf, 0.18).addScaledVector(tr, -0.1);
       j[J.W1].copy(j[J.W0]).addScaledVector(UP, -0.3).addScaledVector(tr, 0.4);
     } else {
-      _g1.copy(_s0).addScaledVector(_dir, 0.24).addScaledVector(_wu, -0.075);
-      _g2.copy(_s0).addScaledVector(_dir, 0.5).addScaledVector(_wu, -0.045);
+      _g1.copy(_s0).addScaledVector(_dir, gk.g1).addScaledVector(_wu, -0.075);
+      _g2.copy(_s0).addScaledVector(_dir, gk.g2).addScaledVector(_wu, -0.045);
+      if (mk > 0 && this.meleeKind === 'knife') { // right hand: raised back beside the head, then stabs forward-down
+        _g2.lerp(_t1.copy(_s0).addScaledVector(_dir, 0.3), mk);
+        _t1.copy(j[J.Ne]).addScaledVector(tr, lerp(0.3, 0.06, ms)).addScaledVector(UP, lerp(0.16, -0.06, ms)).addScaledVector(tf, lerp(-0.08, 0.58, ms));
+        _g1.lerp(_t1, mk);
+      }
     }
     if (this.sidearm) { // pistol: low ready -> arm(s) extended along the aim (1 = one-handed, 2 = two hands)
       _s0.copy(j[J.SR]).addScaledVector(tr, -0.09 * at).addScaledVector(_tu, lerp(-0.34, -0.03, at)).addScaledVector(tf, lerp(0.2, 0.0, at)).addScaledVector(_a, 0.5 * at);
@@ -568,10 +672,17 @@ export class Human {
     pr('shin', 0, j[J.KL], j[J.AL], bf); pr('shin', 1, j[J.KR], j[J.AR], bf);
     _fw.subVectors(j[J.KL], j[J.AL]); pr('foot', 0, j[J.AL], j[J.TL], _fw);
     _fw.subVectors(j[J.KR], j[J.AR]); pr('foot', 1, j[J.AR], j[J.TR], _fw);
-    if (this.noWeapon || this.weaponGone || this.sidearm) M.rifle.setMatrixAt(s, ZERO);
-    else M.rifle.setMatrixAt(s, segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp));
-    if (M.pistol) M.pistol.setMatrixAt(s, this.sidearm && !this.noWeapon && !this.weaponGone ? segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp) : ZERO);
-    for (const im of Object.values(M)) im.instanceMatrix.needsUpdate = true;
+    // primary gun (by gunKind; a downed man's primary lies beside him at dropM) + sidearm + knife
+    const gp = this.gunKind && M[GPART[this.gunKind]] ? GPART[this.gunKind] : 'rifle';
+    const dropped = this.sidearm && this.dropM, showP = !this.noWeapon && !this.weaponGone && (!this.sidearm || dropped);
+    const gm = showP ? (dropped ? this.dropM : segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp)) : ZERO;
+    for (const g of f.guns) M[g].setMatrixAt(s, g === gp ? gm : ZERO);
+    if (M.pistol) M.pistol.setMatrixAt(s, this.sidearm && !this.noWeapon && (!this.weaponGone || this.dropM) ? segMatrix(j[J.W0], j[J.W1], rag ? UP : this.weaponUp) : ZERO);
+    if (M.knife) {
+      if (this.meleeT >= 0 && this.meleeKind === 'knife' && !rag) { _fw.subVectors(j[J.HR], j[J.ER]).normalize(); _t1.copy(j[J.HR]).addScaledVector(_fw, 0.05); _x.copy(_t1).add(_fw); M.knife.setMatrixAt(s, segMatrix(_t1, _x, this.weaponUp)); }
+      else M.knife.setMatrixAt(s, ZERO);
+    }
+    for (const im of f.list) im.instanceMatrix.needsUpdate = true;
   }
 
   // ---- hit test
@@ -607,9 +718,85 @@ export class Human {
     const mult = part === 'head' ? 4 : part === 'torso' ? 1 : part === 'arm' ? 0.7 : part === 'leg' ? 0.75 : 1;
     this.hp -= dmg * mult;
     this.flinch = 1; this.flinchSide = Math.random() < 0.5 ? -1 : 1;
-    if (this.onHurt) this.onHurt(dmg, dir, part);
-    if (this.hp <= 0) { this.die(dir, joint ?? J.P, opts.force || 5, part); return true; }
+    if (this.onHurt) this.onHurt(dmg, dir, part, opts);
+    if (this.hp <= 0) {
+      // last stand: the AI may decide a lethal hit knocks him down instead (onLethal returns true)
+      if (!this.downed && this.onLethal && this.onLethal(dmg, dir, part, opts)) { this.goDown(dir); return false; }
+      this.die(dir, joint ?? J.P, opts.force || 5, part); return true;
+    }
     return false;
+  }
+
+  // ---- downed ("last stand"): falls on his back away from the shot, propped on the left elbow, pistol in the right hand.
+  // The primary drops beside him (dropM). AI drives h.aim / aimTarget / recoil, h.down.cw (crawl) and h.down.die (>= 0: dying).
+  goDown(dir) {
+    this.downed = true; this.hp = 14; this.meleeT = -1; this.sidearm = 1; this.aimT = 0; this.aimTarget = 0; this.crouchT = 0; this.vel.set(0, 0, 0); this.grips = null;
+    if (dir && Math.abs(dir.x) + Math.abs(dir.z) > 1e-3) _f.set(-dir.x, 0, -dir.z).normalize(); else _f.copy(this.bodyFwd).setY(0).normalize();
+    const yaw = this.downYaw ?? yawOf(_f), r = rightYaw(yaw, _r), gl = (GK[this.gunKind] || GK.rifle).len;
+    fwdYaw(yaw, _f);
+    this.down = { t: 0, yaw, die: -1, from: null, cw: 0, cph: 0, bend: Math.random() };
+    _p.copy(this.pos).addScaledVector(r, 0.45).addScaledVector(_f, -0.05).setY(this.pos.y + 0.06);
+    _n.copy(_f).multiplyScalar(0.95).addScaledVector(r, 0.3).normalize();
+    _t1.copy(_p).addScaledVector(_n, gl);
+    this.dropM = segMatrix(_p, _t1, r, new THREE.Matrix4());
+  }
+  poseDowned(dt) {
+    const d = this.down, j = this.j;
+    for (let i = 0; i < NJ; i++) this.lj[i].copy(j[i]);
+    if (!d.from) d.from = j.map((v) => v.clone());
+    d.t += dt; this.lastDt = dt;
+    this.recoil = damp(this.recoil, 0, 14, dt); this.flinch = damp(this.flinch, 0, 6, dt);
+    const f = fwdYaw(d.yaw, _f), r = rightYaw(d.yaw, _r), b = this.pos;
+    if (d.die >= 0) d.die += dt;
+    const dk = d.die >= 0 ? clamp(d.die / 1.1, 0, 1) : 0, de = dk * dk * (3 - 2 * dk), lv = 1 - de;
+    const aw = (this.aimT = damp(this.aimT, this.aimTarget, 5, dt)) * lv;
+    const th = lerp(0.1, 0.5 + this.flinch * 0.12, lv), ct = Math.cos(th), st = Math.sin(th);
+    const cw = d.cw, cs = Math.sin(d.cph * Math.PI * 2);
+    j[J.P].copy(b).addScaledVector(UP, 0.13);
+    _tu.copy(f).multiplyScalar(-ct).addScaledVector(UP, st);
+    j[J.Ne].copy(j[J.P]).addScaledVector(_tu, 0.52).addScaledVector(r, -0.05 * lv);
+    this.bodyFwd.copy(f).multiplyScalar(st).addScaledVector(UP, ct).addScaledVector(r, 0.32 * lv).normalize();
+    j[J.SL].copy(j[J.Ne]).addScaledVector(r, -0.18).addScaledVector(UP, -0.07 * lv).addScaledVector(_tu, -0.04);
+    j[J.SR].copy(j[J.Ne]).addScaledVector(r, 0.18).addScaledVector(UP, 0.03 * lv).addScaledVector(_tu, -0.04);
+    j[J.HPL].copy(j[J.P]).addScaledVector(r, -0.1); j[J.HPR].copy(j[J.P]).addScaledVector(r, 0.1);
+    // aim: front half only, never into the ground
+    _a.copy(this.aim); if (_a.lengthSq() < 1e-6) _a.copy(f);
+    _a.y = clamp(_a.y, -0.25, 0.6); _a.normalize();
+    const fd = _a.x * f.x + _a.z * f.z; if (fd < 0.3) _a.addScaledVector(f, 0.3 - fd).normalize();
+    // head: looks at the target, lolls back and to the side when he dies
+    _hb.copy(_tu).multiplyScalar(0.5).addScaledVector(_a, 0.6 * lv).addScaledVector(UP, 0.15).addScaledVector(f, -0.7 * de).addScaledVector(r, -0.45 * de).normalize();
+    j[J.Hc].copy(j[J.Ne]).addScaledVector(_hb, 0.17);
+    this.headFwd.copy(_a).setY(_a.y * 0.4).normalize().multiplyScalar(lv).addScaledVector(UP, 0.6 * de).addScaledVector(r, -0.55 * de).normalize();
+    // left arm: forearm flat on the ground, elbow under the shoulder
+    _g2.copy(b).addScaledVector(f, lerp(-0.62, -0.22, lv)).addScaledVector(r, lerp(-0.42, -0.31, lv)).addScaledVector(UP, 0.05);
+    _pole.copy(f).multiplyScalar(-0.6).addScaledVector(UP, -0.5).addScaledVector(r, -0.45);
+    ik2(j[J.SL], _g2, L_UA, L_FA, _pole, j[J.EL], j[J.HL]);
+    // right arm: pistol on the chest -> extended at the target; drops to the ground when he dies
+    _s0.copy(j[J.P]).addScaledVector(f, 0.12).addScaledVector(r, 0.06).addScaledVector(UP, 0.2);
+    _t1.copy(j[J.SR]).addScaledVector(_a, 0.45); _s0.lerp(_t1, aw);
+    _dir.copy(f).multiplyScalar(0.6).addScaledVector(r, -0.5).addScaledVector(UP, 0.2).normalize().lerp(_a, aw).normalize();
+    if (de > 0) { _t1.copy(b).addScaledVector(r, 0.5).addScaledVector(f, -0.05).addScaledVector(UP, 0.05); _s0.lerp(_t1, de); _mv.copy(f).multiplyScalar(0.45).addScaledVector(r, 0.9).normalize(); _dir.lerp(_mv, de).normalize(); }
+    _s0.addScaledVector(_dir, -0.05 * this.recoil);
+    _dir.addScaledVector(UP, 0.3 * this.recoil).normalize();
+    j[J.W0].copy(_s0); j[J.W1].copy(_s0).addScaledVector(_dir, 0.2);
+    _wu.copy(UP).addScaledVector(_dir, -_dir.y).normalize(); this.weaponUp.copy(_wu);
+    _g1.copy(_s0);
+    _pole.copy(r).multiplyScalar(0.7).addScaledVector(UP, -0.6).addScaledVector(f, -0.2);
+    ik2(j[J.SR], _g1, L_UA, L_FA, _pole, j[J.ER], j[J.HR]);
+    // legs: left straight, right knee up; crawling pushes with alternating heels
+    const bl = d.bend * 0.18 * lv + cw * Math.max(0, cs) * 0.3, br = lerp(0.12, 0.3, lv) + cw * Math.max(0, -cs) * 0.25;
+    _fl.copy(b).addScaledVector(f, 0.86 - bl).addScaledVector(r, -0.17).addScaledVector(UP, 0.08);
+    _fr.copy(b).addScaledVector(f, 0.86 - br).addScaledVector(r, 0.21).addScaledVector(UP, 0.09);
+    _pole.copy(UP).addScaledVector(f, 0.35);
+    ik2(j[J.HPL], _fl, L_TH, L_SH, _pole, j[J.KL], j[J.AL]);
+    ik2(j[J.HPR], _fr, L_TH, L_SH, _pole, j[J.KR], j[J.AR]);
+    j[J.TL].copy(j[J.AL]).addScaledVector(UP, 0.16).addScaledVector(r, -0.07).addScaledVector(f, 0.05);
+    j[J.TR].copy(j[J.AR]).addScaledVector(UP, 0.16).addScaledVector(r, 0.07).addScaledVector(f, 0.05);
+    // fall: blend from the last standing pose (accelerating, like a body going over)
+    const k = clamp(d.t / 0.55, 0, 1), e = k * k;
+    if (k < 1) for (let i = 0; i < NJ; i++) j[i].lerpVectors(d.from[i], j[i], e);
+    this.firstPose = false;
+    if (dk >= 1) this.die(null, J.Hc, 0, 'torso');
   }
 
   die(dir, joint = J.P, force = 5, part = 'torso') {
@@ -623,7 +810,7 @@ export class Human {
 
   update(dt) {
     if (this.removed) return;
-    if (this.alive) { if (!this.hidden) this.animate(dt); }
+    if (this.alive) { if (this.downed) this.poseDowned(dt); else if (!this.hidden) this.animate(dt); }
     else if (this.slump) this.poseSlump(dt);
     else if (this.rag) {
       this.deadT += dt;

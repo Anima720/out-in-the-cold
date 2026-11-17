@@ -6,7 +6,7 @@ Q = sys.argv[1] if len(sys.argv) > 1 else "medium"
 SH = len(sys.argv) <= 2 or sys.argv[2] != "noshots"
 
 async def main():
-    P = await Page().open(560, 315, Q)
+    P = await Page().open(480 if Q=="low" else 640, 270 if Q=="low" else 360, Q)
     ev, j = P.ev, P.j
     S = """{ph:__D.cv.ph, t:+__D.cv.rideT?.toFixed(1), y:+(__D.cv&&window.__cy?__cy():0).toFixed(2), P:__P.pos.toArray().map(v=>+v.toFixed(2)), gr:__P.grounded,
       m:__G.mates.map(m=>[m.name[0], m.p5, m.h.pos.toArray().map(v=>+v.toFixed(2))]), v:+(__D.cv.v||0).toFixed(2), en:__G.enemies.filter(e=>e.h.alive).length, cur:__D.cur&&__D.cur.id, err:window.__errors.length}"""

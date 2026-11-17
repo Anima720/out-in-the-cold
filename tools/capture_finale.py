@@ -3,8 +3,8 @@
 import asyncio, os, pathlib, sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
-os.makedirs("shots", exist_ok=True)
+from runtime import CHROME, assert_clean
+os.makedirs(ROOT / "shots", exist_ok=True)
 from playwright.async_api import async_playwright
 ONLY = sys.argv[1] if len(sys.argv) > 1 else ''
 async def main():
@@ -22,13 +22,15 @@ async def main():
         async def shot(n):
             await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
             await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
-            await pg.screenshot(path=f"shots/f_{n}.png", timeout=200000)
+            if ONLY != 'a': await ev("window.__rafHold=true")
+            await pg.screenshot(path=str(ROOT / f"shots/f_{n}.png"), timeout=200000)
             if ONLY != 'a': await ev("window.__rafHold=true")
         async def st(tag):
             print(tag, await ev("JSON.stringify({ph:__fin.ph, t:+__fin.t.toFixed(2), st:__G.state, ck:__D.ck, ts:__G.timeScale, P:__P.pos.toArray().map(v=>+v.toFixed(2)), alive:__P.alive, sub:__D.cur&&__D.cur.id, err:window.__errors.slice(0,3)})"), flush=True)
         async def until(cond, step=0.1, maxt=40):
             t = 0
             while t < maxt and not await ev(cond): await ev(f"__sim({step})"); t += step
+            assert await ev(cond), f"Timed out after {maxt}s waiting for {cond}"
         if ONLY in ('', 'a'):
             await ev("__begin(6)"); await ev("__sim(1.5)")
             await ev("__P.pos.set(2.6,0,-6.1); __P.yaw=-Math.PI/2+0.25; __P.pitch=-0.3"); await ev("__sim(0.1)"); await shot("01_truck")
@@ -41,7 +43,7 @@ async def main():
             await ev("__sim(3.0)"); await shot("06_drag3")
             await until("__fin.ph==='wake'", 0.5, 12); await st("wake0")
             if ONLY == 'a':
-                print("\n".join(logs[-10:])); await b.close(); return
+                print("\n".join(logs[-10:])); await assert_clean(pg, logs); await b.close(); return
         else:
             await ev("__begin(7)")
         await ev("__sim(4.5)"); await st("wake"); await shot("07_wake")
@@ -66,5 +68,5 @@ async def main():
         await ev("__sim(5.2)"); await shot("17_mono2")
         await until("__G.state==='cine'", 0.25, 20); await st("epi")
         print("\n".join(logs[-10:]))
-        await b.close()
+        await assert_clean(pg, logs); await b.close()
 asyncio.run(main())

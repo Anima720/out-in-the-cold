@@ -5,69 +5,10 @@ import { play } from './audio.js';
 import { T, GUN_PIVOT, DECK, ORE, carAt, COVER, deckY } from './train.js';
 import { throwNade, lobAt, NADES } from './grenade.js';
 
-// ---------- attack tokens: limits how many enemies shoot at the player at once
-export const TOK = { n: 0, last: -9 };
-export function requestToken(e) {
-  if (e.hasTok) return true;
-  const alive = G.enemies.filter((x) => x.h.alive).length + G.sleds.filter((s) => s.gunner && s.gunner.alive).length;
-  const max = 2;
-  if (TOK.n >= max || G.t - TOK.last < 0.55) return false;
-  TOK.n++; TOK.last = G.t; e.hasTok = true; return true;
-}
-export function releaseToken(e) { if (e.hasTok) { e.hasTok = false; TOK.n = Math.max(0, TOK.n - 1); } }
+import { TOK, requestToken, releaseToken, shootAtPlayer, shootAt, updateCombat, setLoadout, rollLoadout, enemyFire, enemyFireAt, aimTime, burstOf, tryDown, downedUpdate, enemyMelee, mateMelee, nadeOk, callout, glint, AI } from './combat.js';
+export { TOK, requestToken, releaseToken, shootAtPlayer, shootAt };
 
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _t = new THREE.Vector3(), _e = new THREE.Vector3();
-
-// enemy shot at the player: hit chance model + visible tracer / near-miss
-export function shootAtPlayer(muzzle, o = {}) {
-  const P = G.player;
-  const dist = muzzle.distanceTo(P.eye);
-  let p = clamp(0.4 - dist * 0.01, 0.06, 0.34) * (o.acc || 1);
-  if (P.moving) p *= 0.75; if (P.crouched) p *= 0.75; if (P.sprinting) p *= 0.6;
-  const visHead = los(muzzle, P.eye), visChest = los(muzzle, P.chest);
-  if (!visHead && !visChest) p = 0; else if (!visChest) p *= 0.5;
-  const hitP = Math.random() < p;
-  if (hitP) _t.copy(visChest ? P.chest : P.eye).add(_e.set(rr(-0.15, 0.15), rr(-0.2, 0.2), rr(-0.15, 0.15)));
-  else _t.copy(P.eye).add(_e.set(rr(-1, 1), rr(-0.8, 1.0), rr(-1, 1)).normalize().multiplyScalar(rr(0.5, 1.6)));
-  _d.subVectors(_t, muzzle).normalize();
-  let end;
-  if (hitP) {
-    end = _t.clone();
-    P.damage(o.dmg || 11, muzzle);
-  } else {
-    const h = raycast(muzzle, _d, 300, null, { noCorpse: true });
-    end = h ? h.point.clone() : _o.copy(muzzle).addScaledVector(_d, 300).clone();
-    if (h) { G.fx.impact(h.point, h.normal, h.mat); if (h.box && h.point.distanceTo(P.eye) < 12) G.fx.decal(h.point, h.normal, 0.07); if (h.point.distanceTo(P.eye) < 6) play(h.mat === 'metal' ? (Math.random() < 0.3 ? 'ricochet' : 'metal') : 'soft', { pos: h.point, vol: 0.6, ref: 3 }); }
-    // near miss whiz
-    const toEye = _e.subVectors(P.eye, muzzle); const along = toEye.dot(_d);
-    if (along > 0 && along < muzzle.distanceTo(end) + 1) {
-      const closest = toEye.addScaledVector(_d, -along).length();
-      if (closest < 1.8) { play(Math.random() < 0.5 ? 'whiz' : 'crack', { pos: P.eye.clone().addScaledVector(_d, 0.5), vol: 0.5, ref: 2, rev: 0 }); }
-    }
-  }
-  if (Math.random() < (o.tracer ?? 0.45)) G.fx.tracer(muzzle, end, { start: 1, width: o.width || 0.025, speed: 300 });
-  G.fx.muzzle(muzzle, _d, o.flash || 1);
-  G.fx.flash(muzzle, 0xffb060, 10, 8, 0.05);
-  play(o.snd || 'ak_far', { pos: muzzle, vol: o.vol ?? 0.8, ref: 6, rev: 0.5 });
-}
-
-// NPC shot at an arbitrary target entity (teammates -> enemies, enemies -> teammates)
-export function shootAt(shooter, muzzle, target, o = {}) {
-  _d.subVectors(target, muzzle).normalize();
-  const sp = o.spread ?? 0.03;
-  _d.x += rr(-sp, sp); _d.y += rr(-sp, sp); _d.z += rr(-sp, sp); _d.normalize();
-  const h = raycast(muzzle, _d, 300, shooter, { factionSkip: o.skip, noCorpse: true });
-  const end = h ? h.point.clone() : muzzle.clone().addScaledVector(_d, 300);
-  if (h) {
-    if (h.ent && h.ent.hurt && o.dmg) {
-      if (h.ent.faction === 'us' || !(o.hitChance !== undefined && Math.random() > o.hitChance)) h.ent.hurt(o.dmg, _d, h.part, h.joint, { force: 5 });
-      G.fx.impact(h.point, h.normal, h.ent.faction ? 'flesh' : 'metal');
-    } else G.fx.impact(h.point, h.normal, h.mat);
-  }
-  if (Math.random() < (o.tracer ?? 0.35)) G.fx.tracer(muzzle, end, { start: 1, speed: 300 });
-  G.fx.muzzle(muzzle, _d, 1);
-  play(o.snd || 'ak_far', { pos: muzzle, vol: o.vol ?? 0.7, ref: 6, rev: 0.5 });
-}
 
 // ---------- train enemies ----------
 export const SPAWNS = [
@@ -89,16 +30,21 @@ export class Enemy {
     this.h.yaw = Math.PI; // face +z (toward the rear)
     const sup = supportAt(x, z, 0.2, 3, 3);
     this.h.pos.set(x, sup.y, z);
+    if (kind !== 'gunner') setLoadout(this, kind === 'rusher' ? pick(['saiga', 'smg']) : rollLoadout(2));
+    this.canDown = kind !== 'gunner'; this.hitDir = new THREE.Vector3(); this.stagT = 0;
+    this.h.onLethal = (dmg, dir, part, op) => tryDown(this, dir, part, op);
     this.h.onDeath = (part) => {
-      releaseToken(this);
+      releaseToken(this); this.downed = false;
       if (Math.random() < 0.5) play('thud', { pos: this.h.pos, vol: 0.5, ref: 4 });
       if (G.onEnemyKilled) G.onEnemyKilled(this);
     };
-    this.h.onHurt = () => {
+    this.h.onHurt = (dmg, dir) => {
+      if (this.downed) return;
       if (this.state === 'fire' || this.state === 'aim') { this.state = 'cover'; this.t = rr(0.6, 1.2); releaseToken(this); }
       this.wake();
       if (this.h.hp > 0 && G.bark && Math.random() < 0.6) G.bark('RU_05', this.h.pos, true);
       if (this.h.hp > 0 && Math.random() < 0.5) this.wantMove = true;
+      if (this.h.hp > 0 && this.kind !== 'gunner') { this.stagT = 0.3; if (dir) this.hitDir.set(dir.x, 0, dir.z); }
     };
     if (kind === 'gunner') this.updateGunnerPos();
     G.enemies.push(this);
@@ -118,6 +64,7 @@ export class Enemy {
     const h = this.h; if (!h.alive) return;
     const P = G.player;
     h.vel.set(0, 0, 0); h.onGround = false;
+    if (this.downed) return downedUpdate(this, dt);
     const eye = _o.copy(h.j[J.Hc]);
     const toP = _t.subVectors(P.eye, eye); const dist = toP.length();
     if (!this.active) {
@@ -163,11 +110,12 @@ export class Enemy {
     }
     h.yaw += clamp(angDiff(h.yaw, wantYaw), -4 * dt, 4 * dt);
     this.t -= dt;
-    const close = dist < 5;
+    const close = dist < 5, w = this.w;
     // visibility memory (for grenade decisions)
     this.losT = (this.losT || 0) - dt;
     if (this.losT <= 0) { this.losT = 0.25; this.seen = los(_e.copy(eye).setY(eye.y + 0.4), P.eye); }
     this.hiddenT = this.seen ? 0 : (this.hiddenT || 0) + dt;
+    if (enemyMelee(this, dt)) return;
     // scatter away from a player grenade
     if (this.flee && this.flee.t > 0) {
       this.flee.t -= dt;
@@ -182,6 +130,15 @@ export class Enemy {
       this.t = Math.max(this.t, 0.4);
       return;
     }
+    // hit: flinch and stagger half a step back along the shot (same car, centre-lane rules)
+    if (this.stagT > 0) {
+      this.stagT -= dt; h.crouchT = 0.25; h.aimTarget = 0.2;
+      const car = carAt(h.pos.z);
+      let nz = h.pos.z + Math.sign(this.hitDir.z || 1) * 0.9 * dt;
+      if (car) nz = clamp(nz, car.z0 + 0.5, car.z1 - 0.5);
+      if (Math.abs(supportAt(h.pos.x, nz, 0.2, h.pos.y, 0.4).y - h.pos.y) < 0.2) { h.vel.z = (nz - h.pos.z) / dt; h.pos.z = nz; }
+      return;
+    }
     if (this.state === 'throw') {
       h.crouchT = 0; h.aimTarget = 0;
       if (this.t <= 0) {
@@ -189,54 +146,72 @@ export class Enemy {
         const tgt = _t.copy(P.pos).add(_o.set(rr(-1.2, 1.2), 0.1, rr(-1.2, 1.2)));
         const T2 = clamp(dist / 13, 0.9, 1.6);
         throwNade(from, lobAt(from, tgt, T2), 'enemy');
-        G.lastEnemyNade = G.t;
+        G.lastEnemyNade = G.t; AI.stats.nades++;
         this.state = 'cover'; this.t = rr(1.5, 2.5);
       }
       return;
     }
-    // occasionally relocate to another cover spot on the same car
+    // occasionally relocate to another cover spot on the same car (close-quarters guns pick the spot nearest the player)
     this.relT = (this.relT ?? rr(7, 13)) - dt;
     if (this.kind === 'c' && this.state === 'cover' && (this.relT <= 0 || this.wantMove)) {
-      this.relT = rr(8, 14); this.wantMove = false;
+      this.relT = rr(8, 14) * w.hold; this.wantMove = false;
       const car = carAt(h.pos.z);
       const opts = COVER.enemy.filter((c) => c.car === car && Math.hypot(c.x - h.pos.x, c.z - h.pos.z) > 1 && !G.enemies.some((o) => o !== this && o.h.alive && Math.hypot(o.h.pos.x - c.x, o.h.pos.z - c.z) < 1));
-      if (opts.length) { this.dest = pick(opts); this.state = 'move'; releaseToken(this); }
+      if (opts.length) { this.dest = w.pref > 0.5 ? opts.reduce((a, c) => (Math.abs(c.z - P.pos.z) < Math.abs(a.z - P.pos.z) ? c : a)) : pick(opts); this.state = 'move'; releaseToken(this); }
     }
     switch (this.state) {
       case 'move':
         h.crouchT = 0.35; h.aimTarget = 0.3;
-        if (laneMove(h, this.dest.x, this.dest.z, 3.4, dt)) { this.state = 'cover'; this.t = rr(0.4, 1.0); }
+        if (laneMove(h, this.dest.x, this.dest.z, 3.4 * w.spd, dt)) { this.state = 'cover'; this.t = rr(0.4, 1.0); }
         break;
       case 'cover':
         h.crouchT = this.kind === 'rusher' ? 0 : 1; h.aimTarget = 0.3;
         if (this.kind === 'rusher' && P.pos.z < -20) { // charge toward the player along the center lane
-          const tz = P.pos.z + 4;
+          const tz = P.pos.z + (close ? 1.2 : 4);
           const dz = clamp(tz - h.pos.z, -3.5, 3.5);
-          if (Math.abs(tz - h.pos.z) > 1.5) { h.vel.z = dz; h.pos.z += dz * dt; h.pos.x = damp(h.pos.x, 0, 3, dt); const s = supportAt(h.pos.x, h.pos.z, 0.2, h.pos.y, 0.6); h.pos.y = s.y; }
+          if (Math.abs(tz - h.pos.z) > 1.0) { h.vel.z = dz; h.pos.z += dz * dt; h.pos.x = damp(h.pos.x, 0, 3, dt); const s = supportAt(h.pos.x, h.pos.z, 0.2, h.pos.y, 0.6); h.pos.y = s.y; }
         }
         if (this.t <= 0) {
-          if (this.hiddenT > 3 && dist > 7 && dist < 26 && G.t - (G.lastEnemyNade ?? -99) > 11 && !NADES.some((n) => n.owner === 'enemy') && Math.random() < 0.55) {
+          if (nadeOk(this, dist) && Math.random() < 0.55) {
             this.state = 'throw'; this.t = 0.45; this.hiddenT = 0;
-          } else if ((close || this.seen) && requestToken(this)) { this.state = 'aim'; this.t = close ? 0.15 : rr(0.35, 0.55); }
+          } else if (this.seen && (close || requestToken(this))) { this.state = 'aim'; this.t = close ? 0.15 : aimTime(this); }
+          else if (!this.seen && Math.random() < 0.3 && (this.mt = trainMate(eye))) { this.state = 'aimM'; this.t = 0.35; }
           else this.t = rr(0.3, 0.7);
         }
         break;
       case 'aim':
         h.crouchT = 0; h.aimTarget = 1;
-        if (this.t <= 0) { this.state = 'fire'; this.burst = 3 + (Math.random() * 4 | 0); this.t = 0; }
+        if (w.gk === 'dmr') glint(this, dist);
+        if (this.t <= 0) { this.state = 'fire'; this.burst = burstOf(this); this.t = 0; }
         break;
       case 'fire':
         h.crouchT = 0; h.aimTarget = 1;
         if (this.t <= 0) {
-          this.t = 0.12; this.burst--;
+          this.t = w.rate * rr(0.9, 1.15); this.burst--;
           h.recoil = 1;
-          const mz = _e.copy(h.j[J.W1]);
-          shootAtPlayer(mz, { dmg: 6 + (Math.random() * 3 | 0) });
-          if (this.burst <= 0) { this.state = 'cover'; this.t = close ? rr(0.3, 0.6) : rr(1.2, 2.6); releaseToken(this); if (G.bark && Math.random() < 0.18) G.bark('RU_02', this.h.pos); }
+          enemyFire(this, _e.copy(h.j[J.W1]), dist);
+          if (this.burst <= 0) { this.state = 'cover'; this.t = (close ? rr(0.3, 0.6) : rr(1.2, 2.6)) * w.pause; releaseToken(this); if (G.bark && Math.random() < 0.18) G.bark('RU_02', this.h.pos); }
         }
         break;
+      case 'aimM': case 'fireM': { // pin down a squad mate the player can't see
+        const m = this.mt;
+        if (!m || !m.h.alive || m.h.hidden) { this.state = 'cover'; this.t = 0.5; break; }
+        h.crouchT = 0; h.aimTarget = 1;
+        h.aim.subVectors(m.h.j[J.Ne], eye).normalize(); h.yaw += clamp(angDiff(h.yaw, yawOf(h.aim)), -5 * dt, 5 * dt);
+        if (this.state === 'aimM') { if (this.t <= 0) { this.state = 'fireM'; this.burst = burstOf(this); this.t = 0; } break; }
+        if (this.t <= 0) {
+          this.t = w.rate * rr(0.9, 1.15); this.burst--; h.recoil = 1;
+          enemyFireAt(this, _e.copy(h.j[J.W1]), _d.copy(m.h.j[J.Ne]).add(_o.set(rr(-0.6, 0.6), rr(-0.3, 0.6), rr(-0.6, 0.6))));
+          if (this.burst <= 0) { this.state = 'cover'; this.t = rr(1.4, 2.6); }
+        }
+        break;
+      }
     }
   }
+}
+function trainMate(eye) {
+  for (const m of G.mates) { if (!m.h.alive || m.h.hidden || m.arc) continue; if (m.h.pos.distanceTo(eye) < 40 && los(eye, m.h.j[J.Ne])) return m; }
+  return null;
 }
 
 export function spawnTrainEnemies(minZ = -999) {
@@ -280,22 +255,36 @@ export class Mate {
   jumpTo(x, y, z, dur = 0.55, h = 0.8) {
     this.arc = { from: this.h.pos.clone(), to: new THREE.Vector3(x, y, z), t: 0, dur, h };
   }
+  // best visible target: exposed shooters first, then the nearest; downed men last (finish them when nothing else is up)
   pickTarget(fromEye) {
+    if (!fromEye) { // cached for a few frames (line-of-sight tests are the expensive part)
+      this.ptT = (this.ptT || 0) - (G.dt || 0.016);
+      if (this.ptT > 0 && (!this.tgtE || this.tgtE.h.alive)) return this.ptC;
+      this.ptT = 0.2;
+    }
     const eye = fromEye || this.h.j[J.Hc];
-    let best = null, bd = 60;
+    let best = null, bd = 60, be = null;
     for (const e of G.enemies) {
       if (!e.h.alive || !e.active) continue;
-      const d = e.h.j[J.P].distanceTo(eye);
-      if (d < bd && los(eye, e.h.j[J.Ne])) { bd = d; best = e.h.j[J.Ne]; }
+      const d = e.h.j[J.P].distanceTo(eye) + (e.downed ? 14 : 0) - (e.state === 'fire' || e.state === 'aim' || e.state === 'supp' ? 6 : 0) - (e === this.tgtE ? 8 : 0); // stay on one man until he drops
+      if (d < bd && los(eye, e.h.j[J.Ne])) { bd = d; best = e.h.j[J.Ne]; be = e; }
     }
     for (const s of G.sleds) {
       if (s.dead) continue;
       const tgt = s.gunner && s.gunner.alive ? s.gunner : s.driver;
       if (!tgt || !tgt.alive) continue;
       const d = tgt.j[J.P].distanceTo(eye);
-      if (d < bd + 10 && los(eye, tgt.j[J.Ne])) { bd = d; best = tgt.j[J.Ne]; }
+      if (d < bd + 10 && los(eye, tgt.j[J.Ne])) { bd = d; best = tgt.j[J.Ne]; be = null; }
     }
     if (!best && G.hind && G.hind.visible && G.hind.pos.distanceTo(eye) < 220) best = G.hind.pos;
+    if (be) { // callouts about what we see
+      if (AI.quietT > 12 || !this.engaged) { this.engaged = true; if (AI.quietT > 12) callout(this, 'MC_CONTACT'); }
+      if (be.firedMG && !AI.seen.mg) { AI.seen.mg = 1; callout(this, 'MC_MG'); }
+      else if (be.w && be.w.gk === 'dmr' && be.state === 'aim' && !AI.seen.dmr) { AI.seen.dmr = 1; callout(this, 'MC_SNIPER'); }
+      else if (be.w && be.w.gk === 'shotgun' && be.state === 'rush' && !AI.seen.sg) { AI.seen.sg = 1; callout(this, 'MC_SHOTGUN'); }
+    }
+    if (!fromEye) { this.tgtE = be; this.ptC = best; }
+    if (best) this.lastTgtT = G.t;
     return best;
   }
   fireAt(tgt, dt) {
@@ -303,14 +292,19 @@ export class Mate {
     h.aim.subVectors(tgt, h.j[J.Hc]).normalize();
     h.yaw += clamp(angDiff(h.yaw, yawOf(h.aim)), -5 * dt, 5 * dt);
     h.aimTarget = 1;
+    if (this.reloadT > 0) { this.reloadT -= dt; h.aimTarget = 0.3; return false; }
     this.fireT -= dt;
     if (this.fireT <= 0) {
       if (this.burst <= 0) this.burst = 3 + (Math.random() * 3 | 0);
-      this.burst--; this.fireT = this.burst > 0 ? 0.11 : rr(0.9, 2.0);
+      this.burst--; this.fireT = this.burst > 0 ? 0.11 : rr(0.7, 1.6);
       h.recoil = 1;
       const isHind = G.hind && tgt === G.hind.pos;
-      shootAt(h, _e.copy(h.j[J.W1]), isHind ? _t.copy(tgt).add(_o.set(rr(-2, 2), rr(-1, 1), rr(-2, 2))) : tgt, { dmg: isHind ? 0 : 30, hitChance: 0.28, skip: 'us', snd: 'm4', vol: 0.75, spread: 0.02 });
+      // aim error ~0.3 m at the target whatever the range (a trained shooter), capped up close
+      const sp = clamp(0.3 / Math.max(1, tgt.distanceTo(h.j[J.W1])), 0.005, 0.02);
+      shootAt(h, _e.copy(h.j[J.W1]), isHind ? _t.copy(tgt).add(_o.set(rr(-2, 2), rr(-1, 1), rr(-2, 2))) : _t.set(tgt.x, tgt.y - 0.12, tgt.z), { dmg: isHind ? 0 : 34, hitChance: 0.6, skip: 'us', snd: G.weaponDef?.('m4')?.far ?? 'm4', vol: 0.75, spread: sp, by: isHind ? null : this });
       if (isHind && Math.random() < 0.4) G.hind.hurt(4, null);
+      this.mag = (this.mag ?? 30) - 1;
+      if (this.mag <= 0) { this.mag = 30; this.burst = 0; this.reloadT = rr(1.8, 2.4); play('magout', { pos: h.pos, vol: 0.4, ref: 3 }); if (Math.random() < 0.35) callout(this, 'MC_RELOAD'); }
       return this.burst <= 0;
     }
     return false;
@@ -327,6 +321,7 @@ export class Mate {
       return;
     }
     if (this.mode === 'run' || this.mode === 'ground' || this.mode === 'jump') return this.groundUpdate(dt);
+    if ((this.mode === 'follow' || this.mode === 'hold') && mateMelee(this, dt)) return;
     if (this.mode === 'cab') { // Grinch heading for the cab: vault the sandbag ring, then the door
       if (h.pos.z > -44.4) laneMove(h, 0, -44.6, 5, dt);
       else if (h.pos.z > -49) { this.jumpTo(0.95, DECK, -49.3, 0.55, 0.75); this.onArcDone = () => this.target.set(0.85, 0, -50.7); }
@@ -399,6 +394,7 @@ export class Mate {
 }
 
 export function updateAI(dt) {
+  updateCombat(dt);
   for (const e of G.enemies) e.update(dt);
   for (const m of G.mates) m.update(dt);
 }

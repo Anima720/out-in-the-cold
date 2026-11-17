@@ -3,7 +3,7 @@ import asyncio, os, pathlib, json
 from playwright.async_api import async_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
+from runtime import CHROME, assert_clean
 ARGS = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required"]
 SHOTS = ROOT / "shots"; SHOTS.mkdir(exist_ok=True)
 
@@ -30,6 +30,7 @@ class Page:
         pg = self.pg
         await pg.evaluate("window.__rafHold=false; window.__freeze=true; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
         await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=300, timeout=600000)
+        await pg.evaluate("window.__rafHold=true")
         await pg.screenshot(path=str(SHOTS / name), timeout=200000)
         await pg.evaluate("window.__rafHold=true; window.__freeze=false")
         print("shot", SHOTS / name, flush=True)
@@ -37,4 +38,5 @@ class Page:
         return await self.pg.evaluate("window.__errors.slice(0,5)")
     async def close(self):
         if self.logs: print("\n".join(self.logs[-10:]))
+        await assert_clean(self.pg, self.logs)
         await self.b.close(); await self.p.stop()

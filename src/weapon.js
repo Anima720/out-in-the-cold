@@ -476,6 +476,7 @@ function equip(id, instant) {
 }
 export function giveIgla() { WP.hasIgla = true; WP.launch = 'igla'; WP.st.igla = { ammo: 1, reserve: 2 }; switchTo('igla'); }
 export const WDEF = DEF;
+G.weaponDef = (key) => DEF[key];
 // pick up / swap a weapon: long guns replace the primary slot (with their attachments), launchers the third slot
 export function giveWeapon(id, ammo, reserve, att) {
   const D = DEF[id]; if (!D) return;
