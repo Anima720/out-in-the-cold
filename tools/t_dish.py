@@ -12,7 +12,7 @@ async def main():
         await ev("__begin(5); __sim(1)")
         print(await ev("(()=>{const S=__p5().S,v=new __THREE.Vector3();S.dish.yaw.getWorldPosition(v);return JSON.stringify({yaw:v.toArray(),R:S.root.position.toArray()})})()"))
         await ev("""window.__view=(ax,ay,az,tx,ty,tz)=>{const P=__P;P.pos.set(ax,ay,az);const dx=tx-ax,dy=ty-(ay+1.6),dz=tz-az;P.yaw=Math.atan2(-dx,-dz);P.pitch=Math.atan2(dy,Math.hypot(dx,dz));__sim(0.2);};void 0""")
-        views=[('yard',-1,0,16,-3.5,6.5,-0.5),('roof',-0.8,4.3,2.2,-3.5,5.6,-0.5),('roof2',-6.5,4.3,3.2,-3.5,5.6,-0.5),('low',-12,0,1,-3.5,5.0,-0.5),('side',-3.5,4.3,4.0,-3.5,5.6,-0.5)]
+        views=[('yard',-1,0,16,-3.5,6.5,-0.5),('roof2',-6.5,4.3,3.2,-3.5,5.6,-0.5),('low',-12,0,1,-3.5,5.0,-0.5),('side',-3.5,4.3,4.0,-3.5,5.6,-0.5)]
         for n,*v in views:
             await ev(f"__view({','.join(map(str,v))})"); await shot(pg,f'dish_{n}.png')
         await ev("__p5().S.dish.off=1.2; __sim(0.1)"); await ev("__view(-0.8,4.3,2.2,-3.5,5.6,-0.5)"); await shot(pg,'dish_hit.png')

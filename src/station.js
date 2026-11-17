@@ -292,7 +292,6 @@ export function buildStation() {
   }
   // power poles leading in from the south
   for (let i = 0; i < 6; i++) { const z = 30 + i * 22, x = -6 + Math.sin(i) * 2; B.cyl(x, ground5(x, z) + 4, z, 0.12, 0.14, 8, 'wood', 0x5a4632); B.boxC(x, ground5(x, z) + 7.4, z, 1.6, 0.1, 0.1, 'wood', 0x5a4632); }
-  B.build(mats, root);
   // --- trees (instanced)
   const rng = mulberry32(55), mtx = [[], []];
   for (let i = 0; i < 420; i++) {
@@ -328,6 +327,7 @@ export function buildStation() {
   B.boxC(-3.0, R + 0.75, -0.5, 0.05, 0.62, 0.4, 'steel', 0x55585b); B.boxC(-2.97, R + 0.75, -0.38, 0.03, 0.06, 0.05, 'dark', DK); // access hatch
   seg(B, V3(-3.06, R + 0.15, -0.2), V3(-3.1, R + 2.02, -0.28), 0.022, 'dark', DK);                        // cable up the tower
   seg(B, V3(-3.06, R + 0.04, -0.15), V3(-2.1, R + 0.04, 0.75), 0.025, 'dark', DK); seg(B, V3(-2.1, R + 0.04, 0.75), V3(-1.15, R + 0.04, 1.45), 0.025, 'dark', DK); // to the panel
+  B.build(mats, root);                                                                                      // (static dish pedestal parts were added after the main build before: the tower and plate were never drawn)
   const yb = new Builder();
   yb.cyl(0, 0, 0, 0.62, 0.62, 0.16, 'steel', 0x6f7375, 0, 0, 0, 20);                                    // turntable + gear ring
   yb.cyl(0, -0.05, 0, 0.67, 0.67, 0.05, 'dark', DK, 0, 0, 0, 28);
@@ -350,7 +350,7 @@ export function buildStation() {
   const FZ = DZ - FOC;                                                                                     // focus
   db.cyl(0, 0, FZ - 0.05, 0.07, 0.21, 0.36, 'steel', 0x5f6366, -Math.PI / 2, 0, 0, 12);                  // feed horn, mouth toward the dish
   db.boxC(0, 0, FZ - 0.32, 0.17, 0.17, 0.24, 'dark', DK);                                                // LNB
-  for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2, r = RR * 0.97;                // quadripod
+  for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2, r = RR;                // quadripod
     seg(db, V3(Math.cos(a) * r, Math.sin(a) * r, zAt(r)), V3(Math.cos(a) * 0.1, Math.sin(a) * 0.1, FZ - 0.2), 0.026, 'steel', 0x8b8f90); }
   { const a = Math.PI * 1.25, r = RR * 0.97; seg(db, V3(Math.cos(a) * 0.14, Math.sin(a) * 0.14, FZ - 0.3), V3(Math.cos(a) * r, Math.sin(a) * r - 0.05, zAt(r) - 0.03), 0.013, 'dark', DK); // feed cable down a strut,
     seg(db, V3(Math.cos(a) * r, Math.sin(a) * r - 0.05, zAt(r) + 0.1), V3(Math.cos(a) * 0.4, Math.sin(a) * 0.4, DZ + 0.15), 0.013, 'dark', DK); } // round the rim to the hub
