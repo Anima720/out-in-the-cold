@@ -94,9 +94,14 @@ async def main():
             await out("audio", """(()=>{ const A=window.__A; if(!A.on) return {on:false};
               const pk=(b)=>{ let m=0,r=0; const d=b.getChannelData(0); for(let i=0;i<d.length;i++){ m=Math.max(m,Math.abs(d[i])); r+=d[i]*d[i]; } return [+m.toFixed(2), +Math.sqrt(r/d.length).toFixed(3), +b.duration.toFixed(2)]; };
               const r={old_ak:pk(A.b.ak), m4:pk(A.gun.m4.close[0]), pkm:pk(A.gun.pkm.close[1]), far:pk(A.far.rifle[0]), tailOpen:pk(A.tail.open[0]), tailTunnel:pk(A.tail.tunnel[0]), step:pk(A.steps.snow[0]), mech:pk(A.mech.ar[0])};
-              window.__wpn.giveWeapon('pkm'); __sim(0.8); let vmax=0; __input.lmb=true; for(let i=0;i<180;i++){ __sim(1/60); vmax=Math.max(vmax,A.voices); } __input.lmb=false; r.voicesPKM=vmax; r.space=A.space;
+              window.__wpn.giveWeapon('pkm'); __sim(0.8); r.space=A.space;
               A.nSteps=0; __P.pos.set(-0.5,0,-2.5); __P.yaw=0; __input.down.add('KeyW'); __sim(3); __input.down.delete('KeyW'); r.ownSteps=A.nSteps%1000;
               r.err=window.__errors.slice(0,3); return r; })()""")
+            # sustained fire paced in real time (the audio clock only runs in real time)
+            await ev("""new Promise(res=>{ const A=window.__A; let vmax=0, n=0, t0=performance.now(), last=t0; __input.lmb=true; const s0=__WP.shotN;
+              const iv=setInterval(()=>{ const now=performance.now(); __sim(Math.min(0.05,(now-last)/1000)); last=now; vmax=Math.max(vmax,A.voices);
+                if(now-t0>3000){ clearInterval(iv); __input.lmb=false; window.__vres={vmax, shots:__WP.shotN-s0, ctx:A.ctx.state}; res(); } }, 16); })""")
+            await out("voicesRealtime", "window.__vres")
             await out("f11", """(()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{code:'F11',key:'F11',bubbles:true,cancelable:true})); return {fsT:!!__input.fsT, paused:__G.paused, lockFailed:__input.lockFailed}; })()""")
         if MODE == "npc":
             await ev("__begin(4)"); await ev("__sim(2.0)")

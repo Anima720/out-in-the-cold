@@ -265,8 +265,9 @@ function buildGunBank() {
 function pickV(list, key) { let i = (Math.random() * list.length) | 0; if (list.length > 1 && i === A.lastV[key]) i = (i + 1) % list.length; A.lastV[key] = i; return list[i]; }
 function voice(buf, rate, v, dest, when) {
   const s = A.ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate;
-  const g = gain(v, dest); s.connect(g); A.voices++; s.onended = () => { A.voices--; }; s.start(when); return g;
+  const g = gain(v, dest); s.connect(g); A.voices++; s.onended = () => { A.voices--; }; s.start(when); g.src = s; return g;
 }
+const CLOSE_G = 0.6; // the v7 transients are denser than the old one-shot buffers: keep overall loudness where it was
 // o.self: the player's own gun (centred, with mechanics); otherwise o.pos (or a far-away default) gets distance treatment
 export function gunShot(cls, o = {}) {
   if (!A.on || !A.gun) return null;
@@ -282,11 +283,11 @@ export function gunShot(cls, o = {}) {
   out.connect(A.sfx);
   if (o.rev !== 0) out.connect(gain(self ? 0.07 : (o.rev ?? 0.3) * 0.6, A.revSend));
   if (self) {
-    voice(pickV(B.close, cls), rate, vol, pk, t0);
+    voice(pickV(B.close, cls), rate, vol * CLOSE_G, pk, t0);
     if (C.mech) voice(pickV(A.mech[C.mech], 'm' + C.mech), rate * J(1, 0.04), vol * 0.22, A.sfx, t0 + 0.006 + Math.random() * 0.008);
   } else {
     const near = clamp(1 - d / 45, 0, 1);
-    if (near > 0.05) voice(pickV(B.close, cls), rate, vol * near * near * 0.9, pk, t0);
+    if (near > 0.05) voice(pickV(B.close, cls), rate, vol * near * near * CLOSE_G, pk, t0);
     voice(pickV(A.far[C.far], 'f' + C.far), rate, vol * clamp(0.25 + d / 35, 0.25, 1), pk, t0);
   }
   // reflections of the listener's space (diffuse: not panned)
@@ -295,7 +296,10 @@ export function gunShot(cls, o = {}) {
     let dst = A.sfx;
     if (!self) { const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(lpf * 1.4, 9000); lp.connect(A.sfx); dst = lp; }
     const g = voice(pickV(A.tail[sp], 't' + sp), C.tr * slow * J(1, 0.03), tg, dst, t0 + (self ? 0.003 : 0.01 + d / 1200));
-    if (self) { const pt = A.selfTail; if (pt) pt.g.gain.setTargetAtTime(pt.v * 0.35, t0, 0.06); A.selfTail = { g, v: tg }; } // keep long bursts from piling up
+    if (self) { // a new shot chokes the previous tail (and frees its voice) so long bursts don't pile up
+      const pt = A.selfTail; if (pt) { pt.gain.setTargetAtTime(0, t0, 0.07); try { pt.src.stop(t0 + 0.35); } catch {} }
+      A.selfTail = g;
+    }
   }
   return pk;
 }
