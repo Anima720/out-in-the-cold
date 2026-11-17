@@ -518,8 +518,8 @@ export class Human {
         _t1.copy(ne).addScaledVector(tr, -0.12).addScaledVector(UP, -0.5).addScaledVector(tf, 0.12);
         _hb.copy(tf).multiplyScalar(0.5).addScaledVector(UP, -0.85).addScaledVector(tr, -0.1).normalize();
       } else { // butt stroke: rifle cocked back over the right shoulder, then the butt is driven forward at face height
-        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.56, ms)).addScaledVector(tr, lerp(0.24, 0.04, ms)).addScaledVector(UP, lerp(-0.16, 0.04, ms));
-        _hb.copy(UP).multiplyScalar(lerp(0.7, 0.62, ms)).addScaledVector(tf, lerp(-0.42, -0.6, ms)).addScaledVector(tr, lerp(0.35, 0.28, ms)).normalize();
+        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.55, ms)).addScaledVector(tr, lerp(0.3, 0.02, ms)).addScaledVector(UP, lerp(-0.1, -0.04, ms));
+        _hb.copy(UP).multiplyScalar(lerp(0.45, 0.2, ms)).addScaledVector(tf, lerp(-0.55, -0.85, ms)).addScaledVector(tr, lerp(0.7, 0.42, ms)).normalize();
       }
       _s0.lerp(_t1, mk); _dir.lerp(_hb, mk).normalize();
     }
@@ -735,7 +735,7 @@ export class Human {
     const yaw = this.downYaw ?? yawOf(_f), r = rightYaw(yaw, _r), gl = (GK[this.gunKind] || GK.rifle).len;
     fwdYaw(yaw, _f);
     this.down = { t: 0, yaw, die: -1, from: null, cw: 0, cph: 0, bend: Math.random() };
-    _p.copy(this.pos).addScaledVector(r, 0.45).addScaledVector(_f, -0.05).setY(this.pos.y + 0.035);
+    _p.copy(this.pos).addScaledVector(r, 0.45).addScaledVector(_f, -0.05).setY(this.pos.y + 0.06);
     _n.copy(_f).multiplyScalar(0.95).addScaledVector(r, 0.3).normalize();
     _t1.copy(_p).addScaledVector(_n, gl);
     this.dropM = segMatrix(_p, _t1, r, new THREE.Matrix4());
