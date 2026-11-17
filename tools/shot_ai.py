@@ -23,7 +23,8 @@ async def main():
           window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
         async def snap(name):
             await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
-            await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=300, timeout=600000)
+            await pg.wait_for_function("((window.__frames||0) >= window.__f0 + 2) || !!window.__fatal || !!window.__errors?.length", polling=300, timeout=600000)
+            await assert_clean(pg, logs)
             await ev("window.__rafHold=true")  # stop rendering: the canvas keeps the last frame, the compositor is idle
             await pg.screenshot(path=str(OUT / name), timeout=200000)
             await ev("window.__freeze=false")

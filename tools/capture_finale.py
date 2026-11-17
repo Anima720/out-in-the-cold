@@ -3,7 +3,7 @@
 import asyncio, os, pathlib, sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-from runtime import CHROME, assert_clean
+from runtime import CHROME, assert_clean, hold, shot as stable_shot
 os.makedirs(ROOT / "shots", exist_ok=True)
 from playwright.async_api import async_playwright
 ONLY = sys.argv[1] if len(sys.argv) > 1 else ''
@@ -15,16 +15,15 @@ async def main():
         await pg.goto(DIST + "?q=medium&god=1")
         await pg.wait_for_function("window.__ready || window.__fatal", timeout=300000)
         ev = pg.evaluate
-        # stop the render loop between screenshots (software GL is slow); __sim still advances the game
-        await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
-          window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
-        if ONLY == 'a': await ev("window.__rafHold=false; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
+        # __sim owns the clock; mode 'a' keeps rendering between captures for debugging.
+        await hold(pg)
+        release = "window.__testHold=false; {const q=window.__testPend.splice(0); for(const cb of q) window.__testRaf(cb);}"
+        if ONLY == 'a': await ev(release)
         async def shot(n):
-            await ev("window.__freeze=true; window.__rafHold=false; const f=window.__frames||0; window.__f0=f; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
-            await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 1", polling=300, timeout=600000)
-            if ONLY != 'a': await ev("window.__rafHold=true")
-            await pg.screenshot(path=str(ROOT / f"shots/f_{n}.png"), timeout=200000)
-            if ONLY != 'a': await ev("window.__rafHold=true")
+            # Preserve this script's existing frozen simulation after its first screenshot.
+            await ev("window.__freeze=true")
+            await stable_shot(pg, f"f_{n}.png")
+            if ONLY == 'a': await ev(release)
         async def st(tag):
             print(tag, await ev("JSON.stringify({ph:__fin.ph, t:+__fin.t.toFixed(2), st:__G.state, ck:__D.ck, ts:__G.timeScale, P:__P.pos.toArray().map(v=>+v.toFixed(2)), alive:__P.alive, sub:__D.cur&&__D.cur.id, err:window.__errors.slice(0,3)})"), flush=True)
         async def until(cond, step=0.1, maxt=40):

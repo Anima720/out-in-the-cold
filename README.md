@@ -68,6 +68,7 @@ tools/           无头浏览器试玩脚本、配乐切片脚本
 ```bash
 pip install playwright
 node tools/test_combat_logic.mjs  # 无图形 CPU 逻辑验证，不代替浏览器验收
+node tools/test_ragdoll.mjs  # 实际雷达站碰撞体与尸体求解器；--sweep 覆盖 50 组随机姿态
 CHROME=/path/to/chrome python3 tools/run_regression.py  # 原 19 项 + 补充固定机位，串行执行
 ```
 

@@ -57,7 +57,8 @@ async def main(names):
                 # Let CSS fades finish in real time while the simulation remains frozen. All
                 # callbacks are released, including HUD.fade, before checking visible content.
                 await ev(RELEASE)
-                await pg.wait_for_function('(window.__frames||0)>=window.__reviewF0+2', timeout=200000, polling=300)
+                await pg.wait_for_function('((window.__frames||0)>=window.__reviewF0+2) || !!window.__fatal || !!window.__errors?.length', timeout=200000, polling=300)
+                await assert_clean(pg, logs)
                 await pg.wait_for_function(CLEAR, timeout=30000, polling=100)
                 if visible: await pg.wait_for_function(visible, timeout=30000, polling=100)
                 await ev('window.__testHold=true')

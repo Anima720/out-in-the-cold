@@ -836,12 +836,12 @@ export class Ragdoll {
       return new THREE.Vector3().copy(p).addScaledVector(v, -1 / 60);
     });
     this.cons = BONES.map(([a, b]) => [a, b, j[a].distanceTo(j[b])]);
-    this.acc = 0; this.sleep = 0; this.asleep = false;
+    this.acc = 0; this.sleep = 0; this.slow = false; this.asleep = false;
     this.ref = j.map((p) => p.clone()); this.win = 0; this.touch = false; // rest detection window (see sub)
     if (dir) this.impulse(joint, dir, force);
   }
   impulse(joint, dir, force) {
-    this.asleep = false; this.sleep = 0; this.win = 0; this.touch = false;
+    this.asleep = false; this.sleep = 0; this.slow = false; this.win = 0; this.touch = false;
     for (let i = 0; i < NJ; i++) this.ref[i].copy(this.pos[i]);
     const h = 1 / 60;
     for (let i = 0; i < NJ; i++) {
@@ -854,7 +854,7 @@ export class Ragdoll {
     if (this.asleep) return;
     this.acc = Math.min(this.acc + dt, 0.1);
     const h = 1 / 60;
-    while (this.acc >= h) { this.acc -= h; this.sub(h); }
+    while (this.acc >= h) { this.acc -= h; this.sub(h); if (this.asleep) { this.acc = 0; break; } }
   }
   sub(h) {
     const P = this.pos, Q = this.prev;
@@ -911,6 +911,10 @@ export class Ragdoll {
         }
       }
     }
+    // Dissipate the whole body's residual motion once it has stayed supported and slow for 0.5 s.
+    // Contact-only friction misses free limbs; constraint corrections otherwise feed a slow turn for tens of seconds.
+    this.sleep = grounded ? this.sleep + h : 0;
+    if (this.sleep >= 0.5 && this.slow) for (let i = 0; i < NJ; i++) Q[i].lerp(P[i], 0.2);
     // rest: supported for a 0.5 s window in which no joint moved more than 1.5 cm in total -> sleep until the next impulse.
     // (The old per-substep speed test never fired for bodies on the snow or wedged against an edge, and the solver's
     // tiny per-step bias then accumulated into corpses slowly turning on the spot.)
@@ -918,6 +922,7 @@ export class Ragdoll {
     if ((this.win += h) >= 0.5) {
       let m = 0;
       for (let i = 0; i < NJ; i++) { const d = P[i].distanceToSquared(this.ref[i]); if (d > m) m = d; this.ref[i].copy(P[i]); }
+      this.slow = m < 0.05 * 0.05; // measured pose motion; contact correction can leave a large fictitious P-Q velocity
       if (this.touch && m < 0.015 * 0.015) this.asleep = true;
       this.win = 0; this.touch = false;
     }

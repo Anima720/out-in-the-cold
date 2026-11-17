@@ -6,12 +6,23 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: regression-${{ github.ref }}
-  cancel-in-progress: true
+  group: regression-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
   campaign:
+    name: ${{ matrix.group }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: world
+            cases: mine_surface train last_stand assault_1 assault_2 assault_3 crowd blood_fence t_quick t_cage t_cab t_bridge
+          - group: cinematics
+            cases: finale epilogue review_shots
+          - group: combat
+            cases: weapons_logic weapons_shots weapons_npc ai ai_shots
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,18 +34,22 @@ jobs:
           python-version: '3.12'
       - run: npm ci && node build.mjs
       - name: Combat, route and reinforcement contracts
-        run: node tools/test_combat_logic.mjs
+        run: node tools/test_combat_logic.mjs && node tools/test_ragdoll.mjs
       - run: pip install playwright && python -m playwright install --with-deps chromium
-      - name: Use isolated headless renderer
+      - name: Select Chrome for software rendering
         run: |
-          playtest_chrome=$(find ~/.cache/ms-playwright -type f \( -name headless_shell -o -name chrome-headless-shell \) | head -1)
+          playtest_chrome=$(command -v google-chrome || true)
+          if [ -z "$playtest_chrome" ]; then
+            playtest_chrome=$(find ~/.cache/ms-playwright -type f \( -name headless_shell -o -name chrome-headless-shell \) | head -1)
+          fi
           test -n "$playtest_chrome" && test -x "$playtest_chrome"
+          "$playtest_chrome" --version
           echo "CHROME=$playtest_chrome" >> "$GITHUB_ENV"
       - name: Browser regression and fixed-camera captures
-        run: python tools/run_regression.py
+        run: python tools/run_regression.py ${{ matrix.cases }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: campaign-regression-${{ github.sha }}
+          name: campaign-regression-${{ github.sha }}-${{ matrix.group }}
           path: shots/
           retention-days: 14

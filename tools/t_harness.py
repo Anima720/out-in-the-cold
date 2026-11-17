@@ -29,7 +29,8 @@ class Page:
     async def snap(self, name):
         pg = self.pg
         await pg.evaluate("window.__rafHold=false; window.__freeze=true; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
-        await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=300, timeout=600000)
+        await pg.wait_for_function("((window.__frames||0) >= window.__f0 + 2) || !!window.__fatal || !!window.__errors?.length", polling=300, timeout=600000)
+        await assert_clean(pg, self.logs)
         await pg.evaluate("window.__rafHold=true")
         await pg.screenshot(path=str(SHOTS / name), timeout=200000)
         await pg.evaluate("window.__rafHold=true; window.__freeze=false")

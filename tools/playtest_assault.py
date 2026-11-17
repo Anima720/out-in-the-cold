@@ -80,10 +80,11 @@ async def main():
           window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pendL.push(cb); return 0; } return raf(cb); }; })()""")
         async def snap(name, hud=False):
             await ev("__P.health=100; __G.hud.show(" + ("true" if hud else "false") + "); window.__freeze=true; __WP.hidden=true; window.__rafHold=false; window.__f0=window.__frames||0; (() => { const L=window.__pendL; window.__pendL=[]; for (const c of L) window.__raf(c); })();")
-            try: await pg.wait_for_function("(window.__frames||0) >= window.__f0 + 2", polling=300, timeout=180000)
+            try: await pg.wait_for_function("((window.__frames||0) >= window.__f0 + 2) || !!window.__fatal || !!window.__errors?.length", polling=300, timeout=180000)
             except Exception as e:
                 print("  snap timeout", name, await ev("JSON.stringify({f: window.__frames, f0: window.__f0, pend: window.__pendL.length, hold: window.__rafHold, err: window.__errors.slice(-3)})"), flush=True)
                 FAILS.append("snap " + name); await ev("window.__rafHold=true; window.__freeze=false; __WP.hidden=false; __home()"); return
+            await assert_clean(pg, logs)
             await pg.screenshot(path=str(SHOTS / f"{name}{TAG}.png"), timeout=200000)
             await ev("window.__rafHold=true; window.__freeze=false; __WP.hidden=false; __G.hud.show(true); __home()")
             print("  shot", f"shots/{name}{TAG}.png", flush=True)

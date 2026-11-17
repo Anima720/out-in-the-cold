@@ -227,7 +227,8 @@ async def main():
             assert r['cases']==24 and all(x['arrived'] and x['crossings']==1 for x in r['results']),r
             # One evidence image after the final actual crossing; camera placement is only for documentation.
             await ev("__P.pos.set(35,1.2,-18);__P.camY=1.2;__P.eyeY=1.62;__P.yaw=Math.atan2(35-__fenceWalkActor.h.pos.x,-18-__fenceWalkActor.h.pos.z);__P.pitch=-.17;__P.shake=0;__P.autoLook=null;window.__freeze=true;window.__rafHold=false;window.__f0=window.__frames||0;{const q=window.__pend.splice(0);for(const cb of q)window.__raf(cb);}")
-            await pg.wait_for_function("(window.__frames||0)>=window.__f0+2",polling=300,timeout=200000)
+            await pg.wait_for_function("((window.__frames||0)>=window.__f0+2) || !!window.__fatal || !!window.__errors?.length",polling=300,timeout=200000)
+            await assert_clean(pg, logs)
             await ev("window.__rafHold=true")
             await pg.screenshot(path=str(ROOT/'shots'/'ai_fence_walk.png'),timeout=200000)
             await ev("window.__freeze=false")
