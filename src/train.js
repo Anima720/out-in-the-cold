@@ -421,14 +421,15 @@ export function buildDShK() {
   const gb = new Builder();
   for (const sx of [-0.09, 0.09]) { gb.boxC(sx, -0.02, 0.49, 0.08, 0.11, 0.1, 'cloth', 0x9a8a68); gb.boxC(sx, -0.05, 0.6, 0.11, 0.12, 0.22, 'cloth', 0x55606c); }
   const gloves = new THREE.Group(); gb.build(m, gloves, { cast: false }); gloves.visible = false; pitch.add(gloves);
-  G.scene.add(yaw);
-  T.dshk = { yaw, pitch, gloves, muzzleLocal: new THREE.Vector3(0, 0, -1.25), eyeLocal: new THREE.Vector3(0, 0.2, 0.92) };
+  const root = new THREE.Group(); root.add(yaw); G.scene.add(root); // identity unless the gun car is falling (then root rides the car's transform)
+  T.dshk = { root, glue: null, unglue() { this.glue = null; root.matrixAutoUpdate = true; root.matrix.identity(); root.position.set(0, 0, 0); root.quaternion.identity(); root.scale.set(1, 1, 1); root.matrixWorldNeedsUpdate = true; }, yaw, pitch, gloves, muzzleLocal: new THREE.Vector3(0, 0, -1.25), eyeLocal: new THREE.Vector3(0, 0.2, 0.92) };
   return T.dshk;
 }
 
 export function buildTrain() {
   const m = mats();
   for (const c of T.cars) { G.scene.remove(c.group); }
+  T.dshk?.unglue();
   T.cars = []; T.wheelInfo = []; T.invWalls = [];
   for (const def of CARS) {
     const c = { ...def, falling: false, landed: false, vy: 0, vz: 0, av: 0, boxes: [], idx: T.cars.length, extra: [] };
@@ -503,6 +504,7 @@ export function updateTrain(dt) {
         if (!h.rag) { h.remove(); continue; } // posed (non-ragdoll) corpse: just clear it away
         c.riders.push({ h, l: h.j.map((v) => v.clone().applyMatrix4(_ri)) });
       }
+      if (c.type === 'gun' && T.dshk) { const D = T.dshk; D.unglue(); D.glue = { c, L: _ri.clone() }; } // the DShK assembly (pedestal gun, gloves) falls with its car
       G.fx?.bloodCar?.(c);
       { const dm = G.fx?.decalMesh; c.decals = []; // bullet holes in the car's panels fall with it too
         if (dm) for (let i = 0; i < 160; i++) { dm.getMatrixAt(i, _m); _p.setFromMatrixPosition(_m); if (_m.elements[0] === 0 && _m.elements[5] === 0 || _p.z < c.z0 - 0.1 || _p.z > c.z1 + 0.1 || Math.abs(_p.x) > 2.9 || _p.y < 0.9) continue; c.decals.push({ i, m: _m.clone().premultiply(_ri) }); } }
@@ -530,6 +532,7 @@ export function updateTrain(dt) {
       c.group.rotation.x *= 1 - dt * 0.5;
     }
     c.group.updateMatrixWorld(true);
+    { const D = T.dshk, gl = D && D.glue; if (gl && gl.c === c) { D.root.matrixAutoUpdate = false; D.root.matrix.multiplyMatrices(c.group.matrixWorld, gl.L); D.root.updateMatrixWorld(true); } }
     if (c.decals && c.decals.length) { for (const d of c.decals) G.fx.decalMesh.setMatrixAt(d.i, _m.multiplyMatrices(c.group.matrixWorld, d.m)); G.fx.decalMesh.instanceMatrix.needsUpdate = true; }
     if (c.riders) for (let r = c.riders.length - 1; r >= 0; r--) {
       const { h, l } = c.riders[r];

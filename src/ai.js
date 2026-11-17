@@ -234,7 +234,7 @@ export function laneMove(h, tx, tz, speed, dt) {
   h.pos.x += vx * dt; h.pos.z += vz * dt;
   h.pos.x = clamp(h.pos.x, -1.35, 1.35);
   h.pos.y = deckY(h.pos.x, h.pos.z, h.pos.y);
-  h.vel.set(vx, 0, vz);
+  h.vel.set(vx, 0, vz); h.onGround = false; // deck walkers are in the train frame: no world-scroll compensation in the gait speed
   const moving = Math.abs(vx) + Math.abs(vz) > 0.05;
   if (moving) h.yaw += clamp(angDiff(h.yaw, yawOf(_lane.set(vx, 0, vz))), -7 * dt, 7 * dt);
   return !moving && Math.abs(dx) < 0.12 && Math.abs(dz) < 0.4;
@@ -254,6 +254,7 @@ export class Mate {
     this.h.pos.set(x, y ?? s.y, z); this.target.copy(this.h.pos);
   }
   jumpTo(x, y, z, dur = 0.55, h = 0.8) {
+    this.h.onGround = false;
     this.arc = { from: this.h.pos.clone(), to: new THREE.Vector3(x, y, z), t: 0, dur, h };
   }
   // best visible target: exposed shooters first, then the nearest; downed men last (finish them when nothing else is up)

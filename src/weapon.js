@@ -272,15 +272,33 @@ function buildPistol() {
   b.cyl(0, 0.017, -0.131, 0.0065, 0.0065, 0.006, 'poly', 0xffffff, H, 0, 0, 12);
   b.boxC(0.0155, 0.026, -0.02, 0.002, 0.012, 0.04, 'poly', 0xffffff, 0, 0, 0, 0); // ejection port
   b.boxC(-0.016, 0.003, 0.0, 0.004, 0.01, 0.03, 'gunW', 0xffffff, 0, 0, 0, 0.001); // slide stop
-  // two-hand grip
-  b.boxC(0.003, -0.075, 0.045, 0.054, 0.1, 0.06, 'glove', 0xffffff, -0.25, 0, 0, 0.018);
-  for (let k = 0; k < 3; k++) b.capsule(0.0, -0.058 - k * 0.022, 0.005 + k * 0.006, 0.0108, 0.034, 'glove', 0xffffff, 0, 0, H);
-  b.capsule(0.022, -0.01, -0.02, 0.0098, 0.045, 'glove', 0xffffff, H);
-  b.boxC(-0.03, -0.075, 0.03, 0.03, 0.095, 0.07, 'glove', 0xffffff, -0.25, 0, 0.1, 0.014);
-  for (let k = 0; k < 3; k++) b.capsule(-0.006, -0.06 - k * 0.022, -0.012 + k * 0.006, 0.0102, 0.03, 'glove', 0xffffff, 0, 0, H);
-  b.capsule(-0.02, -0.006, -0.03, 0.0098, 0.04, 'glove', 0xffffff, H - 0.1);
-  segm(b, [0.008, -0.11, 0.08], [0.03, -0.16, 0.16], 0.034, 0.031, 'glove');
-  segm(b, [-0.035, -0.11, 0.07], [-0.07, -0.16, 0.15], 0.034, 0.031, 'glove');
+  // two-hand grip: right palm on the backstrap, three fingers wrapped round the front, trigger finger along the frame, thumb on the left;
+  // support hand cupping the right hand from the left (palm on the grip's left, fingers across the front under the right ones, thumb forward)
+  const gf = (y) => 0.009 + -(y + 0.072) * 0.25;                       // z of the grip's front face at height y (the grip slopes back)
+  b.boxC(0.012, -0.066, 0.078, 0.05, 0.088, 0.036, 'glove', 0xffffff, -0.25, 0, 0, 0.016);        // right palm / heel on the backstrap
+  b.boxC(0.027, -0.048, 0.05, 0.016, 0.05, 0.05, 'glove', 0xffffff, -0.25, 0, 0, 0.006);           // right-hand side pad (pinky-side of the palm over the right panel)
+  for (let k = 0; k < 3; k++) {                                         // middle, ring, pinky: round the front of the grip
+    const y = -0.052 - k * 0.0215, z = gf(y);
+    segm(b, [0.03, y, z + 0.03], [0.026, y, z - 0.002], 0.0098, 0.0092, 'glove');
+    segm(b, [0.026, y, z - 0.002], [0.0, y, z - 0.012], 0.0094, 0.0088, 'glove');
+    segm(b, [0.0, y, z - 0.012], [-0.019, y + 0.003, z + 0.002], 0.0088, 0.008, 'glove');
+  }
+  segm(b, [0.03, -0.024, 0.062], [0.026, -0.021, 0.02], 0.0095, 0.0088, 'glove');                  // trigger finger: along the right of the frame
+  segm(b, [0.026, -0.021, 0.02], [0.022, -0.021, -0.016], 0.0088, 0.008, 'glove');
+  segm(b, [0.022, -0.021, -0.016], [0.0155, -0.026, -0.03], 0.008, 0.0072, 'glove');
+  segm(b, [-0.02, -0.032, 0.075], [-0.022, -0.012, 0.03], 0.0105, 0.0098, 'glove');                // right thumb: along the left of the slide / frame
+  segm(b, [-0.022, -0.012, 0.03], [-0.02, -0.004, -0.03], 0.0098, 0.0085, 'glove');
+  b.boxC(-0.036, -0.07, 0.05, 0.03, 0.09, 0.072, 'glove', 0xffffff, -0.25, 0, 0.08, 0.014);         // left palm on the grip's left side
+  for (let k = 0; k < 4; k++) {                                          // left fingers across the front, below / in front of the right ones
+    const y = -0.047 - k * 0.0195, z = gf(y) - 0.019;
+    segm(b, [-0.034, y, z + 0.036], [-0.026, y, z], 0.0092, 0.0086, 'glove');
+    segm(b, [-0.026, y, z], [0.012, y, z - 0.002], 0.0088, 0.0082, 'glove');
+    segm(b, [0.012, y, z - 0.002], [0.03, y - 0.002, z + 0.026], 0.0082, 0.0075, 'glove');
+  }
+  segm(b, [-0.04, -0.042, 0.05], [-0.034, -0.03, -0.005], 0.0105, 0.0098, 'glove');                 // left thumb: forward along the left of the frame
+  segm(b, [-0.034, -0.03, -0.005], [-0.027, -0.028, -0.062], 0.0098, 0.0085, 'glove');
+  segm(b, [0.012, -0.1, 0.092], [0.03, -0.15, 0.16], 0.03, 0.031, 'glove');                         // wrists
+  segm(b, [-0.038, -0.1, 0.075], [-0.07, -0.15, 0.15], 0.03, 0.031, 'glove');
   sleeves(b, [0.028, -0.155, 0.15], [0.14, -0.33, 0.48], [-0.07, -0.155, 0.14], [-0.2, -0.34, 0.48]);
   b.build(VM, g, { cast: false });
   const mag = new THREE.Group(), mb = new Builder();
@@ -288,7 +306,7 @@ function buildPistol() {
   mb.build(VM, mag, { cast: false }); g.add(mag);
   const slide = null;
   return { g, mag, sightY: SY, rearZ: 0.052, muzzle: new THREE.Vector3(0, 0.017, -0.14), eject: new THREE.Vector3(0.02, 0.03, -0.02),
-    hip: [0.1, -0.12, -0.33], adsZ: -0.27, sprint: [0.06, -0.2, -0.3] };
+    hip: [0.07, -0.072, -0.4], adsZ: -0.27, sprint: [0.06, -0.2, -0.3] };
 }
 
 // 9K38 Igla MANPADS on the right shoulder; the iron-sight frame sits at x=0 so ADS centres it
