@@ -14,6 +14,9 @@ async def main():
       f:Object.keys(__D.f).join(','), cur:__D.cur&&__D.cur.id, st:__G.state, P:__P.pos.toArray().map(v=>+v.toFixed(1)), jumped:__P.jumped,
       cars:__T.cars.map(c=>c.landed?'L':c.tip?'T':c.falling?'F':'-').join(''), err:window.__errors.length}"""
     await ev("__begin(3)"); await ev("__sim(1)")
+    if os.environ.get("CORPSES", "1") == "1":  # put dead enemies (with their dropped guns) and blood on the cars, then check they ride the cars down
+        await ev("__spawnTrain(999); __sim(0.3); __killAll(); __G.humans.forEach(h=>{if(!h.alive&&h.faction!=='us')__G.fx.bloodPool?.(h.j[2].clone(),0.5)}); __sim(3)")
+        print("corpses", await j("{n:__G.humans.filter(h=>!h.alive&&h.faction!=='us').length, z:__G.humans.filter(h=>!h.alive&&h.faction!=='us').map(h=>+h.j[2].z.toFixed(0))}"))
     shots = {}
     jumped = False; t = 0.0; landT = None
     while t < 60:
@@ -32,6 +35,7 @@ async def main():
             shots['s2'] = 1; await ev("__P.autoLook=null; __P.yaw=-0.04; __P.pitch=0.0; __sim(0.3)"); await P.snap("t_br_blast.png")
         if SHOTS and 'hitT' in f and 's3' not in shots and 's2' in shots:
             shots['s3'] = 1; await ev("__P.yaw=-0.04; __P.pitch=-0.05; __sim(1.5)"); await P.snap("t_br_fall.png")
+            print("riders", await j("{cars:__T.cars.map(c=>(c.riders||[]).length), dead:__G.humans.filter(h=>!h.alive&&h.faction!=='us').map(h=>[+h.j[2].y.toFixed(1),+h.j[2].z.toFixed(0)])}"))
         if r['st'] != 'play' or r['ph'] == 'p5': break
         if 'jumpOpen' in f and not jumped:
             await ev("__P.autoLook=null; __P.yaw=-0.05; __P.pitch=0.0; __sim(2.0)")

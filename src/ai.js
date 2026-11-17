@@ -221,6 +221,7 @@ export function spawnTrainEnemies(minZ = -999) {
   }
 }
 
+if (typeof window !== 'undefined') window.__spawnTrain = spawnTrainEnemies; // test hook (tools/t_bridge.py)
 // ---------- walking on the train: centre lane between cars, never drop into a gap
 const _lane = new THREE.Vector3();
 export function laneMove(h, tx, tz, speed, dt) {
