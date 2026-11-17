@@ -130,7 +130,8 @@ function buildDubai() {
     for (const sx of [-1, 1]) { cb.boxC(sx * 0.6, 0.65, -2.21, 0.36, 0.12, 0.04, 'head', 0); cb.boxC(sx * 0.65, 0.68, 2.21, 0.3, 0.12, 0.04, 'tail', 0); }
     cb.build({ body: new THREE.MeshStandardMaterial({ color: [0xd8d8d8, 0x1a1c20, 0x7a1d1d, 0xc9b28a][i % 4], roughness: 0.3, metalness: 0.7 }), head: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xfff2d8, emissiveIntensity: 6 }), tail: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2a1a, emissiveIntensity: 4 }) }, cg);
     if (out) cg.rotation.y = Math.PI;
-    g.add(cg); C.traffic.push({ g: cg, x: out ? 60 + [3.5, 7.5][i % 2] : 60 - [3.5, 7.5][i % 2], z0: 330 - tc() * 720, v: out ? 26 + tc() * 6 : -(18 + tc() * 8) });
+    g.add(cg); C.traffic.push(out ? { g: cg, out, x: 60 + [3.5, 7.5][i % 2], z0: -395 + i * 46 + tc() * 12, v: 24 + tc() * 6 }
+      : { g: cg, out, x: 52.5, gap: 22 + (i % 6) * 26 + tc() * 8, drift: 0.6 + tc() * 1.6 });
   }
   G.scene.add(g); C.objs.push(g);
   return g;
@@ -224,27 +225,25 @@ function line(id) {
 }
 
 // ---------- timeline ----------
-const NIGHT = 41, BLACK = NIGHT + 12.2, ROLL = BLACK + 6.5, ROLL_LEN = 150;
+const NIGHT = 45, BLACK = 57, ROLL = 57.8, ROLL_LEN = 130, CAR0 = 14, CAR1 = 40;
 const SHOTS = [
   { t: 0, fn: () => { HUD.bigCard('三个月后', '', 3.6); } },
-  { t: 4.0, fn: () => { setDubai(); HUD.fade(0, 2.5); musicMode('end'); } },
+  { t: 4.0, fn: () => { setDubai(); HUD.fade(0, 2.5); } },
   { t: 6.5, fn: () => HUD.bigCard('迪拜', '阿拉伯联合酋长国', 5) },
-  { t: 15, fn: () => HUD.hideBig() },
-  { t: 26.5, fn: () => line('E_PRICE_01') },
-  { t: 31.5, fn: () => HUD.bigCard('绿洲酒店', '马卡洛夫最后的落脚点', 5) },
-  { t: 38.5, fn: () => HUD.fade(1, 1.4) },
-  // the same night, far north: Nikolai's searchlight over the radar station
-  { t: NIGHT, fn: () => { HUD.hideBig(); setNight(); HUD.fade(0, 2.5); musicMode('silence'); } },
-  { t: NIGHT + 4, fn: () => line('E_NIKO_01') },
-  { t: NIGHT + 9.2, fn: () => line('E_NIKO_02') },
-  // hard cut to black the moment he says it; the credits theme comes in on the black
+  { t: 15.5, fn: () => HUD.hideBig() },
+  { t: 28.5, fn: () => line('E_PRICE_01') },
+  { t: 35, fn: () => HUD.bigCard('绿洲酒店', '马卡洛夫最后的落脚点', 5) },
+  { t: 42.8, fn: () => HUD.fade(1, 1.4) },
+  // the same night, far north: Nikolai's searchlight over the radar station (track 0:45-0:56)
+  { t: NIGHT, fn: () => { HUD.hideBig(); setNight(); HUD.fade(0, 1.6); } },
+  { t: NIGHT + 1.2, fn: () => line('E_NIKO_01') },
+  { t: NIGHT + 6.6, fn: () => line('E_NIKO_02') },
+  // track 0:57: hard cut to black the moment he has said it, straight into the credits
   { t: BLACK, fn: () => { HUD.fade(1, 0.01, '#000'); HUD.say(null); C.lineEnd = 0; if (C.heliSnd) { C.heliSnd.stop(); C.heliSnd = null; } if (A.windLoop) A.windLoop.setVol(0); clearNight(); } },
-  { t: BLACK + 1.4, fn: () => { musicMode('credits'); } },
-  { t: BLACK + 2.2, fn: () => { HUD.bigCard('弃于寒冬', 'OUT IN THE COLD', 4.0); } },
   { t: ROLL, fn: () => { HUD.hideBig(); HUD.credits.classList.add('on'); C.rollT0 = C.t; } },
-  { t: ROLL + ROLL_LEN + 1, fn: () => { HUD.credits.classList.remove('on'); } },
-  { t: ROLL + ROLL_LEN + 2.5, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
-  { t: ROLL + ROLL_LEN + 9, fn: () => finish() },
+  { t: ROLL + ROLL_LEN + 0.5, fn: () => { HUD.credits.classList.remove('on'); } },
+  { t: ROLL + ROLL_LEN + 1.5, fn: () => HUD.bigCard('完', '感谢游玩', 0) },
+  { t: 197.5, fn: () => finish() },
 ];
 
 function setDubai() {
@@ -290,22 +289,23 @@ export function playEpilogue() {
   HUD.credits.querySelector('.roll').innerHTML = CREDITS;
   WP.hidden = true;
   muffle(20000, 0.5);
-  musicMode('credits');
+  musicMode('credits'); C.m0 = A.ctx ? A.ctx.currentTime + 0.03 : null; C.skipped = false;
 }
 G.playEpilogue = playEpilogue;
+if (typeof window !== 'undefined') window.__cine = C; // tests: window.__cineFree = true makes __sim drive the timeline
 
 export function updateCine(rdt) {
   if (!C.on) return;
-  C.t += rdt;
-  if (hit('Space') && C.t > 2) { // skip: Dubai -> the night scene; credits -> the end card
-    const to = C.t < NIGHT - 1 ? NIGHT - 0.5 : C.t > ROLL + 2 && C.t < ROLL + ROLL_LEN ? ROLL + ROLL_LEN + 0.5 : -1;
-    if (to > 0) { C.t = to; C.shot = SHOTS.findIndex((s) => s.t >= to); if (to < NIGHT) { HUD.fade(1, 0.01, '#000'); HUD.hideBig(); HUD.say(null); } }
+  const synced = !window.__cineFree && !C.skipped && C.m0 != null && A.ctx && A.ctx.state === 'running' && A.cues && A.cues.END_CREDITS;
+  C.t = synced ? Math.max(C.t, A.ctx.currentTime - C.m0) : C.t + rdt;
+  if (hit('Space') && C.t > ROLL + 2 && C.t < ROLL + ROLL_LEN) { // skip the roll -> the end card
+    C.skipped = true; C.t = ROLL + ROLL_LEN + 0.4; C.shot = SHOTS.findIndex((s) => s.t >= C.t);
   }
   while (C.shot < SHOTS.length && C.t >= SHOTS[C.shot].t) SHOTS[C.shot++].fn();
   if (C.lineEnd && C.t > C.lineEnd) { HUD.say(null); C.lineEnd = 0; }
   const cam = G.camera, t = C.t;
   cam.fov = 50; cam.updateProjectionMatrix();
-  const carZ = lerp(240, -150, clamp((t - 14) / 24, 0, 1));
+  const carZ = lerp(240, -150, clamp((t - CAR0) / (CAR1 - CAR0), 0, 1));
   if (C.car) {
     C.car.position.set(56.5, 0.35, carZ); C.car.rotation.y = 0;
     const [pr, yu] = C.humans;
@@ -315,20 +315,20 @@ export function updateCine(rdt) {
     yu.aim.set(0.3, 0, -1);
   }
   if (window.__lockCam) { if (C.humans) for (const h of C.humans) h.vel.set(0, 0, 0); return; }
-  if (t < 15) { // wide over the water toward the skyline
-    const u = smooth((t - 4) / 11);
+  if (t < 16) { // wide over the water toward the skyline
+    const u = smooth((t - 4) / 12);
     cam.position.set(lerp(-90, -10, u), lerp(22, 34, u), lerp(320, 170, u));
     cam.lookAt(_l.set(110, lerp(120, 150, u), -420));
-  } else if (t < 24) { // tracking shot alongside the SUV on the coastal highway
-    const u = (t - 15) / 9;
+  } else if (t < 26) { // tracking shot alongside the SUV on the coastal highway
+    const u = (t - 16) / 10;
     cam.position.set(56.5 - lerp(7, 4.5, u), lerp(1.6, 2.4, u), carZ + lerp(5, -1, u));
     cam.lookAt(_l.set(56.5, 1.25, carZ - 0.4));
-  } else if (t < 31) { // from the back seat: the hotel through the windscreen
+  } else if (t < 34) { // from the back seat: the hotel through the windscreen
     cam.position.set(56.5, 1.6, carZ + 0.95);
     cam.lookAt(_l.set(100, 20, -420));
     cam.fov = 58; cam.updateProjectionMatrix();
-  } else if (t < 40) { // push toward the hotel crown
-    const u = smooth((t - 31) / 9);
+  } else if (t < NIGHT) { // push toward the hotel crown
+    const u = smooth((t - 34) / 10);
     cam.position.set(lerp(30, 70, u), lerp(130, 215, u), lerp(-120, -290, u));
     cam.lookAt(_l.set(110, 250, -420));
   } else if (t >= NIGHT && C.heli) { // blizzard night: Nikolai's searchlight sweeps the roof and the dish
@@ -362,5 +362,8 @@ export function updateCine(rdt) {
     roll.style.transform = `translateY(${-k * total}px)`;
   }
   if (C.humans) for (const h of C.humans) h.vel.set(0, 0, 0);
-  if (C.traffic && C.car) for (const c of C.traffic) { let z = c.z0 + c.v * t; z = ((z - 330) % 730 + 730) % 730 - 400; if (Math.abs(c.x - 56.5) < 0.5 && Math.abs(z - carZ) < 12) z -= 24; /* never through the SUV */ c.g.position.set(c.x, 0.35, z); }
+  if (C.traffic && C.car) for (const c of C.traffic) {
+    const z = c.out ? c.z0 + c.v * Math.max(0, t - 4) : carZ - c.gap - c.drift * Math.max(0, t - CAR0);
+    c.g.visible = z > -405 && z < 345; c.g.position.set(c.x, 0.35, z);
+  }
 }
