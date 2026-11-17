@@ -90,8 +90,8 @@ function riser(g, R, w, len, z = 0) {
 function buildRedDot(R) { // Aimpoint T-1 style micro dot on a riser
   const g = new THREE.Group(), b = new Builder(), L = OPT.reddot.len;
   tube(b, 0, 0, 0, 0.0128, 0.0165, L, 'gun');
-  b.cyl(0, 0, L / 2 - 0.004, 0.0172, 0.0172, 0.008, 'gun', 0xffffff, H, 0, 0, 24);
-  b.cyl(0, 0, -L / 2 + 0.005, 0.0175, 0.0175, 0.009, 'gun', 0xffffff, H, 0, 0, 24);
+  tube(b, 0, 0, L / 2 - 0.004, 0.0128, 0.0174, 0.008, 'gun', false, 28);                    // end bands (open rings)
+  tube(b, 0, 0, -L / 2 + 0.005, 0.0128, 0.0177, 0.009, 'gun', false, 28);
   b.cyl(0.019, 0.003, 0.004, 0.0085, 0.0085, 0.012, 'gun', 0xffffff, 0, 0, H, 14);          // brightness turret
   b.cyl(0, 0.0195, 0.006, 0.0075, 0.0075, 0.009, 'gun', 0xffffff, 0, 0, 0, 14);             // windage cap
   b.boxC(0, -0.0145, 0, 0.022, 0.008, 0.04, 'gun', 0, 0, 0, 0, 0.002);
@@ -123,7 +123,7 @@ function buildACOG(R) { // Trijicon TA31 style 4x-looking body used as a 2x: ocu
   tube(b, 0, 0, L / 2 - 0.018, 0.0165, 0.0205, 0.036, 'gun', false);   // ocular (no inner wall: the eye sees through)
   tube(b, 0, 0, -0.005, 0.0145, 0.0165, 0.08, 'gun', false);
   tube(b, 0, 0, -L / 2 + 0.02, 0.0165, 0.021, 0.04, 'gun', false);     // objective bell
-  b.cyl(0, 0, L / 2 - 0.0015, 0.0215, 0.0215, 0.003, 'poly', 0xffffff, H, 0, 0, 28); // rubber eyepiece rim (ring drawn below)
+  tube(b, 0, 0, L / 2 - 0.0015, 0.0168, 0.0215, 0.003, 'poly', false, 28);                 // rubber eyepiece rim
   b.boxC(0, 0.021, -0.012, 0.016, 0.01, 0.06, 'gun', 0, 0, 0, 0, 0.002);    // elevation housing / fibre mount
   b.cyl(0.019, 0.0, -0.005, 0.008, 0.008, 0.012, 'gun', 0xffffff, 0, 0, H, 14);
   b.cyl(0, 0.022, -0.005, 0.008, 0.008, 0.01, 'gun', 0xffffff, 0, 0, 0, 14);
@@ -237,7 +237,7 @@ export function wui() {
   document.head.appendChild(st);
   UI.ub = document.createElement('div'); UI.ub.className = 'am-ub'; G.hud.ammo.appendChild(UI.ub);
   UI.tb = document.createElement('div'); UI.tb.className = 'wprompt'; UI.tb.innerHTML = '按 <kbd>G</kbd> 掷回'; ui.appendChild(UI.tb);
-  UI.vig = document.createElement('div'); UI.vig.className = 'wvig'; ui.appendChild(UI.vig);
+  UI.vig = document.createElement('div'); UI.vig.className = 'wvig'; ui.insertBefore(UI.vig, ui.firstChild); // under the rest of the HUD
   UI.ok = true; UI.k = ''; UI.vk = ''; UI.tbOn = false; UI.vo = -1;
   return UI;
 }
@@ -250,7 +250,7 @@ export function updateWUI(ubHtml, ubOn, tb, vig) {
   const vk = `${innerWidth}x${innerHeight}`;
   if (vig > 0.01 && vk !== U.vk) { // hole = the ACOG eyepiece as seen from the eye (viewmodel camera fov 50)
     U.vk = vk; const r = (Math.tan(Math.atan(0.0168 / OPT.x2.eye)) / Math.tan((25 * Math.PI) / 180)) * innerHeight * 0.5;
-    U.vig.style.background = `radial-gradient(circle at 50% 50%, rgba(0,0,0,0) ${(r * 0.9).toFixed(0)}px, rgba(0,0,0,.55) ${(r * 1.02).toFixed(0)}px, rgba(0,0,0,.86) ${(r * 1.25).toFixed(0)}px)`;
+    U.vig.style.background = `radial-gradient(circle at 50% 50%, rgba(0,0,0,0) ${(r * 0.9).toFixed(0)}px, rgba(0,0,0,.5) ${(r * 1.02).toFixed(0)}px, rgba(0,0,0,.72) ${(r * 1.3).toFixed(0)}px)`;
   }
   const vo = Math.round(vig * 50) / 50;
   if (vo !== U.vo) { U.vo = vo; U.vig.style.opacity = String(vo); }

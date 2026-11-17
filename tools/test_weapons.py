@@ -55,8 +55,85 @@ async def main():
               __input.pressed.add('KeyX'); __sim(0.5); const on=__WP.ubOn, a0=__WP.ammo, name=window.__wpn.curDef().name;
               __input.lmbPressed=true; __input.lmb=true; __sim(0.05); __input.lmb=false; __sim(0.9); const a1=__WP.ammo;
               __input.pressed.add('KeyX'); __sim(0.5); return {on, name, a0, a1, back:__WP.ubOn, rifle:__WP.ammo, err:window.__errors.slice(0,3)}; })()""")
-            # melee vs interaction: mine laptop prompt in ck 10
-            await out("cave", "({phase:__D.phase, cv:__D.cv && Object.keys(__D.cv).slice(0,30), pos:__P.pos.toArray().map(v=>+v.toFixed(2))})")
+            # melee vs interaction: F in the open swings the knife; F at the mine laptop (ck 10) is the interaction only
+            await out("meleeOpen", """(()=>{ __P.pos.set(-0.5,0,-2.5); __sim(0.3); __input.pressed.add('KeyF'); __sim(1/60); const m=__WP.meleeT; __sim(0.8); return {meleeT:m, p:__G.hud._p||null}; })()""")
+            await out("laptop", """(()=>{ __D.cv.ph='office'; __P.pos.set(7.6,0,-61.0); __P.yaw=-1.2; __sim(0.4); const pr=__G.hud._p;
+              __input.pressed.add('KeyF'); __input.down.add('KeyF'); __sim(1/60); const m=__WP.meleeT; __sim(1.8); __input.down.delete('KeyF'); __sim(0.2);
+              return {prompt:pr, meleeT:m, intel:!!__D.cv.intel, ck:__D.ck, err:window.__errors.slice(0,3)}; })()""")
+            # grenade throw-back: enemy grenade 1.3 m in front, G snatches it and lobs it along the aim
+            await out("throwback", """(()=>{ __P.pos.set(-0.5,0,-2.5); __P.yaw=0; __P.pitch=0.1; __sim(0.2);
+              const n=window.__wpn.throwNade(new __THREE.Vector3(-0.5,0.05,-3.8), new __THREE.Vector3(0,0,0), 'enemy'); n.fuse=2.0; __sim(0.15);
+              const offer=__P.tbNade===n, ui=document.querySelector('.wprompt')?.classList.contains('on');
+              __input.pressed.add('KeyG'); __sim(1/60); const held=n.held; __sim(0.3); const f0=n.fuse, rel={held:n.held, owner:n.owner, v:+n.vel.length().toFixed(1)};
+              const p0=n.pos.clone(); __sim(0.5); const moved=+n.pos.distanceTo(p0).toFixed(1); __sim(2.0);
+              return {offer, ui, held, rel, fuseAtRelease:+f0.toFixed(2), moved, gone:!__NADES.includes(n), hp:__P.health, err:window.__errors.slice(0,3)}; })()""")
+            await out("tbLate", """(()=>{ const n=window.__wpn.throwNade(new __THREE.Vector3(-0.5,0.05,-3.6), new __THREE.Vector3(0,0,0), 'enemy'); n.fuse=0.3; __sim(0.05); const o=__P.tbNade===n; __sim(0.5); return {offerWhenShortFuse:o}; })()""")
+            # corpse pickup: a dead enemy that drops an AK-12 with a holo + GP-25 -> hold F, prompt names the attachments
+            await out("pickup", """(()=>{ const give=window.__wpn.giveWeapon; give('m4',30,200,{optic:'reddot',under:null}); __sim(0.8);
+              const h0=__G.mates[0].h; const fake={faction:'ru', dropWeapon:'ak12', dropAtt:{optic:'holo',under:'gl'}, j:h0.j.map(v=>v.clone()), removed:false, hidden:false};
+              fake.j[2].set(-0.5,0.9,-4.0); __G.onCorpse(fake); __P.pos.set(-0.5,0,-3.2); __sim(0.1); const pr=__G.pickPrompt, hud=__G.hud._p;
+              __input.pressed.add('KeyF'); __input.down.add('KeyF'); __sim(1/60); const m=__WP.meleeT; __sim(0.5); __input.down.delete('KeyF'); __sim(0.8);
+              const r={prompt:pr, hudPrompt:hud, meleeT:m, prim:__WP.prim, att:__WP.att[__WP.prim], ub:__WP.ub&&[__WP.ub.def.name,__WP.ub.ammo,__WP.ub.reserve], left:__G.pickups.map(k=>[k.w, JSON.stringify(k.att), k.ammo]), back:__G.pickPrompt};
+              const f2={faction:'ru', dropWeapon:'smg', j:h0.j.map(v=>v.clone())}; f2.j[2].set(3,0.9,-4); __G.onCorpse(f2); r.rolled=__G.pickups[__G.pickups.length-1].att;
+              const f3={faction:'ru', dropWeapon:'pistol', j:h0.j.map(v=>v.clone())}; f3.j[2].set(3,0.9,-6); __G.onCorpse(f3); r.pistolDrop=[__G.pickups[__G.pickups.length-1].w, __G.pickups[__G.pickups.length-1].pistol];
+              r.err=window.__errors.slice(0,3); return r; })()""")
+            # lean: offset, roll, blocked by a wall
+            await out("lean", """(()=>{ __P.pos.set(-0.5,0,-2.5); __P.yaw=0; __sim(0.2); const c0=__G.camera.position.clone();
+              __input.down.add('KeyE'); __sim(0.6); const r={E:[+__P.leanOff.toFixed(3), +(__G.camera.position.clone().sub(c0).length()).toFixed(3), +__G.camera.rotation.z.toFixed(3)]};
+              __input.down.delete('KeyE'); __input.down.add('KeyQ'); __sim(0.6); r.Q=[+__P.leanOff.toFixed(3), +__G.camera.rotation.z.toFixed(3), +__P.eye.distanceTo(c0).toFixed(3)]; __input.down.delete('KeyQ'); __sim(0.5); r.rest=+__P.leanOff.toFixed(3);
+              // find a wall: step sideways until a box is hit within 0.5 m to the right
+              const d=new __THREE.Vector3(); let best=null; for(let x=-6;x<=6;x+=0.25){ __P.pos.set(x,0,-2.5); __sim(0.05); } r.err=window.__errors.slice(0,3); return r; })()""")
+            await out("leanWall", """(()=>{ let found=null; for (let x=-8; x<=8 && !found; x+=0.2) for (let z=-10; z<=4 && !found; z+=0.5) { const b=__G.boxes.find(b=>b.enabled && !b.inv && b.min.y<1.5 && b.max.y>2.0 && x>b.max.x && x-b.max.x<0.6 && z>b.min.z+0.5 && z<b.max.z-0.5); if (b) found=[x,z,b.max.x]; }
+              if(!found) return {found:null}; __P.pos.set(found[0]+0.15,0,found[1]); __P.yaw=Math.PI/2; __sim(0.3);
+              // facing -x... yaw=+pi/2 faces -x, so the wall (at smaller x) is in front; lean must go sideways: use yaw=0 -> right is +x, left is -x (wall)
+              __P.yaw=0; __sim(0.1); __input.down.add('KeyQ'); __sim(0.7); const off=__P.leanOff, eyeX=__P.eye.x; __input.down.delete('KeyQ'); __sim(0.4);
+              return {wallX:found[2], playerX:+__P.pos.x.toFixed(2), off:+off.toFixed(3), eyeX:+eyeX.toFixed(3), ok: eyeX > found[2]}; })()""")
+            await out("f11", """(()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{code:'F11',key:'F11',bubbles:true,cancelable:true})); return {fsT:!!__input.fsT, paused:__G.paused, lockFailed:__input.lockFailed}; })()""")
+        if MODE == "shots":
+            await ev("__begin(4)"); await ev("__sim(2.0)")
+            await ev("__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.02; __G.enemies.forEach(e=>e.h.hidden=true); __sim(0.3)")
+            give = "window.__wpn.giveWeapon"
+            async def pose(k, att, ads, tag, extra=""):
+                await ev(f"{give}('{k}',30,90,{json.dumps(att)}); __sim(0.9); __input.rmb={'true' if ads else 'false'}; {extra} __sim(0.6)")
+                await snap(f"shots/w_{tag}.png")
+                await ev("__input.rmb=false; __sim(0.2)")
+            only = sys.argv[2].split(",") if len(sys.argv) > 2 else None
+            plan = [
+                ("m4", {"optic": "reddot", "under": None}, False, "m4_reddot_hip"),
+                ("m4", {"optic": "reddot", "under": None}, True, "m4_reddot_ads"),
+                ("m4", {"optic": "iron", "under": "gl"}, False, "m4_iron_m203_hip"),
+                ("m4", {"optic": "iron", "under": None}, True, "m4_iron_ads"),
+                ("ak", {"optic": "holo", "under": "gl"}, False, "ak_holo_gp25_hip"),
+                ("ak", {"optic": "holo", "under": None}, True, "ak_holo_ads"),
+                ("ak12", {"optic": "x2", "under": "shotgun"}, False, "ak12_x2_sg_hip"),
+                ("ak12", {"optic": "x2", "under": None}, True, "ak12_x2_ads"),
+                ("smg", {"optic": "reddot", "under": None}, False, "smg_reddot_hip"),
+                ("smg", {"optic": "iron", "under": None}, True, "smg_iron_ads"),
+            ]
+            for k, att, ads, tag in plan:
+                if only and tag not in only and "all" not in only: continue
+                await pose(k, att, ads, tag)
+            if not only or "lean" in only or "all" in only:
+                await ev(f"{give}('m4',30,90,{{optic:'reddot',under:null}}); __sim(0.8)")
+                for kk, tag in (("KeyQ", "lean_q"), ("KeyE", "lean_e")):
+                    await ev(f"__input.down.add('{kk}'); __sim(0.7)")
+                    await snap(f"shots/w_{tag}.png")
+                    await ev(f"__input.down.delete('{kk}'); __sim(0.5)")
+            if not only or "gl" in only or "all" in only:
+                await ev(f"__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.06; {give}('m4',30,90,{{optic:'reddot',under:'gl'}}); __sim(0.8); __input.pressed.add('KeyX'); __sim(0.5)")
+                await ev("__input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.12)")
+                await snap("shots/w_gl_flight.png")
+                await ev("for(let i=0;i<120 && window.__wpn.GL.length;i++) __sim(1/60); __sim(0.1)")
+                await snap("shots/w_gl_boom.png")
+                await ev("__sim(1.5); __input.pressed.add('KeyX'); __sim(0.5)")
+                await ev(f"{give}('ak12',30,90,{{optic:'reddot',under:'shotgun'}}); __sim(0.8); __input.pressed.add('KeyX'); __sim(0.5); __input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.01)")
+                await snap("shots/w_ubsg_fire.png")
+            if not only or "tb" in only or "all" in only:
+                await ev("__sim(1); __P.pitch=-0.2; const n=window.__wpn.throwNade(new __THREE.Vector3(__P.pos.x,__P.pos.y+0.05,__P.pos.z-1.3), new __THREE.Vector3(0,0,0), 'enemy'); n.fuse=2.5; __sim(0.1)")
+                await snap("shots/w_tb_prompt.png")
+                await ev("__P.pitch=0.1; __input.pressed.add('KeyG'); __sim(0.16)")
+                await snap("shots/w_tb_throw.png")
+                await ev("__sim(3)")
         print("errors", await ev("window.__errors"), flush=True)
         for l in logs[:20]: print(l)
         await b.close()

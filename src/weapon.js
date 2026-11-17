@@ -4,7 +4,7 @@ import { Builder, TEX, mat4, rbox } from './geom.js';
 import { M, TX, stdMat } from './mats.js';
 import { raycast } from './physics.js';
 import { play, gunShot } from './audio.js';
-import { fireGL, GL } from './grenade.js';
+import { fireGL, GL, throwNade } from './grenade.js';
 import { buildAttachments, fitAttachments } from './attach.js';
 import { T } from './train.js';
 
@@ -770,4 +770,4 @@ export function renderViewmodel(renderer) {
 }
 
 // test hooks (headless checks in tools/test_weapons.py)
-if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, GL, DEF, UBDEF };
+if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, GL, DEF, UBDEF, throwNade };
