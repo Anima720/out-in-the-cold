@@ -45,7 +45,7 @@ export function initHUD() {
   HUD.credits = $('div', 'credits', ui, '<div class="roll"></div>');
   HUD.toastEl = $('div', 'toast', ui);
   HUD.ftag = $('div', 'ftag', ui);
-  HUD.scope = $('div', 'scope', ui, '<i></i><i></i><b></b>');
+  HUD.scope = $('div', 'scope', ui, '<div class="scope-ret"><i></i><i></i><b></b></div>'); HUD.scopeRet = HUD.scope.firstChild;
   HUD.threat = $('div', 'threat', ui, '<b></b><i></i><span></span>'); HUD.thS = HUD.threat.querySelector('span'); HUD.thA = HUD.threat.querySelector('b');
   initMinimap(ui);
   HUD.hitT = 0; HUD.dmgList = []; HUD.mk = null; HUD.lk = null; HUD.th = null;
@@ -144,6 +144,7 @@ export function updateHUD(dt) {
     if (HUD._bk !== k) { HUD._bk = k; const n = Math.min(mag, 40); HUD.amBar.innerHTML = mag ? '<i></i>'.repeat(Math.min(WP.ammo, n)) .replace(/<i><\/i>/g, '<i></i>') + '<i class="e"></i>'.repeat(Math.max(0, n - WP.ammo)) : ''; } }
   WP.scoped = G.state === 'play' && !P.mounted && WP.cur === 'svd' && WP.adsT > 0.85 && !WP.sw;
   HUD.scope.classList.toggle('on', WP.scoped); HUD.cross.style.opacity = WP.scoped ? '0' : '';
+  if (WP.scoped) HUD.scopeRet.style.transform = `rotate(${-(WP.root?.rotation.z || 0)}rad)`;
   // friendly name tag when looking at a teammate
   { let best = null, ba = 0.09;
     if (G.state === 'play' && G.mates) { G.camera.getWorldDirection(_v2);

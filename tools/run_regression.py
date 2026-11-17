@@ -25,6 +25,7 @@ CASES = {
     'ai': ['test_ai.py'],
     'ai_shots': ['shot_ai.py'],
     'review_shots': ['capture_review.py'],
+    'lean': ['test_lean.py'],
 }
 
 def process_snapshot():

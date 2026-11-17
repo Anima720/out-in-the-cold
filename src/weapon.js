@@ -10,7 +10,7 @@ import { T } from './train.js';
 
 // First-person viewmodel (separate scene rendered over the world) + firing for rifle, pistol, DShK.
 export const WP = {};
-const UP = new THREE.Vector3(0, 1, 0);
+const UP = new THREE.Vector3(0, 1, 0), _viewQ = new THREE.Quaternion();
 
 function segm(b, A, B, r0, r1, key, color = 0xffffff, seg = 12) {
   const a = new THREE.Vector3(...A), c = new THREE.Vector3(...B), d = c.clone().sub(a), len = d.length();
@@ -437,7 +437,7 @@ export function initWeapon() {
   VM = vmMats();
   WP.models = { m4: buildM4(), ak: buildAK({ ub: true }), ak12: buildAK({ rail: true, ub: true }), smg: buildSMG(), pistol: buildPistol(), igla: buildIgla(), rpg: buildIgla(true), pkm: buildAK({ ext: 0.16, barrel: 0.015, muzR: 0.02, mag: 'can', bipod: true, shroud: true }), svd: buildAK({ ext: 0.24, barrel: 0.009, mag: 'short', scope: true }), saiga: buildAK({ ext: -0.06, barrel: 0.016, muzR: 0.022, mag: 'box' }) };
   for (const m of Object.values(WP.models)) { m.g.visible = false; root.add(m.g); }
-  WP.attm = buildAttachments(VM); cam.add(WP.attm.scope);
+  WP.attm = buildAttachments(VM); root.add(WP.attm.scope);
   WP.throwArm = buildThrowArm(); WP.throwArm.pivot.visible = false; cam.add(WP.throwArm.pivot);
   WP.knife = buildKnifeArm(); WP.knife.pivot.visible = false; cam.add(WP.knife.pivot);
   // muzzle flash
@@ -671,7 +671,9 @@ function ejectShell() {
 export function updateViewmodel(dt, p) {
   const W = WP, cam = WP.cam; let mdl = W.m;
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
-  W.sun.position.set(-0.45, 1, 0.35).applyQuaternion(G.camera.quaternion.clone().invert()).multiplyScalar(5);
+  W.sun.position.set(-0.45, 1, 0.35).applyQuaternion(_viewQ.copy(G.camera.quaternion).invert()).multiplyScalar(5);
+  // Cant the complete gun/optic around the eye's view axis, not the weapon's grip origin.
+  W.root.rotation.z = W.inspect ? 0 : -(p.leanOff || 0) * 0.3;
   W.cool = Math.max(0, W.cool - dt); W.dCool = Math.max(0, W.dCool - dt);
   W.bloom = damp(W.bloom, 0, 5, dt);
   W.heat = Math.max(0, W.heat - dt * (W.overheated ? 0.32 : 0.22));
@@ -683,10 +685,10 @@ export function updateViewmodel(dt, p) {
   const bobA = p.bobAmt * (1 - ads * 0.85);
   const bx = Math.sin(p.bobPhase * Math.PI * 2) * 0.012 * bobA, by = -Math.abs(Math.cos(p.bobPhase * Math.PI * 2)) * 0.012 * bobA;
   const breathe = Math.sin(G.real * 1.6) * 0.0015 * (1 - ads * 0.7);
-  const hip = mdl.hip, ad = [0, -mdl.sightY, mdl.adsZ - mdl.rearZ], sp = mdl.sprint;
+  const hip = mdl.hip, sp = mdl.sprint;
   W.ubK = damp(W.ubK || 0, W.ubOn && W.cur === W.prim ? 1 : 0, 10, dt);
   const ubh = mdl.ub && W.cur === W.prim ? 1 - ads : 0;                    // hip carry raised a little so the launcher shows
-  let x = lerp(hip[0], ad[0], ads) - ubh * (0.012 + W.ubK * 0.018), y = lerp(hip[1], ad[1], ads) + ubh * (0.028 + W.ubK * 0.035), z = lerp(hip[2], ad[2], ads);
+  let x = lerp(hip[0], 0, ads) - ubh * (0.012 + W.ubK * 0.018), y = lerp(hip[1], -mdl.sightY, ads) + ubh * (0.028 + W.ubK * 0.035), z = lerp(hip[2], mdl.adsZ - mdl.rearZ, ads);
   x = lerp(x, sp[0], spr); y = lerp(y, sp[1], spr); z = lerp(z, sp[2], spr);
   let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32 + W.ubK * 0.3 * (1 - ads * 0.8);
   // weapon switch: lower, swap, raise
@@ -762,7 +764,7 @@ export function updateViewmodel(dt, p) {
     }
   }
   mdl.mag.position.y = (mdl.magY0 || 0) + magY; mdl.mag.visible = magVis;
-  rz -= (p.leanOff || 0) * 0.3; x += (p.leanOff || 0) * 0.02;                // lean: a little extra cant
+  x += (p.leanOff || 0) * 0.02 * (1 - ads);
   // 2x scope at full ADS: hide the gun, show the eyepiece view (it sways with the gun)
   const sv = mdl.optic === 'x2' && W.cur === W.prim && W.adsT > 0.86 && !busy() && !W.hidden;
   mdl.g.visible = !sv; W.attm.scope.visible = sv;

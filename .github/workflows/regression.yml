@@ -23,6 +23,8 @@ jobs:
             cases: finale epilogue review_shots
           - group: combat
             cases: weapons_logic weapons_shots weapons_npc ai ai_shots
+          - group: lean
+            cases: lean
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
