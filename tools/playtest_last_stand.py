@@ -40,17 +40,21 @@ async def main():
             await ev("__sim(5)"); await st(f"def{i}")
         await snap("shots/p5_fight.png")
         await ev("__p5().P5.up=54.9"); await ev("__sim(6)"); await st("dish?")
+        LOOKDISH = "(()=>{ __P.pos.set(3.2,4.3,4.2); __P.camY=4.3; __sim(0.3); const c=__G.camera.position, d=new __THREE.Vector3(-3.5,6.6,-0.5).sub(c).normalize(); __P.yaw=Math.atan2(-d.x,-d.z); __P.pitch=Math.asin(d.y); __sim(0.05); })()"
+        await ev(LOOKDISH); await snap("shots/p5_dish_hit.png")
         await ev("__P.pos.set(-0.8,4.3,2.5); __P.yaw=Math.PI; __input.down.add('KeyF'); __sim(2.2); __input.down.delete('KeyF')"); await st("aligned")
+        await ev("__sim(1.5)"); await ev(LOOKDISH); await snap("shots/p5_dish.png")
         await ev("__P.pos.set(9,4.3,-3.8); __P.yaw=Math.PI*0.75; __P.pitch=-0.25; __sim(0.2)")
         await snap("shots/p5_roof.png")
         await ev("__p5().P5.up=69.4"); await ev("__sim(4)"); await st("jugg")
-        for i in range(12):
+        for i in range(15):  # three Juggernauts walk in on foot, ~13 s apart
             await ev("__sim(4)")
-            if await ev("__G.enemies.some(e=>e.jugg&&e.h.alive)"): break
-        await st("jugg2")
+            if await ev("__G.enemies.filter(e=>e.jugg&&e.h.alive).length>=3"): break
+        await st("jugg2"); print("juggs", await ev("JSON.stringify(__G.enemies.filter(e=>e.jugg).map(e=>[e.h.alive,+e.h.pos.x.toFixed(1),+e.h.pos.z.toFixed(1)]))"), "marker", await ev("__G.hud.th && __G.hud.th.label"))
         await ev("const j=__G.enemies.find(e=>e.jugg); if(j){ __P.pos.set(j.h.pos.x, j.h.pos.y, j.h.pos.z+6); __P.yaw=0; __P.pitch=0.0 }"); await ev("__sim(0.2)")
         await snap("shots/p5_jugg.png")
         await ev("__G.enemies.filter(e=>e.jugg).forEach(e=>e.h.hurt(5000,new __THREE.Vector3(0,0,-1),'torso'))"); await ev("__sim(3)")
+        print("juggDone", await ev("__p5().P5.juggDone"), "kills", await ev("__p5().P5.juggKills"), "marker", await ev("!!__G.hud.th"))
         await ev("__p5().P5.up=80"); await ev("__sim(6)"); await st("hind")
         await ev("__sim(14)"); await st("strafe")
         for i in range(6):

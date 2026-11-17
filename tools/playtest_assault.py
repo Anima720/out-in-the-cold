@@ -1,6 +1,7 @@
 # Part 4 assault vehicles (assault.js): schedule, parking, dismounts, kills en route, Juggernaut marker, enemy cap.
 #   python3 tools/playtest_assault.py            logic run, 480x270 q=low (+ a few low-res shots)
 #   python3 tools/playtest_assault.py --visual   same run at 800x450 q=medium with the dismount screenshots
+#   --part 1 | --part 2                          run only one half (each fits the 900 s budget on the shared 2-core box)
 # Wrap in `timeout 900`. One Chrome. Shots go to shots/as_*.png.
 import asyncio, json, os, pathlib, sys
 from playwright.async_api import async_playwright
@@ -9,6 +10,7 @@ DIST = (ROOT / "dist" / "index.html").as_uri()
 CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
 SHOTS = ROOT / "shots"; SHOTS.mkdir(exist_ok=True)
 VIS = "--visual" in sys.argv
+PART = sys.argv[sys.argv.index("--part") + 1] if "--part" in sys.argv else "123"   # 1: schedule, Juggernauts, cap, kills  2: all-nine stress, refill pressure  3: ops-room corpses (#6)
 W, H, Q = (800, 450, "medium") if VIS else (480, 270, "low")
 TAG = "" if VIS else "_low"
 
@@ -87,106 +89,132 @@ async def main():
             print("  shot", f"shots/{name}{TAG}.png", flush=True)
         async def J(expr): return json.loads(await ev(f"JSON.stringify({expr})"))
 
-        # ---- Part 4, straight to the defence with everything else held still (no refills: the schedule is checked alone)
-        await ev("__begin(4)"); await ev("__sim(0.5)")
         SETUP = """(()=>{ const P5=__P5(); __D.timers.length=0; __D.q.length=0;
           Object.assign(P5, { ph:'defend', up:0, rate:0, wave:99, spawnT:1e9, refT:1e9, dishHit:true, dishDone:true, krasDone:true, l25:true, l50:true });
           for (const m of __G.mates) { m.p5='idle'; m.path=[]; }  __home(); })()"""
-        await ev(SETUP); await ev("__sim(0.5)")
-        print("start", await J("{ph:__P5().ph, en:__G.enemies.length, veh:__AS().A.veh.length, err:window.__errors}"))
+        if "1" in PART:
+            # ---- Part 4, straight to the defence with everything else held still (no refills: the schedule is checked alone)
+            await ev("__begin(4)"); await ev("__sim(0.5)")
+            SETUP = """(()=>{ const P5=__P5(); __D.timers.length=0; __D.q.length=0;
+              Object.assign(P5, { ph:'defend', up:0, rate:0, wave:99, spawnT:1e9, refT:1e9, dishHit:true, dishDone:true, krasDone:true, l25:true, l50:true });
+              for (const m of __G.mates) { m.p5='idle'; m.path=[]; }  __home(); })()"""
+            await ev(SETUP); await ev("__sim(0.5)")
+            print("start", await J("{ph:__P5().ph, en:__G.enemies.length, veh:__AS().A.veh.length, err:window.__errors}"))
 
-        async def stage(label, setup, rids, npax, shots=None):
-            print(f"== {label}", flush=True)
-            await ev(setup)
-            t = await J(f"__until(() => {json.dumps(rids)}.every(r => __AS().A.veh.some(v => v.rid === r)), 40)")
-            vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
-            check(len(vs) == len(rids) and all(v['npax'] == npax for v in vs), f"{label}: spawned {[v['rid'] for v in vs]} with {[v['npax'] for v in vs]} aboard (want {npax}) after {t}s")
-            if shots and 'drive' in shots: await shots['drive']()
-            t = await J(f"__until(() => __AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).every(v => v.arrived), 45)")
-            vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
-            for v in vs: check(v['arrived'] and not v['dead'], f"{v['rid']} parked at {v['pos']} yaw {v['yaw']} cols {v['cols']} in {t}s")
-            if shots and 'dismount' in shots: await shots['dismount']()
-            t = await J(f"__until(() => __AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).every(v => v.pax.every(r => !r.h.alive || r.ride.st === 'done')), 12, 0.05)")
-            for rid in rids:
-                px = await J(f"__pax(__AS().A.veh.find(v => v.rid === '{rid}'))")
-                ok = [r for r in px if r['alive'] and r['st'] == 'done' and not r['own'] and not r['noCrowd'] and r['active'] and not r['sit'] and r['enemy'] and abs(r['pos'][1]) < 0.12]
-                check(len(ok) == npax, f"{rid}: {len(ok)}/{npax} dismounted -> active enemies on the ground in {t}s")
-            await ev("__drive(1.0)")
-            bad = await J("(() => { const L = __AS().A.veh.filter(v => v.arrived && !v.dead), o = []; for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) if (__sat(__corners(L[i], 0.15), __corners(L[j], 0.15))) o.push(L[i].rid + '/' + L[j].rid); return o; })()")
-            check(not bad, f"parked vehicles keep distinct spots {bad}")
+            async def stage(label, setup, rids, npax, shots=None):
+                print(f"== {label}", flush=True)
+                await ev(setup)
+                t = await J(f"__until(() => {json.dumps(rids)}.every(r => __AS().A.veh.some(v => v.rid === r)), 40)")
+                vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
+                check(len(vs) == len(rids) and all(v['npax'] == npax for v in vs), f"{label}: spawned {[v['rid'] for v in vs]} with {[v['npax'] for v in vs]} aboard (want {npax}) after {t}s")
+                if shots and 'drive' in shots: await shots['drive']()
+                t = await J(f"__until(() => __AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).every(v => v.arrived), 45)")
+                vs = await J(f"__AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).map(__vinfo)")
+                for v in vs: check(v['arrived'] and not v['dead'], f"{v['rid']} parked at {v['pos']} yaw {v['yaw']} cols {v['cols']} in {t}s")
+                if shots and 'dismount' in shots: await shots['dismount']()
+                t = await J(f"__until(() => __AS().A.veh.filter(v => {json.dumps(rids)}.includes(v.rid)).every(v => v.pax.every(r => !r.h.alive || r.ride.st === 'done')), 12, 0.05)")
+                for rid in rids:
+                    px = await J(f"__pax(__AS().A.veh.find(v => v.rid === '{rid}'))")
+                    ok = [r for r in px if r['alive'] and r['st'] == 'done' and not r['own'] and not r['noCrowd'] and r['active'] and not r['sit'] and r['enemy'] and abs(r['pos'][1]) < 0.12]
+                    check(len(ok) == npax, f"{rid}: {len(ok)}/{npax} dismounted -> active enemies on the ground in {t}s")
+                await ev("__drive(1.0)")
+                bad = await J("(() => { const L = __AS().A.veh.filter(v => v.arrived && !v.dead), o = []; for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) if (__sat(__corners(L[i], 0.15), __corners(L[j], 0.15))) o.push(L[i].rid + '/' + L[j].rid); return o; })()")
+                check(not bad, f"parked vehicles keep distinct spots {bad}")
 
-        async def suv_shot():
-            await ev("__until(() => { const v = __AS().A.veh.find(v => v.rid === 'suvW'); return v && v.at >= 1.0; }, 5, 1/60)")
-            await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'suvW'); __look(v.pos.x + 4.2, v.pos.z - 3.2, v.pos.x, 0.9, v.pos.z); })()"); await snap("as_suv_doors")
-        await stage("SUV 20%", "__P5().up = 20", ["suvW"], 3, {"dismount": suv_shot})
-        async def truck_drive():
-            await ev("__until(() => { const v = __AS().A.veh.find(v => v.rid === 'truckW'); return v && v.s > v.L - 36; }, 30, 1/30)")
-            await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'truckW'); const bx = v.pos.x - v.tan.x * 10.5, bz = v.pos.z - v.tan.z * 10.5; __look(bx, bz, v.pos.x - v.tan.x * 1.2, v.pos.y + 2.2, v.pos.z - v.tan.z * 1.2, v.pos.y + 0.9); })()")
-            await snap("as_truck_bed")
-        async def truck_jump():
-            await ev("__until(() => __AS().A.veh.find(v => v.rid === 'truckW').at >= 2.22, 5, 1/60)")
-            await ev("__look(-6.6, -14.6, -9.2, 1.3, -23.0)"); await snap("as_truck_jump")
-        await stage("truck 28%", "__P5().up = 28", ["truckW"], 5, {"drive": truck_drive, "dismount": truck_jump})
-        async def sled_shot():
-            await ev("__until(() => __AS().A.veh.find(v => v.rid === 'sledSW').at >= 0.5, 5, 1/60)")
-            await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'sledSW'); const f = [-Math.sin(v.yaw), -Math.cos(v.yaw)]; __look(v.pos.x + f[0] * 6.5 + f[1] * 1.5, v.pos.z + f[1] * 6.5 - f[0] * 1.5, v.pos.x, 0.9, v.pos.z); })()")
-            await snap("as_sled_hop")
-        await stage("sleds 42%", "__P5().up = 42", ["sledSW", "sledSE"], 2, {"dismount": sled_shot})
-        await stage("SUV 50%", "__P5().up = 50", ["suvE"], 2)
-        await stage("truck 60%", "__P5().up = 60", ["truckE"], 4)
-        print("alive enemies:", await J("__AS().aliveN()"))
-        # ~70%: three Juggernauts walk in on foot, staggered; marker on the nearest, counts the living; cleared when all are down
-        print("== Juggernauts 70%", flush=True)
-        await ev("__P5().up = 69.5"); await ev("__drive(0.5)")
-        th = await J("(() => { const t = __G.hud.th; return { on: !!t, label: t && t.label, live: !!t && t.pos === __AS().A.th, n: __AS().A.juggs.length, trucks: __AS().A.veh.filter(v => v.rid === 'truckJ').length }; })()")
-        check(th['on'] and th['label'] == '重装兵' and th['live'] and th['n'] == 1 and th['trucks'] == 0, f"first Juggernaut on foot, no truck, marker on: {th}")
-        await ev("__drive(27)")
-        jg = await J("(() => { const A = __AS().A, L = A.juggs.map(r => [r.h.alive, +r.h.pos.x.toFixed(1), +r.h.pos.z.toFixed(1), Object.prototype.hasOwnProperty.call(r, 'update')]); return { L, label: __G.hud.th && __G.hud.th.label, near: A.near, juggSp: __P5().juggSpawned }; })()")
-        check(len(jg['L']) == 3 and all(x[0] for x in jg['L']) and jg['label'] == '重装兵 ×3' and jg['near'], f"three Juggernauts walking in, staggered; marker label counts them; gate call fired: {jg}")
-        await ev("(() => { const j = __AS().A.juggs[0]; __look(-3.2, -7.4, j.h.pos.x, 1.4, j.h.pos.z); })()"); await snap("as_jugg_marker", True)
-        for k in range(3):
-            await ev(f"(() => {{ const j = __AS().A.juggs[{k}]; j.h.hurt(5000, new __THREE.Vector3(0, 0, -1), 'torso'); }})()"); await ev("__drive(0.3)")
-            st = await J("{lab: __G.hud.th && __G.hud.th.label, done: !!__P5().juggDone, kills: __P5().juggKills, el: !!document.querySelector('.threat.on')}")
-            want = ['重装兵 ×2', '重装兵', None][k]
-            check(st['lab'] == want and st['done'] == (k == 2) and (st['el'] == (k < 2)), f"Juggernaut {k + 1} down: marker {st}")
-        # enemy cap: the late SUV waits while > 16 are alive
-        n = await J("__AS().aliveN()")
-        await ev("__P5().hindIn = true"); await ev("__drive(14)")
-        held = await J("{alive: __AS().aliveN(), q: __AS().A.q.length, suv: __AS().A.veh.some(v => v.rid === 'suvNW')}")
-        check(n > 16 and held['q'] == 1 and not held['suv'], f"late SUV held back while {held['alive']} (>16) enemies alive: {held}")
-        k = await J("__killDone()"); print("   killed", k)
-        await stage("late SUV (Hind phase)", "0", ["suvNW"], 3)
-        await J("__killDone()")
-        await stage("sleds (Igla phase)", "__P5().ph = 'igla'", ["sledW2", "sledNE"], 2)
-        await J("__killDone()")
-        check(not await J("__ovlog"), f"no vehicle drove through a collider, parked vehicle or tree: {await J('__ovlog.slice(0, 8)')}")
-        # destroyed en route: everybody aboard dies
-        print("== destroyed en route", flush=True)
-        for rid, n, how in [("truckW", 5, "v.hurt(1e5)"), ("suvE", 3, "v.hurt(1e5)"), ("sledSE", 2, "v.hurt(1e5)"), ("sledSW", 2, "v.pax[0].h.hurt(500, new __THREE.Vector3(0,0,-1), 'head')")]:
-            r = await J(f"""(() => {{ const v = __AS().send('{rid}', {n}); __drive(3); const pre = v.pax.filter(r => r.h.alive).length; {how}; __drive(0.5);
-              return {{ pre, dead: v.dead, alive: v.pax.filter(r => r.h.alive).length, pos: [v.pos.x, v.pos.z].map(x => +x.toFixed(0)), cols: v.col.length }}; }})()""")
-            check(r['pre'] == n and r['dead'] and r['alive'] == 0, f"{rid} destroyed en route ({how}) kills all {n} aboard: {r}")
-        # stress: a clean yard, all nine vehicles released at the same moment -> own lanes, never touching
-        print("== stress: all nine at once", flush=True)
-        await ev("__begin(5)"); await ev("__sim(0.2)"); await ev(SETUP)
-        await ev("(() => { const P5 = __P5(); for (const k of ['as_suv1','as_truck1','as_sleds1','as_suv2','as_truck2','as_suv3','as_sleds2']) P5[k] = true; P5.as_init = true; for (const e of __G.enemies) e.h.remove(); __G.enemies.length = 0; })()")
-        await ev("__seplog.length = 0; window.__sepN = 0; __ovlog.length = 0; for (const r of Object.keys(__AS().ROUTES)) __AS().send(r, 2)")
-        t = await J("__until(() => __AS().A.veh.every(v => v.arrived), 40)")
-        r = await J("{n: __AS().A.veh.length, arrived: __AS().A.veh.filter(v => v.arrived && !v.dead).length, sep: __seplog.slice(0, 6), pairs: __sepN, ovl: __ovlog.slice(0, 6)}")
-        check(r['n'] == 9 and r['arrived'] == 9 and not r['sep'] and not r['ovl'] and r['pairs'] > 0, f"all nine released together: arrived in {t}s, {r['pairs']} close pairs sampled, no footprint contact {r}")
-        check(not await J("__seplog.length"), "vehicles never closer than 0.5 m over the whole run")
-        # pressure: from the start of the defence the yard fills to ~10 and is kept there (cap 16 never exceeded)
-        print("== pressure", flush=True)
-        await ev("__begin(5)"); await ev("__sim(0.2)")
-        await ev("(() => { const P5 = __P5(); __D.timers.length = 0; for (const k of ['as_suv1','as_truck1','as_sleds1','as_suv2','as_truck2','as_suv3','as_sleds2']) P5[k] = true; P5.as_init = true; Object.assign(P5, { up: 5, rate: 0, wave: 99 }); for (const e of __G.enemies) e.h.remove(); __G.enemies.length = 0; window.__maxAlive = 0; })()")
-        L = []
-        for i in range(8):
-            await ev("__drive(5)"); n = await J("__AS().aliveN()"); L.append(n)
-            if i == 3: await ev("for (const e of __G.enemies) if (e.h.alive && Math.random() < 0.6) e.h.die(new __THREE.Vector3(0, 0.3, -1), 2, 3)")
-        mx = await J("__maxAlive")
-        print("   alive every 5 s:", L, "max", mx)
-        check(L[2] >= 9 and L[-1] >= 9 and mx <= 16, f"early refill keeps ~10 alive (and refills after losses), never above 16: {L} max {mx}")
-        await ev("__sim(1)")
+            async def suv_shot():
+                await ev("__until(() => { const v = __AS().A.veh.find(v => v.rid === 'suvW'); return v && v.at >= 1.0; }, 5, 1/60)")
+                await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'suvW'); __look(v.pos.x + 4.2, v.pos.z - 3.2, v.pos.x, 0.9, v.pos.z); })()"); await snap("as_suv_doors")
+            await stage("SUV 20%", "__P5().up = 20", ["suvW"], 3, {"dismount": suv_shot})
+            async def truck_drive():
+                await ev("__until(() => { const v = __AS().A.veh.find(v => v.rid === 'truckW'); return v && v.s > v.L - 36; }, 30, 1/30)")
+                await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'truckW'); const bx = v.pos.x - v.tan.x * 10.5, bz = v.pos.z - v.tan.z * 10.5; __look(bx, bz, v.pos.x - v.tan.x * 1.2, v.pos.y + 2.2, v.pos.z - v.tan.z * 1.2, v.pos.y + 0.9); })()")
+                await snap("as_truck_bed")
+            async def truck_jump():
+                await ev("__until(() => __AS().A.veh.find(v => v.rid === 'truckW').at >= 2.22, 5, 1/60)")
+                await ev("__look(-6.6, -14.6, -9.2, 1.3, -23.0)"); await snap("as_truck_jump")
+            await stage("truck 28%", "__P5().up = 28", ["truckW"], 5, {"drive": truck_drive, "dismount": truck_jump})
+            async def sled_shot():
+                await ev("__until(() => __AS().A.veh.find(v => v.rid === 'sledSW').at >= 0.5, 5, 1/60)")
+                await ev("(() => { const v = __AS().A.veh.find(v => v.rid === 'sledSW'); const f = [-Math.sin(v.yaw), -Math.cos(v.yaw)]; __look(v.pos.x + f[0] * 6.5 + f[1] * 1.5, v.pos.z + f[1] * 6.5 - f[0] * 1.5, v.pos.x, 0.9, v.pos.z); })()")
+                await snap("as_sled_hop")
+            await stage("sleds 42%", "__P5().up = 42", ["sledSW", "sledSE"], 2, {"dismount": sled_shot})
+            await stage("SUV 50%", "__P5().up = 50", ["suvE"], 2)
+            await stage("truck 60%", "__P5().up = 60", ["truckE"], 4)
+            print("alive enemies:", await J("__AS().aliveN()"))
+            # ~70%: three Juggernauts walk in on foot, staggered; marker on the nearest, counts the living; cleared when all are down
+            print("== Juggernauts 70%", flush=True)
+            await ev("__P5().up = 69.5"); await ev("__drive(0.5)")
+            th = await J("(() => { const t = __G.hud.th; return { on: !!t, label: t && t.label, live: !!t && t.pos === __AS().A.th, n: __AS().A.juggs.length, trucks: __AS().A.veh.filter(v => v.rid === 'truckJ').length }; })()")
+            check(th['on'] and th['label'] == '重装兵' and th['live'] and th['n'] == 1 and th['trucks'] == 0, f"first Juggernaut on foot, no truck, marker on: {th}")
+            await ev("__drive(27)")
+            jg = await J("(() => { const A = __AS().A, L = A.juggs.map(r => [r.h.alive, +r.h.pos.x.toFixed(1), +r.h.pos.z.toFixed(1), Object.prototype.hasOwnProperty.call(r, 'update')]); return { L, label: __G.hud.th && __G.hud.th.label, near: A.near, juggSp: __P5().juggSpawned }; })()")
+            check(len(jg['L']) == 3 and all(x[0] for x in jg['L']) and jg['label'] == '重装兵 ×3' and jg['near'], f"three Juggernauts walking in, staggered; marker label counts them; gate call fired: {jg}")
+            await ev("(() => { const j = __AS().A.juggs[0]; __look(-3.2, -7.4, j.h.pos.x, 1.4, j.h.pos.z); })()"); await snap("as_jugg_marker", True)
+            for k in range(3):
+                await ev(f"(() => {{ const j = __AS().A.juggs[{k}]; j.h.hurt(5000, new __THREE.Vector3(0, 0, -1), 'torso'); }})()"); await ev("__drive(0.3)")
+                st = await J("{lab: __G.hud.th && __G.hud.th.label, done: !!__P5().juggDone, kills: __P5().juggKills, el: !!document.querySelector('.threat.on')}")
+                want = ['重装兵 ×2', '重装兵', None][k]
+                check(st['lab'] == want and st['done'] == (k == 2) and (st['el'] == (k < 2)), f"Juggernaut {k + 1} down: marker {st}")
+            # enemy cap: the late SUV waits while > 16 are alive
+            n = await J("__AS().aliveN()")
+            await ev("__P5().hindIn = true"); await ev("__drive(14)")
+            held = await J("{alive: __AS().aliveN(), q: __AS().A.q.length, suv: __AS().A.veh.some(v => v.rid === 'suvNW')}")
+            check(n > 16 and held['q'] == 1 and not held['suv'], f"late SUV held back while {held['alive']} (>16) enemies alive: {held}")
+            k = await J("__killDone()"); print("   killed", k)
+            await stage("late SUV (Hind phase)", "0", ["suvNW"], 3)
+            await J("__killDone()")
+            await stage("sleds (Igla phase)", "__P5().ph = 'igla'", ["sledW2", "sledNE"], 2)
+            await J("__killDone()")
+            check(not await J("__ovlog"), f"no vehicle drove through a collider, parked vehicle or tree: {await J('__ovlog.slice(0, 8)')}")
+            # destroyed en route: everybody aboard dies
+            print("== destroyed en route", flush=True)
+            for rid, n, how in [("truckW", 5, "v.hurt(1e5)"), ("suvE", 3, "v.hurt(1e5)"), ("sledSE", 2, "v.hurt(1e5)"), ("sledSW", 2, "v.pax[0].h.hurt(500, new __THREE.Vector3(0,0,-1), 'head')")]:
+                r = await J(f"""(() => {{ const v = __AS().send('{rid}', {n}); __drive(3); const pre = v.pax.filter(r => r.h.alive).length; {how}; __drive(0.5);
+                  return {{ pre, dead: v.dead, alive: v.pax.filter(r => r.h.alive).length, pos: [v.pos.x, v.pos.z].map(x => +x.toFixed(0)), cols: v.col.length }}; }})()""")
+                check(r['pre'] == n and r['dead'] and r['alive'] == 0, f"{rid} destroyed en route ({how}) kills all {n} aboard: {r}")
+
+        if "2" in PART:
+            # stress: a clean yard, all nine vehicles released at the same moment -> own lanes, never touching
+            print("== stress: all nine at once", flush=True)
+            await ev("__begin(5)"); await ev("__sim(0.2)"); await ev(SETUP)
+            await ev("(() => { const P5 = __P5(); for (const k of ['as_suv1','as_truck1','as_sleds1','as_suv2','as_truck2','as_suv3','as_sleds2']) P5[k] = true; P5.as_init = true; const A = __AS().A; for (const v of [...A.veh]) v.remove(); A.q.length = 0; for (const e of __G.enemies) e.h.remove(); __G.enemies.length = 0; })()")
+            await ev("__seplog.length = 0; window.__sepN = 0; __ovlog.length = 0; for (const r of Object.keys(__AS().ROUTES)) __AS().send(r, 2)")
+            t = await J("__until(() => __AS().A.veh.every(v => v.arrived), 40)")
+            r = await J("{n: __AS().A.veh.length, arrived: __AS().A.veh.filter(v => v.arrived && !v.dead).length, sep: __seplog.slice(0, 6), pairs: __sepN, ovl: __ovlog.slice(0, 6)}")
+            check(r['n'] == 9 and r['arrived'] == 9 and not r['sep'] and not r['ovl'] and r['pairs'] > 0, f"all nine released together: arrived in {t}s, {r['pairs']} close pairs sampled, no footprint contact {r}")
+            check(not await J("__seplog.length"), "vehicles never closer than 0.5 m over the whole run")
+            # pressure: from the start of the defence the yard fills to ~10 and is kept there (cap 16 never exceeded)
+            print("== pressure", flush=True)
+            await ev("__begin(5)"); await ev("__sim(0.2)")
+            await ev("(() => { const P5 = __P5(); __D.timers.length = 0; for (const k of ['as_suv1','as_truck1','as_sleds1','as_suv2','as_truck2','as_suv3','as_sleds2']) P5[k] = true; P5.as_init = true; Object.assign(P5, { up: 5, rate: 0, wave: 99 }); for (const e of __G.enemies) e.h.remove(); __G.enemies.length = 0; window.__maxAlive = 0; })()")
+            L = []
+            for i in range(8):
+                await ev("__drive(5)"); n = await J("__AS().aliveN()"); L.append(n)
+                if i == 3: await ev("for (const e of __G.enemies) if (e.h.alive && Math.random() < 0.6) e.h.die(new __THREE.Vector3(0, 0.3, -1), 2, 3)")
+            mx = await J("__maxAlive")
+            print("   alive every 5 s:", L, "max", mx)
+            check(L[2] >= 9 and L[-1] >= 9 and mx <= 16, f"early refill keeps ~10 alive (and refills after losses), never above 16: {L} max {mx}")
+            await ev("__sim(1)")
+        if "3" in PART:
+            # v7 #6: bodies killed in and around the ops room (walls, furniture, the south door / snow) must come to rest and stay still
+            print("== corpses come to rest", flush=True)
+            await ev("__begin(5)"); await ev("__sim(0.3)")
+            await ev("""(()=>{ const P5=__P5(); Object.assign(P5, { wave: 99, refT: 1e9, rate: 0, as_init: true }); __D.timers.length = 0; for (const m of __G.mates) m.p5 = 'idle';
+              for (const e of __G.enemies) e.h.remove(); __G.enemies.length = 0; __P.pos.set(0, 0.15, 2.5);
+              const R = __AS().Raider, pts = [[0,-4.5,0,-1],[-4.6,-4.5,0,-1],[7.4,0,1,0],[-7.4,0.2,-1,0],[0,4.6,0,1],[0.5,5.0,0,1],[-0.5,5.6,0,1],[3.3,1.9,0,1],[-7,-2,-1,0],[6.5,3.2,1,0],[-6.2,4.0,-1,1],[1.5,-1.5,1,1]];
+              window.__C = pts.map(([x, z, dx, dz], i) => { const r = new R(x, z, {}); r.h.pos.y = Math.abs(x) < 8.2 && Math.abs(z) < 5.2 ? 0.15 : 0; r.update = () => {}; r.h.vel.set(dx * 4.3, 0, dz * 4.3); r.dir = [dx, dz]; return r; });
+              __sim(0.1);
+              __C.forEach((r, i) => { const h = r.h; for (let k = 0; k < 3; k++) { h.pos.x += r.dir[0] * 0.07; h.pos.z += r.dir[1] * 0.07; h.animate(1 / 60); } h.lastDt = 1 / 60;
+                h.hurt(500, new __THREE.Vector3(r.dir[0], 0.15, r.dir[1]).normalize(), i % 3 ? 'torso' : 'head', 2, { force: 7 }); });
+              window.__L = __C.map(r => r.h.j.map(v => v.clone())); })()""")
+            MOT = "(() => __C.map((r, i) => { let m = 0; const L = __L[i]; for (let k = 0; k < r.h.j.length; k++) { m = Math.max(m, r.h.j[k].distanceTo(L[k])); L[k].copy(r.h.j[k]); } return [+m.toFixed(3), r.h.rag && r.h.rag.asleep ? 1 : 0]; }))()"
+            await ev("__sim(16)"); await J(MOT)
+            late = []
+            for i in range(12): await ev("__sim(2)"); late.append(await J(MOT))
+            mx = max(m for row in late for m, a in row); awake = sum(1 for m, a in late[-1] if not a)
+            check(mx < 0.003 and awake == 0, f"12 bodies (walls, furniture, door threshold, snow outside) at rest after 16 s and still for 24 s more: max joint motion per 2 s {mx} m, awake {awake}")
+            await ev("(() => { __P.pos.set(2.6, 0.15, -3.2); __P.camY = 0.15; const d = new __THREE.Vector3(-1.5, 0.2, 3.5).sub(new __THREE.Vector3(2.6, 1.77, -3.2)).normalize(); __P.yaw = Math.atan2(-d.x, -d.z); __P.pitch = Math.asin(d.y); })()")
+            await snap("as_corpses")
         errs = await J("window.__errors")
         check(not errs, f"window.__errors empty: {errs[:3]}")
         print("\n".join(logs[-10:]))
