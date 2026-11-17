@@ -277,7 +277,7 @@ function bridgeHit() {
     after(dl, () => { const p = new THREE.Vector3(x, 1.5, spanZ(u)); explodeAt(p, sz, 1, 0, { noPlayerDmg: true, wind: 0.6 }); G.fx.flash(p, 0xffa050, 60, 40, 0.15); }));
   P.addShake(0.6);
   D.f.brakeAt = D.rt + 0.9;
-  HUD.objective('抓稳了');
+  HUD.objective(D.f.side ? '抓稳了' : '到右侧车边，准备跳车');
   musicMode('bridge');
   say('GRIN_07', 0.7); say('TRUCK_09', 1.2);
   const g = D.grinch;
@@ -432,7 +432,8 @@ export function updateDirector(dt, rdt) {
     const h = G.hind;
     // the Hind breaks off, swings out over the gorge and lines up side-on to the near span
     if (!D.f.lineup && dLoco < 345) { D.f.lineup = 1; if (h) { h.state = 'lineup'; h.stT = 0; } }
-    if (!D.f.t4 && dLoco < 240) { D.f.t4 = 1; say('TRUCK_04'); }
+    if (!D.f.t4 && dLoco < 240) { D.f.t4 = 1; say('TRUCK_04'); HUD.objective('到右侧车边，准备跳车'); HUD.setMarker(new THREE.Vector3(1.75, DECK + 1.1, -44.5), ''); D.truck.target.set(1.3, 0, -41.6); }
+    if (D.f.t4 && !D.f.side && P.pos.x > 1.45 && !P.mounted) { D.f.side = 1; HUD.setMarker(null); }
     if (!D.f.salvo && dLoco < 172) { // ripple of rockets into the near span; the camera is drawn to it for a moment
       D.f.salvo = 1; D.f.lookT = D.t + 2.4;
       if (!P.autoLook) { P.autoLook = { target: new THREE.Vector3(0, 3, spanZ(0.3)), rate: 1.3 }; D.f.lookSalvo = true; }
@@ -457,7 +458,7 @@ export function updateDirector(dt, rdt) {
     }
     // the engine reaches the lip: slow motion, JUMP (the player is still aboard and sees it tip over)
     if (!D.f.jumpOpen && !D.f.jumped && gorge.broken && dLoco < 6) {
-      D.f.jumpOpen = true; D.q.length = 0; D.cur = null; say('SAND_06'); HUD.objective('跳车！');
+      D.f.jumpOpen = true; D.q.length = 0; D.cur = null; say('SAND_06'); HUD.objective('跳车！'); HUD.setMarker(null);
       D.slow = { t: 0, hold: 3.4, out: 1.1, k: 0.3 }; HUD.setSlowmo(true); play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });
       if (D.f.lookSalvo) { P.autoLook = null; D.f.lookSalvo = false; }
       mateJump(D.truck, 0.25); mateJump(D.grinch, 0.55);

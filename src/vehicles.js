@@ -393,7 +393,7 @@ export class Hind {
         break;
       case 'lineup': // swings out over the gorge, side-on to the bridge, nose on the near span (rockets come from here)
         maxSp = 58;
-        if (gorge.active) { const ez = G.s - gorge.D - gorge.span0; this.wp.set(-42, 22, ez - 30); this.faceTarget.set(0, 1, ez - 10); }
+        if (gorge.active) { const ez = G.s - gorge.D - gorge.span0; this.wp.set(46, 21, ez + 70); this.faceTarget.set(0, 1, ez - 12); } // ahead-right: clear of the loco cab from the gun car
         break;
       case 'hover':
         maxSp = 60;

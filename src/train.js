@@ -383,6 +383,11 @@ function buildGunCar(b, c) {
     b.boxC(x, DECK + 0.37, z, 0.45, 0.03, 0.26, 'snow', SNOW);
   }
   crate(b, -1.45, -0.5, -41.4, -40.2, 1.1, 1);
+  // right-side step board (lean out past the loco cab to see the line ahead; the jump side)
+  b.boxC(1.76, DECK - 0.09, -44.5, 0.42, 0.05, 11.5, 'wood', 0x7a6650);
+  for (let z = -49.5; z <= -39.5; z += 2.5) b.boxC(1.62, DECK - 0.2, z, 0.2, 0.06, 0.08, 'dark', 0x2a2a2a);
+  b.cyl(1.92, DECK + 0.55, -45.2, 0.02, 0.02, 1.2, 'steel', 0xb0b0b0, 0, 0, 0, 6);
+  addBox(1.55, DECK - 0.12, -50.25, 1.97, DECK - 0.065, -38.75, 'wood');
   // pedestal
   b.cyl(0, DECK + 0.4, GUN_PIVOT.z, 0.12, 0.25, 0.8, 'dark', 0x2d3129, 0, 0, 0, 10);
   b.cyl(0, DECK + 0.05, GUN_PIVOT.z, 0.5, 0.55, 0.1, 'dark', 0x2d3129, 0, 0, 0, 12);
@@ -458,7 +463,8 @@ export function buildTrain() {
   for (const c of T.cars) {
     if (c.type === 'loco') { const w = addBox(-1.9, DECK - 0.3, c.z0 - 0.6, 1.9, 6, c.z0 - 0.3, 'metal', 'inv'); w.enabled = false; w.car = c.idx; T.invWalls.push(w); c.boxes.push(w); }
     for (const sx of [-1, 1]) {
-      const w = addBox(sx * 1.62, DECK - 0.3, c.z0 - 0.5, sx * 1.9, 6, c.z1 + 0.5, 'metal', 'inv');
+      const wx = c.type === 'gun' && sx > 0 ? 2.06 : 1.62; // gun car: the right step board is walkable
+      const w = addBox(sx * wx, DECK - 0.3, c.z0 - 0.5, sx * (wx + 0.28), 6, c.z1 + 0.5, 'metal', 'inv');
       w.enabled = false; w.car = c.idx; T.invWalls.push(w); c.boxes.push(w);
     }
   }

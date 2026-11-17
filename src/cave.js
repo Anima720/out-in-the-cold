@@ -1,7 +1,7 @@
 // Part 1 "坍塌" (collapsed mine) and Part 2 "升井" (cage elevator + blizzard yard + BTR).
 import { G, THREE, rr, ri, clamp, damp, lerp, smooth, yawOf, angDiff, reseed, mulberry32 } from './core.js';
 import { hit, key } from './input.js';
-import { Builder } from './geom.js';
+import { Builder, canvasTex, labelTex } from './geom.js';
 import { M } from './mats.js';
 import { W } from './world.js';
 import { J } from './humans.js';
@@ -42,6 +42,9 @@ Object.assign(LINES, {
 const CV = { root: {}, lights: [], look: null, flash: null, cover: [], cols: [], lvl: 0 };
 const _v = new THREE.Vector3(), _e = new THREE.Vector3(), _d = new THREE.Vector3();
 const flat = () => 0;
+const inHH = (x, z, pad = 0) => Math.abs(x) <= 8 + pad && z >= -6 - pad && z <= 10 + pad; // hoist house footprint
+const inShaft = (x, z) => Math.abs(x) < 2.4 && z > 4.1 && z < 8.3;
+const surfG = (x, z) => (inShaft(x, z) ? -90 : Math.abs(x) < 8 && z > -6 && z < 9.5 ? 0.04 : surfGround(x, z)); // Part 2 ground: hoist house floor, open shaft
 const surfGround = (x, z) => 0.5 * Math.sin(x * 0.045) * Math.cos(z * 0.035) + 0.25 * Math.sin(x * 0.13 + z * 0.09) + (Math.abs(x) > 40 ? (Math.abs(x) - 40) * 0.12 : 0);
 
 // ---------- look (fog / light) ----------
@@ -81,6 +84,70 @@ function flashlight(on) {
 let B;
 function solid(x0, y0, z0, x1, y1, z1, key, color, mat = 'rock', vis = true) { if (vis) B.box(x0, y0, z0, x1, y1, z1, key, color); CV.cols.push([x0, y0, z0, x1, y1, z1, mat]); }
 function cover(x, z, tier, list) { (list || CV.cover).push({ x, z, tier, used: null }); }
+
+// ---------- mine cage (bottom landing in Part 1, the ride up in Part 2) ----------
+// local frame: floor at y 0, x ±1.7, z ±1.6, folding gate on the -z side. setGate(k): 0 folded open .. 1 closed.
+const CAGE = { X: 1.7, Z: 1.6, H: 2.7, N: 9 };
+let CMAT = null;
+function cageMats() {
+  if (CMAT) return CMAT;
+  const t = canvasTex(64, 64, (g) => { g.strokeStyle = '#cdb27a'; g.lineWidth = 9; g.beginPath(); g.moveTo(0, 32); g.lineTo(32, 0); g.lineTo(64, 32); g.lineTo(32, 64); g.closePath(); g.stroke(); });
+  CMAT = {
+    ...M,
+    mesh: new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.3, side: THREE.DoubleSide, metalness: 0.45, roughness: 0.55, color: 0xa89a7a }),
+    gate: new THREE.MeshStandardMaterial({ color: 0x9c7a34, metalness: 0.55, roughness: 0.45 }),
+    lamp: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffc77a, emissiveIntensity: 7 }),
+    rope: new THREE.MeshStandardMaterial({ color: 0x2c2c2a, metalness: 0.7, roughness: 0.45 }),
+  };
+  return CMAT;
+}
+const _sq = new THREE.Quaternion(), _sv = new THREE.Vector3(), _sy = new THREE.Vector3(0, 1, 0), _sm = new THREE.Vector3(), _ss = new THREE.Vector3(1, 1, 1);
+function strut(b, ax, ay, az, bx, by, bz, t, key, color) { // square beam from a to b
+  _sv.set(bx - ax, by - ay, bz - az); const L = _sv.length(); _sq.setFromUnitVectors(_sy, _sv.normalize());
+  b.add(new THREE.BoxGeometry(t, L, t), key, color, new THREE.Matrix4().compose(_sm.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), _sq, _ss));
+}
+function cageMesh() {
+  const { X, Z, H, N } = CAGE, m = cageMats(), grp = new THREE.Group(), b = new Builder(), Y = 0x8a6a2a;
+  b.box(-X, -0.1, -Z, X, 0.04, Z, 'steel', 0x5c5e60);                                   // chequer-plate floor
+  for (const x of [-X + 0.06, 0, X - 0.06]) b.boxC(x, -0.2, 0, 0.1, 0.16, Z * 2, 'dark', 0x2a2a2a);
+  for (const [x, z] of [[-X, -Z], [X, -Z], [-X, Z], [X, Z], [-X, 0], [X, 0], [0, Z]]) b.boxC(x, H / 2, z, 0.09, H, 0.09, 'steel', Y);
+  for (const y of [0.06, 1.2, H - 0.04]) { b.boxC(-X, y, 0, 0.06, 0.07, Z * 2, 'steel', Y); b.boxC(X, y, 0, 0.06, 0.07, Z * 2, 'steel', Y); b.boxC(0, y, Z, X * 2, 0.07, 0.06, 'steel', Y); }
+  b.boxC(0, H - 0.04, -Z, X * 2 + 0.1, 0.1, 0.1, 'steel', Y); b.boxC(0, 0.02, -Z - 0.04, X * 2, 0.04, 0.08, 'steel', 0x444444); // gate header + bottom track
+  for (const sx of [-1, 1]) { b.boxC(sx * X, 0.17, 0, 0.02, 0.26, Z * 2, 'steel', 0x6a5a32); b.cyl(sx * (X - 0.12), 1.5, 0, 0.022, 0.022, Z * 2 - 0.4, 'steel', 0xa0a0a0, Math.PI / 2, 0, 0, 6); }
+  b.boxC(0, 0.17, Z, X * 2, 0.26, 0.02, 'steel', 0x6a5a32);
+  b.box(-X - 0.05, H, -Z - 0.05, X + 0.05, H + 0.06, Z + 0.05, 'steel', 0x5c5e60);         // roof plate
+  b.boxC(0, H + 0.32, 0, 3.8, 0.16, 0.22, 'steel', Y);                                    // crosshead (bridle)
+  for (const sx of [-1, 1]) { strut(b, sx * 1.6, H + 0.3, 0, sx * (X - 0.05), H + 0.05, -Z + 0.1, 0.06, 'steel', Y); strut(b, sx * 1.6, H + 0.3, 0, sx * (X - 0.05), H + 0.05, Z - 0.1, 0.06, 'steel', Y); }
+  for (const z of [-0.3, 0.3]) { b.cyl(0, H + 0.55, z, 0.05, 0.09, 0.42, 'dark', 0x2a2a2a, 0, 0, 0, 8); b.boxC(0, H + 0.38, z, 0.2, 0.08, 0.14, 'dark', 0x222222); }
+  for (const sx of [-1, 1]) for (const y of [0.25, H + 0.25]) b.boxC(sx * 1.84, y, 0, 0.2, 0.28, 0.34, 'dark', 0x252525); // guide shoes
+  b.sphere(0, H - 0.12, 0.6, 0.07, 'lamp', 0, 1, 1, 1, 10);                                // caged roof lamp
+  b.build(m, grp);
+  const guard = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 4, 12), m.dark); guard.position.set(0, H - 0.12, 0.6); guard.rotation.x = Math.PI / 2; grp.add(guard);
+  const pg = (w, h) => { const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 0.1, uv.getY(i) * h / 0.1); return g; };
+  for (const sx of [-1, 1]) { const w = new THREE.Mesh(pg(Z * 2 - 0.08, H - 0.32), m.mesh); w.position.set(sx * X, 0.3 + (H - 0.32) / 2, 0); w.rotation.y = Math.PI / 2; grp.add(w); }
+  { const w = new THREE.Mesh(pg(X * 2 - 0.08, H - 0.32), m.mesh); w.position.set(0, 0.3 + (H - 0.32) / 2, Z); grp.add(w); }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.16), new THREE.MeshBasicMaterial({ map: labelTex('НЕ БОЛЕЕ 12 ЧЕЛ.', { bg: '#c8b04a', fg: '#1a1a1a', font: 'bold 60px Arial' }) }));
+  sign.position.set(0.6, 1.85, Z - 0.04); sign.rotation.y = Math.PI; grp.add(sign);
+  // folding (scissor) gate: slats + crossed links, instanced; folded on the -x side
+  const gate = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), m.gate, N + 8 * (N - 1)); gate.frustumCulled = false; grp.add(gate);
+  const xs = new Float32Array(N), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), Pp = new THREE.Vector3(), Sc = new THREE.Vector3(), gz = -Z - 0.05;
+  const setGate = (k) => {
+    const sp = 0.035 + ((X * 2 - 0.14) / (N - 1) - 0.035) * k;
+    for (let i = 0; i < N; i++) { xs[i] = -X + 0.07 + i * sp; gate.setMatrixAt(i, M4.compose(Pp.set(xs[i], 1.24, gz), Q.identity(), Sc.set(0.03, 2.36, 0.035))); }
+    let n = N;
+    for (let i = 0; i < N - 1; i++) {
+      const dx = xs[i + 1] - xs[i], L = 0.62, hh = Math.sqrt(Math.max(0, L * L - dx * dx)) / 2;
+      for (let t = 0; t < 4; t++) for (const sg of [-1, 1]) {
+        const yc = 0.36 + t * 0.58; E.set(0, 0, Math.atan2(sg * 2 * hh, dx));
+        gate.setMatrixAt(n++, M4.compose(Pp.set((xs[i] + xs[i + 1]) / 2, yc, gz - 0.02 * sg), Q.setFromEuler(E), Sc.set(L, 0.022, 0.012)));
+      }
+    }
+    gate.instanceMatrix.needsUpdate = true;
+    return xs[N - 1];
+  };
+  setGate(0);
+  return { grp, setGate };
+}
 
 // ---------- Part 1: the mine ----------
 function buildMine() {
@@ -140,9 +207,10 @@ function buildMine() {
   for (const [x, z] of [[7.5, -105], [-8, -114], [8, -124]]) { solid(x - 0.6, 0, z - 0.6, x + 0.6, 1.2, z + 0.6, 'crate', 0xffffff, 'wood'); cover(x, z - 1.2, 0, CV.coverB); }
   // cage elevator at the north wall
   const CZ = -121.5;
-  for (const [x, z] of [[-1.7, CZ - 1.6], [1.7, CZ - 1.6], [-1.7, CZ + 1.6], [1.7, CZ + 1.6]]) B.cyl(x, 3.5, z, 0.06, 0.06, 7, 'steel', 0x8a6a2a);
-  for (let y = 0.4; y < 3; y += 0.5) { B.boxC(-1.7, y, CZ, 0.04, 0.04, 3.2, 'steel', 0x8a6a2a); B.boxC(1.7, y, CZ, 0.04, 0.04, 3.2, 'steel', 0x8a6a2a); B.boxC(0, y, CZ - 1.6, 3.4, 0.04, 0.04, 'steel', 0x8a6a2a); }
-  B.box(-1.7, 0, CZ - 1.6, 1.7, 0.12, CZ + 1.6, 'steel', 0x5c5e60); B.box(-1.8, 2.9, CZ - 1.7, 1.8, 3.0, CZ + 1.7, 'steel', 0x5c5e60);
+  { const mc = cageMesh(); mc.grp.position.set(0, 0, CZ); mc.grp.rotation.y = Math.PI; g.add(mc.grp); } // gate side faces the cavern
+  for (const z of [-0.3, 0.3]) B.cyl(0, 5.3, CZ + z, 0.022, 0.022, 3.4, 'dark', 0x2c2c2a, 0, 0, 0, 6);  // hoist ropes into the shaft
+  for (const sx of [-1, 1]) B.boxC(sx * 2.08, 3.5, CZ, 0.18, 7, 0.22, 'wood', 0x5a4632);                    // guides
+  B.boxC(0, 6.98, CZ, 4.6, 0.04, 4.2, 'dark', 0x050505);                                                   // shaft mouth in the roof
   CV.cols.push([-1.9, 0, CZ - 1.75, 1.9, 3.0, CZ - 1.55, 'metal'], [-1.9, 0, CZ - 1.6, -1.65, 3, CZ + 1.6, 'metal'], [1.65, 0, CZ - 1.6, 1.9, 3, CZ + 1.6, 'metal']);
   CV.cage = new THREE.Vector3(0, 0, CZ);
   B.build({ ...M, lamp: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffc77a, emissiveIntensity: 7 }), screen: new THREE.MeshStandardMaterial({ color: 0, emissive: 0x7de0ff, emissiveIntensity: 2.5 }) }, g);
@@ -157,7 +225,12 @@ function buildSurface() {
   B = new Builder();
   const terr = new THREE.PlaneGeometry(500, 500, 120, 120).rotateX(-Math.PI / 2);
   const p = terr.attributes.position, uv = terr.attributes.uv;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i); p.setY(i, surfGround(x, z) - 0.02); uv.setXY(i, x / 9, z / 9); }
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i); p.setY(i, Math.abs(x) < 7.9 && z > -5.9 && z < 9.4 ? -0.3 : surfGround(x, z) - 0.02); uv.setXY(i, x / 9, z / 9); }
+  { // no snow inside the hoist house (and no lid over the shaft): drop the terrain cells that lie inside it
+    const idx = terr.index.array, keep = [];
+    for (let i = 0; i < idx.length; i += 3) { let inside = 0; for (let k = 0; k < 3; k++) if (inHH(p.getX(idx[i + k]), p.getZ(idx[i + k]), 0.45)) inside++; if (inside < 3) keep.push(idx[i], idx[i + 1], idx[i + 2]); }
+    terr.setIndex(keep);
+  }
   terr.computeVertexNormals();
   const tm = new THREE.Mesh(terr, W.mat.snow); tm.receiveShadow = true; g.add(tm);
   const CON = 0x8e8a82;
@@ -165,22 +238,46 @@ function buildSurface() {
   solid(-8.5, 0, 9.5, 8.5, 9, 10.5, 'concrete', CON, 'concrete');
   solid(-8.5, 0, -6.5, -8, 9, 10, 'concrete', CON, 'concrete'); solid(8, 0, -6.5, 8.5, 9, 10, 'concrete', CON, 'concrete');
   solid(-8, 0, -6.5, -3, 9, -6, 'concrete', CON, 'concrete'); solid(3, 0, -6.5, 8, 9, -6, 'concrete', CON, 'concrete'); solid(-3, 4.2, -6.5, 3, 9, -6, 'concrete', CON, 'concrete');
-  solid(-8.5, 9, -6.5, 8.5, 9.4, 10.5, 'steel', 0x6b6e66, 'metal'); B.boxC(0, 9.5, 2, 17, 0.1, 16.8, 'snow', 0xffffff);
-  B.box(-8, -0.02, -6, 8, 0.06, 9.5, 'concrete', 0x6a675f);
-  solid(-6.5, 0, 2.5, -3.5, 2.6, 7.5, 'paint', 0x5d6a4a, 'metal'); B.cyl(-5, 3.6, 5, 1.4, 1.4, 4.4, 'steel', 0x5a5e60, Math.PI / 2, 0, 0, 18);
-  // headframe tower above the shaft
-  for (const [x, z] of [[-2.2, 4.2], [2.2, 4.2], [-2.2, 8.2], [2.2, 8.2]]) B.cyl(x, 14, z, 0.18, 0.18, 10, 'pRust', 0xffffff);
-  B.cyl(0, 19, 6.2, 2.0, 2.0, 0.4, 'pRust', 0xffffff, 0, 0, Math.PI / 2, 20);
-  // cage at the surface (its own group so it stays visible during the ride)
-  const CZ = 6.2, cg = new THREE.Group(), cb = new Builder();
-  for (const [x, z] of [[-1.7, CZ - 1.6], [1.7, CZ - 1.6], [-1.7, CZ + 1.6], [1.7, CZ + 1.6]]) cb.cyl(x, 1.5, z, 0.06, 0.06, 3, 'steel', 0x8a6a2a);
-  for (let y = 0.4; y < 3; y += 0.5) { cb.boxC(-1.7, y, CZ, 0.04, 0.04, 3.2, 'steel', 0x8a6a2a); cb.boxC(1.7, y, CZ, 0.04, 0.04, 3.2, 'steel', 0x8a6a2a); cb.boxC(0, y, CZ + 1.6, 3.4, 0.04, 0.04, 'steel', 0x8a6a2a); }
-  cb.box(-1.8, 2.9, CZ - 1.7, 1.8, 3.0, CZ + 1.7, 'steel', 0x5c5e60); cb.box(-1.7, -0.02, CZ - 1.6, 1.7, 0.06, CZ + 1.6, 'steel', 0x5c5e60);
-  const gate = new THREE.Group(), gb = new Builder();
-  for (let x = -1.5; x <= 1.5; x += 0.3) gb.boxC(x, 1.4, CZ - 1.6, 0.03, 2.8, 0.03, 'steel', 0x8a6a2a);
-  gb.boxC(0, 2.75, CZ - 1.6, 3.3, 0.05, 0.05, 'steel', 0x8a6a2a); gb.build(M, gate); cg.add(gate); CV.gate = gate;
-  cb.build(M, cg); G.scene.add(cg); CV.cageGrp = cg; cg.visible = false;
-  CV.cols.push([-1.9, 0, CZ - 1.6, -1.65, 3, CZ + 1.6, 'metal'], [1.65, 0, CZ - 1.6, 1.9, 3, CZ + 1.6, 'metal'], [-1.9, 0, CZ + 1.55, 1.9, 3, CZ + 1.75, 'metal']);
+  // roof and floor with the shaft opening (x ±2.4, z 4.1..8.3) cut out; the cage arrives through the floor
+  const SX = 2.4, SZ0 = 4.1, SZ1 = 8.3, CZ = 6.2;
+  for (const [x0, x1, z0, z1] of [[-8.5, -SX, -6.5, 10.5], [SX, 8.5, -6.5, 10.5], [-SX, SX, -6.5, SZ0], [-SX, SX, SZ1, 10.5]]) {
+    solid(x0, 9, z0, x1, 9.4, z1, 'steel', 0x6b6e66, 'metal'); B.box(x0 + 0.05, 9.4, Math.max(z0, -6.45) + 0.05, x1 - 0.05, 9.5, Math.min(z1, 10.45) - 0.05, 'snow', 0xffffff);
+  }
+  for (const [x0, x1, z0, z1] of [[-8, -SX, -6, 9.5], [SX, 8, -6, 9.5], [-SX, SX, -6, SZ0], [-SX, SX, SZ1, 9.5]]) B.box(x0, -0.02, z0, x1, 0.06, z1, 'concrete', 0x6a675f);
+  // shaft collar: hazard-striped kerb and the landing plates (keps) the cage stops flush with
+  for (let i = 0; i < 16; i++) { const u = -SX + (i + 0.5) * (SX * 2 / 16), c = i % 2 ? 0x1a1a1a : 0x9a8420; B.boxC(u, 0.09, SZ0 - 0.08, SX * 2 / 16, 0.07, 0.14, i % 2 ? 'dark' : 'steel', c); B.boxC(u, 0.09, SZ1 + 0.08, SX * 2 / 16, 0.07, 0.14, i % 2 ? 'dark' : 'steel', c); }
+  for (const [x0, x1, z0, z1] of [[-SX, -1.95, SZ0, SZ1], [1.95, SX, SZ0, SZ1], [-1.95, 1.95, SZ0, 4.5], [-1.95, 1.95, 7.9, SZ1]]) solid(x0, -0.25, z0, x1, 0.04, z1, 'steel', 0x5c5e60, 'metal');
+  solid(-6.5, 0, 2.5, -3.5, 2.6, 7.5, 'paint', 0x5d6a4a, 'metal');
+  { // hoist drum (turns while the cage moves)
+    const dg = new THREE.Group(), db = new Builder(); dg.position.set(-5, 3.6, 5);
+    db.cyl(0, 0, 0, 1.4, 1.4, 3.6, 'steel', 0x5a5e60, Math.PI / 2, 0, 0, 20); db.cyl(0, 0, 0, 1.43, 1.43, 1.6, 'dark', 0x2c2c2a, Math.PI / 2, 0, 0, 20);
+    for (const z of [-1.85, 1.85]) { db.cyl(0, 0, z, 1.75, 1.75, 0.1, 'steel', 0x6a5a3a, Math.PI / 2, 0, 0, 20); for (let a = 0; a < 6; a++) db.boxC(Math.cos(a) * 0.8, Math.sin(a) * 0.8, z + Math.sign(z) * 0.06, 1.5, 0.12, 0.05, 'dark', 0x333333, 0, 0, a); }
+    db.cyl(0, 0, 0, 0.15, 0.15, 4.6, 'dark', 0x222222, Math.PI / 2, 0, 0, 10); db.build(M, dg); g.add(dg); CV.drum = dg;
+  }
+  // headframe: tapering lattice tower over the shaft, sheave deck, two spoked sheaves
+  const HF = 0x7a4a2a, legs = [[-2.25, 4.25, -1.45, 5.0], [2.25, 4.25, 1.45, 5.0], [-2.25, 8.15, -1.45, 7.4], [2.25, 8.15, 1.45, 7.4]];
+  const lv = [9.4, 13.3, 17.2, 21.0], at = (l, y) => { const u = (y - 9.4) / 11.6; return [l[0] + (l[2] - l[0]) * u, l[1] + (l[3] - l[1]) * u]; };
+  for (const l of legs) strut(B, l[0], 9.4, l[1], l[2], 21.0, l[3], 0.26, 'pRust', 0xffffff);
+  for (let i = 0; i < 3; i++) for (const [a, c] of [[0, 1], [2, 3], [0, 2], [1, 3]]) {
+    const [ax0, az0] = at(legs[a], lv[i]), [cx0, cz0] = at(legs[c], lv[i]), [ax1, az1] = at(legs[a], lv[i + 1]), [cx1, cz1] = at(legs[c], lv[i + 1]);
+    strut(B, ax0, lv[i], az0, cx1, lv[i + 1], cz1, 0.12, 'pRust', 0xffffff); strut(B, cx0, lv[i], cz0, ax1, lv[i + 1], az1, 0.12, 'pRust', 0xffffff);
+    strut(B, ax1, lv[i + 1], az1, cx1, lv[i + 1], cz1, 0.16, 'pRust', 0xffffff);
+  }
+  B.box(-3.3, 21.0, 4.7, 1.9, 21.14, 7.7, 'steel', 0x4a4a46);
+  for (const z of [4.7, 7.7]) { B.box(-3.3, 22.0, z - 0.03, 1.9, 22.06, z + 0.03, 'steel', 0xb08a3a); for (let x = -3.2; x <= 1.9; x += 1.0) B.boxC(x, 21.57, z, 0.05, 1.0, 0.05, 'steel', 0xb08a3a); }
+  for (const z of [5.3, 7.1]) B.boxC(-1.5, 21.6, z, 0.5, 1.0, 0.35, 'dark', 0x2a2a2a);
+  B.boxC(-1.5, 22.6, 6.2, 0.18, 0.18, 1.9, 'dark', 0x222222);
+  CV.sheaves = [];
+  for (const z of [5.7, 6.7]) {
+    const sg = new THREE.Group(), sb2 = new Builder(); sg.position.set(-1.5, 22.6, z);
+    sb2.add(new THREE.TorusGeometry(1.5, 0.08, 6, 36), 'steel', 0x5a5550, null); sb2.add(new THREE.TorusGeometry(1.42, 0.04, 4, 36), 'dark', 0x2a2a2a, null);
+    for (let a = 0; a < 8; a++) sb2.boxC(Math.cos(a * Math.PI / 4) * 0.75, Math.sin(a * Math.PI / 4) * 0.75, 0, 1.4, 0.07, 0.05, 'steel', 0x5a5550, 0, 0, a * Math.PI / 4);
+    sb2.cyl(0, 0, 0, 0.22, 0.22, 0.3, 'dark', 0x222222, Math.PI / 2, 0, 0, 12); sb2.build(M, sg); g.add(sg); CV.sheaves.push(sg);
+    strut(B, -2.9, 23.1, z, -5.1, 5.0, z - 1.0, 0.045, 'dark', 0x2c2c2a); // rope down to the drum
+  }
+  // the cage (moves with the ride) and its two hoist ropes up to the sheaves
+  CV.cageObj = cageMesh(); CV.cageObj.grp.position.set(0, 0, CZ); g.add(CV.cageObj.grp); CV.cageGrp = CV.cageObj.grp;
+  CV.ropes = [5.7, 6.7].map((z) => { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 1, 6), cageMats().rope); r.position.set(0, 10, z); r.userData.z = z; g.add(r); return r; });
   CV.cage2 = new THREE.Vector3(0, 0, CZ);
   // RPG crate by the door
   solid(4.4, 0, -5.4, 6.2, 0.7, -4.4, 'paint', 0x4f5b3f, 'metal'); B.boxC(5.3, 0.78, -4.9, 1.0, 0.1, 0.16, 'pGreen', 0xffffff); B.cyl(5.3, 0.84, -4.9, 0.04, 0.012, 0.22, 'pGreen', 0xffffff, 0, 0, Math.PI / 2);
@@ -224,16 +321,39 @@ function buildSurface() {
   for (let i = 0; i < 160; i++) { const x = (rng() < 0.5 ? -1 : 1) * (42 + rng() * 120), z = 30 - rng() * 240; const s = 0.7 + rng() * 0.7; mt[i % 2].push(new THREE.Matrix4().compose(new THREE.Vector3(x, surfGround(x, z) - 0.3, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s))); }
   tg.forEach((geo, k) => { const im = new THREE.InstancedMesh(geo, W.mat.tree, mt[k].length); mt[k].forEach((m, i) => im.setMatrixAt(i, m)); im.computeBoundingSphere(); im.castShadow = true; g.add(im); });
   B.build({ ...M }, g);
-  // shaft walls for the ride up (a separate group scrolled during the elevator phase)
-  const sh = new THREE.Group(), sb = new Builder();
-  for (let k = 0; k < 14; k++) {
-    const y = -k * 6;
-    sb.box(-3, y - 6, CZ - 3, -2.4, y, CZ + 3, 'rock', 0x5c544c); sb.box(2.4, y - 6, CZ - 3, 3, y, CZ + 3, 'rock', 0x5c544c);
-    sb.box(-3, y - 6, CZ - 3, 3, y, CZ - 2.4, 'rock', 0x5c544c); sb.box(-3, y - 6, CZ + 2.4, 3, y, CZ + 3, 'rock', 0x5c544c);
-    sb.boxC(0, y - 0.5, CZ - 2.38, 4.6, 0.25, 0.1, 'wood', 0x5a4632); if (k % 2 === 0) sb.sphere(2.3, y - 2, CZ, 0.1, 'lamp', 0, 1, 1, 1, 8);
+  // the main shaft under the hoist house: lagged rock walls, timber sets every 2.5 m, guides, pipes, lamps, two
+  // level stations and the bottom landing (the cage really travels up it, from CV.cageY0 to the floor)
+  const sh = new THREE.Group(), sb = new Builder(), RK = 0x5c544c, TB = 0x5a4632, Y0 = CV.cageY0 = -64, YB = -72;
+  const ST = [[Y0, 'ГОРИЗОНТ −430'], [-44, 'ГОРИЗОНТ −310'], [-22, 'ГОРИЗОНТ −190']];
+  sb.box(-SX - 0.4, YB, SZ0, -SX, 0, SZ1, 'rock', RK); sb.box(SX, YB, SZ0, SX + 0.4, 0, SZ1, 'rock', RK);
+  sb.box(-SX - 0.4, YB, SZ1, SX + 0.4, 0, SZ1 + 0.4, 'rock', RK); sb.box(-SX - 0.4, YB - 0.4, SZ0 - 0.4, SX + 0.4, YB, SZ1 + 0.4, 'rock', 0x3a3430);
+  let yPrev = YB; // north wall (gate side) with the station openings
+  for (const [y] of ST) {
+    sb.box(-SX - 0.4, yPrev, SZ0 - 0.4, SX + 0.4, y, SZ0, 'rock', RK);
+    sb.box(-SX - 0.4, y, SZ0 - 0.4, -1.5, y + 3, SZ0, 'rock', RK); sb.box(1.5, y, SZ0 - 0.4, SX + 0.4, y + 3, SZ0, 'rock', RK);
+    // station: short lit gallery, timber sets, rails, barrier, sign
+    sb.box(-1.5, y - 0.3, SZ0 - 6, 1.5, y, SZ0, 'gravel', 0x5f5a54); sb.box(-1.9, y + 3, SZ0 - 6, 1.9, y + 3.4, SZ0, 'rock', RK);
+    sb.box(-1.9, y, SZ0 - 6, -1.5, y + 3, SZ0 - 0.4, 'rock', RK); sb.box(1.5, y, SZ0 - 6, 1.9, y + 3, SZ0 - 0.4, 'rock', RK); sb.box(-1.9, y, SZ0 - 6.4, 1.9, y + 3.4, SZ0 - 6, 'rock', 0x2a2622);
+    for (let z = SZ0 - 1.2; z > SZ0 - 6; z -= 1.6) { sb.boxC(-1.38, y + 1.45, z, 0.2, 2.9, 0.2, 'wood', TB); sb.boxC(1.38, y + 1.45, z, 0.2, 2.9, 0.2, 'wood', TB); sb.boxC(0, y + 2.9, z, 3.0, 0.2, 0.22, 'wood', TB); }
+    for (const x of [-0.62, 0.62]) sb.box(x - 0.04, y + 0.02, SZ0 - 6, x + 0.04, y + 0.12, SZ0 - 0.1, 'steel', 0x6a6e70);
+    sb.sphere(0, y + 2.65, SZ0 - 2.4, 0.09, 'lamp', 0, 1, 1, 1, 8);
+    if (y !== Y0) for (const yy of [0.55, 1.05]) for (let i = 0; i < 6; i++) sb.boxC(-1.25 + i * 0.5, y + yy, SZ0 - 0.25, 0.5, 0.06, 0.06, i % 2 ? 'dark' : 'steel', i % 2 ? 0x111111 : 0x9a8420);
+    yPrev = y + 3;
   }
-  sb.build({ ...M, lamp: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffc77a, emissiveIntensity: 7 }) }, sh);
-  sh.visible = false; G.scene.add(sh); CV.shaft = sh;
+  sb.box(-SX - 0.4, yPrev, SZ0 - 0.4, SX + 0.4, 0, SZ0, 'rock', RK);
+  for (let y = YB + 1; y < -0.3; y += 2.5) { // timber sets: wall plates round the shaft + buntons carrying the guides
+    const inOpen = ST.some(([sy]) => y > sy - 0.2 && y < sy + 3.2);
+    if (!inOpen) sb.boxC(0, y, SZ0 + 0.1, SX * 2, 0.2, 0.2, 'wood', TB);
+    sb.boxC(0, y, SZ1 - 0.1, SX * 2, 0.2, 0.2, 'wood', TB);
+    for (const sx of [-1, 1]) { sb.boxC(sx * (SX - 0.1), y, CZ, 0.2, 0.2, SZ1 - SZ0, 'wood', TB); sb.boxC(sx * 2.2, y, CZ, 0.25, 0.16, 0.5, 'wood', TB); }
+  }
+  for (const sx of [-1, 1]) sb.box(sx * 2.08 - 0.09, YB, CZ - 0.11, sx * 2.08 + 0.09, 0.0, CZ + 0.11, 'wood', 0x6a5640); // cage guides
+  for (const [x, z, r] of [[-2.2, 7.7, 0.09], [-2.2, 7.95, 0.06], [2.22, 4.5, 0.05]]) sb.cyl(x, (YB + 0) / 2, z, r, r, -YB, 'steel', 0x4a4c4e, 0, 0, 0, 8);
+  sb.box(2.25, YB, 7.55, 2.33, 0, 7.75, 'dark', 0x151515);                                       // cable bundle
+  for (let y = YB + 4; y < -2; y += 9) { sb.sphere(2.27, y, 7.2, 0.08, 'lamp', 0, 1, 1, 1, 8); sb.boxC(2.33, y, 7.2, 0.06, 0.2, 0.2, 'dark', 0x222222); }
+  sb.build(cageMats(), sh);
+  for (const [y, txt] of ST) { const sg2 = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.3), new THREE.MeshBasicMaterial({ map: labelTex(txt, { bg: '#2a3a2a', fg: '#e8e2c8', font: 'bold 64px Arial' }), fog: true })); sg2.position.set(0, y + 3.3, SZ0 + 0.02); sh.add(sg2); }
+  g.add(sh); CV.shaft = sh;
   CV.colsSurf = CV.cols;
 }
 
@@ -308,6 +428,29 @@ class BTR {
   remove() { G.scene.remove(this.group); this.snd.stop(); }
 }
 
+// ---------- the cage ride: looks, moving colliders, ropes ----------
+const LOOK_SHAFT = { fog: 0x0b0907, bg: 0x040302, top: 0x6f7d8b, density: 0.05, sun: 0, hemi: [0x7a6a58, 0x1a1410, 0.2], exp: 1.15, env: 0.12, sky: false, snow: false };
+const LOOK_SURF = { fog: 0xa9b5c0, bg: 0xa9b5c0, top: 0x6f7d8b, density: 0.026, sun: 1.1, hemi: [0xd4e0ec, 0x5e646b, 0.75], exp: 1.0, env: 0.8, sky: true, snow: true };
+const _la = new THREE.Color(), _lb = new THREE.Color(), _lc = new THREE.Color();
+const LB = { fog: 0, bg: 0, top: 0, density: 0, sun: 0, hemi: [0, 0, 0], exp: 0, env: 0, sky: false, snow: false };
+function blendLook(k) { // 0 = dark shaft .. 1 = blizzard surface (no allocation)
+  const A = LOOK_SHAFT, Bk = LOOK_SURF, l = (a, b) => a + (b - a) * k;
+  LB.fog = _la.set(A.fog).lerp(_lc.set(Bk.fog), k).getHex(); LB.bg = _la.set(A.bg).lerp(_lc.set(Bk.bg), k).getHex();
+  LB.hemi[0] = _la.set(A.hemi[0]).lerp(_lc.set(Bk.hemi[0]), k).getHex(); LB.hemi[1] = _lb.set(A.hemi[1]).lerp(_lc.set(Bk.hemi[1]), k).getHex(); LB.hemi[2] = l(A.hemi[2], Bk.hemi[2]);
+  LB.top = Bk.top; LB.density = l(A.density, Bk.density); LB.sun = l(A.sun, Bk.sun); LB.exp = l(A.exp, Bk.exp); LB.env = l(A.env, Bk.env); LB.sky = LB.snow = k > 0.45;
+  setLook(LB);
+}
+function placeRopes(cy) {
+  if (!CV.ropes) return;
+  for (const r of CV.ropes) { const y0 = cy + CAGE.H + 0.74, y1 = 22.6; r.position.y = (y0 + y1) / 2; r.scale.y = y1 - y0; r.position.z = 6.2 + (r.userData.z - 6.2) * 0.5; }
+}
+function setCageY(y, sway) {
+  CV.cageY = y; CV.cageGrp.position.set(sway, y, 6.2);
+  if (CV.cageBoxes) for (const [b, y0, y1] of CV.cageBoxes) { b.min.y = y + y0; b.max.y = y + y1; }
+  placeRopes(y);
+  if (CV.lights[0]) CV.lights[0].position.y = y + 2.45;
+}
+
 // ---------- level enter/leave ----------
 function enterCave(lvl) {
   if (G.leavePart5) G.leavePart5();
@@ -325,22 +468,19 @@ function enterCave(lvl) {
     flashlight(true);
   } else {
     if (!CV.root.surf) buildSurface();
-    G.groundFn = surfGround;
-    setLook({ fog: 0xa9b5c0, top: 0x6f7d8b, density: 0.026, sun: 1.1, hemi: [0xd4e0ec, 0x5e646b, 0.75], exp: 1.0, env: 0.8, sky: true, snow: true });
+    G.groundFn = surfG;
+    setLook(LOOK_SURF);
     lights([]);
   }
   for (const k of Object.keys(CV.root)) CV.root[k].visible = (k === 'mine') === (lvl === 1);
   CV.cols = lvl === 1 ? CV.colsMine : CV.colsSurf;
   CV.cover = lvl === 1 ? CV.coverMine : CV.coverS;
-  if (CV.shaft) CV.shaft.visible = false;
-  if (CV.cageGrp) { CV.cageGrp.visible = lvl === 3; CV.gate.position.y = 0; }
+  if (CV.cageObj) { CV.cageGrp.position.set(0, 0, 6.2); CV.cageGrp.rotation.set(0, 0, 0); CV.cageObj.setGate(0); CV.cageY = 0; placeRopes(0); }
 }
 G.leaveCave = () => {
   if (G.lvl !== 1 && G.lvl !== 3) return;
   clear5();
   for (const k of Object.keys(CV.root)) CV.root[k].visible = false;
-  if (CV.shaft) CV.shaft.visible = false;
-  if (CV.cageGrp) CV.cageGrp.visible = false;
   if (CV.flash) { G.camera.remove(CV.flash); G.camera.remove(CV.flash.target); CV.flash = null; }
   lights([]);
   restoreLook();
@@ -395,18 +535,22 @@ G.startCave = (k, cont) => {
     C.ph = 'tocage'; C.intel = true;
     musicMode('p1dark');
     toCavern(true);
-  } else { // 20: the cage ride up
-    resetPlayer(new THREE.Vector3(0.6, 0, 6.6), 0);
-    placeMate(t, 0.9, 5.2); placeMate(g, -0.8, 5.6);
-    for (const m of [t, g]) { m.h.yaw = 0; m.yaw0 = 0; }
-    C.ph = 'ride'; C.rideT = 0; CV.shaft.visible = true; CV.root.surf.visible = false;
-    setLook({ fog: 0x0b0907, bg: 0x040302, density: 0.05, sun: 0, hemi: [0x7a6a58, 0x1a1410, 0.2], exp: 1.15, env: 0.12, sky: false, snow: false });
-    lights([[0, 2.6, 6.2, 0xffd9a0, 5, 8]]);
+  } else { // 20: the cage ride up the main shaft (the cage really travels; the hoist house is waiting at the top)
+    const Y0 = CV.cageY0, F = Y0 + 0.04;
+    CV.cageBoxes = [[addBox(-1.7, 0, 4.6, 1.7, 0, 7.8, 'metal'), -0.1, 0.04], [addBox(-1.92, 0, 4.5, -1.66, 0, 7.9, 'metal'), 0, 2.78], [addBox(1.66, 0, 4.5, 1.92, 0, 7.9, 'metal'), 0, 2.78],
+      [addBox(-1.92, 0, 7.78, 1.92, 0, 7.98, 'metal'), 0, 2.78], [addBox(-1.92, 0, 4.4, 1.92, 0, 4.6, 'metal'), 0, 2.78], [addBox(-1.92, 0, 4.4, 1.92, 0, 8.0, 'metal'), 2.72, 2.95]];
+    CV.gateBox = CV.cageBoxes[4][0];
+    lights([[0, F + 2.45, 6.8, 0xffd9a0, 5.5, 9]]);
+    setCageY(Y0, 0); CV.gateK = 0; CV.cageObj.setGate(0);
+    resetPlayer(new THREE.Vector3(0.35, F, 7.05), 0.08);
+    placeMate(t, -1.05, 5.3, F); placeMate(g, 1.15, 6.55, F);
+    t.h.yaw = 0; t.yaw0 = 0; g.h.yaw = 2.2; g.yaw0 = 2.2;
+    C.ph = 'ride'; C.rideT = 0; C.v = 0; C.rat = 1;
+    blendLook(0);
     musicMode('p2ride');
     after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第二部分']));
-    say('P2_GRIN_01', 3); say('P2_TRUCK_03', 0.8); say('P2_SAND_01', 0.8); say('P2_TRUCK_01', 1.6);
-    C.rideSnd = loop('train', { vol: 0.25, rate: 0.5 });
-    C.gateBox = addBox(-1.9, 0, 4.5, 1.9, 3, 4.65, 'metal');
+    say('P2_GRIN_01', 5.2); say('P2_TRUCK_03', 0.8); say('P2_SAND_01', 0.8); say('P2_TRUCK_01', 0.9);
+    C.rideSnd = loop('train', { vol: 0.12, rate: 0.42 });
   }
   HUD.show(true);
 };
@@ -481,31 +625,58 @@ function updateSurface(dt) {
   C.t += dt;
   let prompt = null;
   if (C.ph === 'ride') {
-    C.rideT += dt;
-    const k = smooth(C.rideT / 16);
-    CV.shaft.position.y = -k * 70 + 2;                     // walls slide down past the cage
-    P.addShake(0.004);
-    if (C.rideT > 16) {
-      C.ph = 'top'; CV.shaft.visible = false; CV.root.surf.visible = true;
-      if (C.rideSnd) { C.rideSnd.stop(); C.rideSnd = null; }
-      setLook({ fog: 0xa9b5c0, top: 0x6f7d8b, density: 0.026, sun: 1.1, hemi: [0xd4e0ec, 0x5e646b, 0.75], exp: 1.0, env: 0.8, sky: true, snow: true });
-      lights([]);
-      play('bolt', { vol: 0.9 }); play('clack', { vol: 0.9 });
-      if (C.gateBox) C.gateBox.enabled = false; C.gateOpen = true;
-      HUD.objective('冲出提升机房，赶往北面的铁路货场');
-      HUD.setMarker(new THREE.Vector3(0, 1.5, -138), '货场');
-      squad([[-9, -30], [10, -40], [-4, -48], [14, -60], [-12, -70], [3, -74]], CV.coverS, 1);
-      new Raider(16, -95, { cover: CV.coverS, maxTier: 1, rpg: true });
-      musicMode('p2fight');
-      C.topT = C.t;
-      // the door squad storms in from the yard, one after another (they stop at the cover right outside the door)
-      [[-7, -31], [7, -33], [1, -37]].forEach(([x, z], i) => after(2.0 + i * 2.6, () => { if (G.lvl === 3) new Raider(x, z, { cover: CV.coverHH, maxTier: 0 }); }));
-      after(13, () => { if (G.lvl === 3 && alive() < 9) squad([[-22, -104], [19, -108], [-6, -122]], CV.coverS, 1); });
-      goMate(D.truck, [[0.8, 3], [2.0, -3.2], [3.9, -5.0]], 'defend', 3.5); goMate(D.grinch, [[-0.6, 3], [-2.0, -3.2], [-3.9, -5.0]], 'defend', 3.5);
-      for (const m of [D.truck, D.grinch]) m.yaw0 = 0;
+    C.rideT += dt; const rt = C.rideT, tr = D.truck;
+    // Truck pulls the folding gate shut (left hand on the leading slat), latches it; three bells; the hoist takes up
+    if (rt > 1.0 && !C.gateShut) {
+      if (!C.pull) { C.pull = true; goMate(tr, [[0.95, 5.3]], 'idle', 1.25); tr.yaw0 = -Math.PI / 2; play('metal', { pos: CV.cageGrp.position, vol: 0.3, ref: 3 }); }
+      CV.gateK = Math.min(1, CV.gateK + dt / 1.6);
+      const lead = CV.cageObj.setGate(CV.gateK);
+      tr.h.handL = (tr.h.handL || new THREE.Vector3()).set(lead + 0.05, CV.cageY + 1.25, 4.62);
+      if (Math.random() < dt * 6) play('clack', { pos: CV.cageGrp.position, vol: 0.12, ref: 3, rate: 1.6 });
+      if (CV.gateK >= 1) { C.gateShut = true; tr.h.handL = null; play('bolt', { pos: CV.cageGrp.position, vol: 0.8, ref: 4 }); play('metal', { pos: CV.cageGrp.position, vol: 0.5, ref: 3 }); tr.yaw0 = 2.8; }
+    }
+    if (C.gateShut && !C.bells) { C.bells = 1; for (let i = 0; i < 3; i++) after(0.5 + i * 0.38, () => play('clink', { vol: 0.55, rate: 0.75, rev: 0.6 })); }
+    if (rt > 4.5 && !C.go) { C.go = true; P.addShake(0.35); play('clack', { vol: 0.8, rev: 0.3 }); play('metal', { vol: 0.5, rev: 0.3 }); }
+    let sway = 0;
+    if (C.go) {
+      const rem = -CV.cageY, vT = Math.min(4.2, Math.sqrt(2 * 1.5 * Math.max(0, rem)) + 0.1);
+      C.v = C.v < vT ? Math.min(vT, C.v + 2.0 * dt) : vT;
+      const yPrev = CV.cageY, y = Math.min(0, CV.cageY + C.v * dt);
+      sway = (0.014 * Math.sin(rt * 2.3) + 0.006 * Math.sin(rt * 6.1)) * Math.min(1, C.v / 2);
+      CV.cageGrp.rotation.z = 0.0035 * Math.sin(rt * 1.7) * Math.min(1, C.v / 2);
+      if (Math.floor(yPrev / 2.5) !== Math.floor(y / 2.5) && C.v > 1) play('clack', { pos: CV.cageGrp.position, vol: 0.1, ref: 3, rate: 1.3 }); // shoes over the guide joints
+      for (const sy of [-44, -22]) if (yPrev < sy - 1 && y >= sy - 1) { P.addShake(0.12); play('metal', { pos: CV.cageGrp.position, vol: 0.35, ref: 3 }); } // past a level station
+      C.rat -= dt; if (C.rat <= 0 && C.v > 0.5) { C.rat = rr(0.4, 1.3); play(Math.random() < 0.6 ? 'clack' : 'metal', { pos: CV.cageGrp.position, vol: rr(0.06, 0.16), ref: 3, rate: rr(0.8, 1.3) }); }
+      P.addShake(0.0016 * C.v);
+      setCageY(y, sway);
+      const sp = C.v * dt; for (const sg of CV.sheaves) sg.rotation.z += sp / 1.5; CV.drum.rotation.z -= sp / 1.4;
+      if (C.rideSnd) { C.rideSnd.setVol(0.08 + C.v * 0.045); C.rideSnd.setRate(0.36 + C.v * 0.05); }
+      blendLook(smooth((y + 13) / 12));
+      if (y >= 0) { // arrival: settle on the keps with a jolt
+        C.ph = 'top'; C.v = 0; setCageY(0, 0); CV.cageGrp.rotation.z = 0; P.addShake(0.4); blendLook(1);
+        if (C.rideSnd) { C.rideSnd.stop(); C.rideSnd = null; }
+        play('bolt', { vol: 0.9 }); play('clack', { vol: 0.9 });
+        C.gateOpen = true; tr.yaw0 = 0;
+        HUD.objective('冲出提升机房，赶往北面的铁路货场');
+        HUD.setMarker(new THREE.Vector3(0, 1.5, -138), '货场');
+        squad([[-9, -30], [10, -40], [-4, -48], [14, -60], [-12, -70], [3, -74]], CV.coverS, 1);
+        new Raider(16, -95, { cover: CV.coverS, maxTier: 1, rpg: true });
+        musicMode('p2fight');
+        C.topT = C.t;
+        // the door squad storms in from the yard, one after another (they stop at the cover right outside the door)
+        [[-7, -31], [7, -33], [1, -37]].forEach(([x, z], i) => after(2.0 + i * 2.6, () => { if (G.lvl === 3) new Raider(x, z, { cover: CV.coverHH, maxTier: 0 }); }));
+        after(13, () => { if (G.lvl === 3 && alive() < 9) squad([[-22, -104], [19, -108], [-6, -122]], CV.coverS, 1); });
+        after(1.3, () => {
+          goMate(D.truck, [[0.8, 3], [2.0, -3.2], [3.9, -5.0]], 'defend', 3.5); goMate(D.grinch, [[-0.6, 3], [-2.0, -3.2], [-3.9, -5.0]], 'defend', 3.5);
+          for (const m of [D.truck, D.grinch]) m.yaw0 = 0;
+        });
+      }
     }
   }
-  if (C.gateOpen && CV.gate.position.y < 2.6) CV.gate.position.y = Math.min(2.6, CV.gate.position.y + dt * 1.6);
+  if (C.gateOpen && CV.gateK > 0) { // gate folds back open
+    CV.gateK = Math.max(0, CV.gateK - dt / 1.1); CV.cageObj.setGate(CV.gateK);
+    if (CV.gateK < 0.55 && CV.gateBox) { CV.gateBox.enabled = false; }
+  }
   if (C.ph === 'top' && C.t - C.topT > 14 && !C.btr) {
     C.btr = new BTR([[2, -130], [0, -90], [3, -55], [0, -28]]); C.btrT = C.t; C.reinf = 0;
     say('P2_TRUCK_02', 2.0); say('P2_GRIN_02', 0.4);
