@@ -203,10 +203,10 @@ export function updatePlayer(dt) {
     const k = smooth(P.deadT / 1.2);
     cam.position.set(P.pos.x, P.pos.y + lerp(P.eyeY, 0.35, k), P.pos.z);
     cam.rotation.set(P.pitch + 0.3 * k, P.yaw, 0.7 * k);
-    WP.hidden = true; updateViewmodel(dt, P);
+    WP.hidden = true; P.lean = P.leanOff = 0; P.tbNade = null; updateViewmodel(dt, P); updateWUI('', false, false, 0);
     return;
   }
-  if (P.downed) return updateDowned(dt, cam);
+  if (P.downed) { P.lean = P.leanOff = 0; P.tbNade = null; updateWUI('', false, false, 0); return updateDowned(dt, cam); }
   const active = P.enabled && G.state === 'play' && !G.paused;
   const ads = active && input.rmb && !P.sprinting && !busy() && !P.mounted;
   // ---- look
@@ -338,7 +338,7 @@ export function updatePlayer(dt) {
         switchTo(list[(i + (input.wheel > 0 ? 1 : list.length - 1)) % list.length]);
       }
       if (hit('KeyG')) { if (P.tbNade) startThrowBack(P.tbNade); else startThrow(); }
-      if (hit('KeyX')) toggleUB();
+      if (hit('KeyX') || (WP.ubOn && WP.cur === WP.prim && WP.ammo === 0 && WP.reserve === 0 && WP.cool <= 0 && !busy())) toggleUB(); // empty underbarrel: back to the rifle
       if ((hit(P.meleeKey) && !fInteract()) || hit('KeyV')) doMelee();
       if (WP.ammo === 0 && WP.reserve > 0 && !busy() && !input.lmb) startReload();
       if (hit('KeyF') && P.canMount && (!G.groundFn || G.mg5) && P.pos.distanceTo(GUN_PIVOT) < 2.6) mount();

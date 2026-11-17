@@ -655,7 +655,7 @@ function ejectShell() {
 }
 
 export function updateViewmodel(dt, p) {
-  const W = WP, cam = WP.cam, mdl = W.m;
+  const W = WP, cam = WP.cam; let mdl = W.m;
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   W.sun.position.set(-0.45, 1, 0.35).applyQuaternion(G.camera.quaternion.clone().invert()).multiplyScalar(5);
   W.cool = Math.max(0, W.cool - dt); W.dCool = Math.max(0, W.dCool - dt);
@@ -677,7 +677,7 @@ export function updateViewmodel(dt, p) {
   if (W.sw) {
     W.sw.t += dt;
     const t = W.sw.t, low = t < 0.24 ? smooth(t / 0.24) : 1 - smooth((t - 0.24) / 0.3);
-    if (!W.sw.swapped && t >= 0.24) { W.sw.swapped = true; equip(W.sw.to); }
+    if (!W.sw.swapped && t >= 0.24) { W.sw.swapped = true; equip(W.sw.to); mdl = W.m; }
     y -= low * 0.32; rx -= low * 0.6; rz += low * 0.3;
     if (t >= 0.54) W.sw = null;
   }
