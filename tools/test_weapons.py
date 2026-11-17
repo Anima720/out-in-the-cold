@@ -46,6 +46,9 @@ async def main():
               } return out; })()""")
             for x in r: print("gun", json.dumps(x, ensure_ascii=False), flush=True)
             # underbarrels: M4 + M203 then AK-12 + Masterkey
+            await out("glBoom", """(()=>{ let n=0; const ex=__G.fx.explosion; __G.fx.explosion=(...a)=>{ n++; return ex(...a); }; const give=window.__wpn.giveWeapon; give('m4',30,90,{optic:'reddot',under:'gl'}); __sim(0.8);
+              __P.pos.set(-0.5,0,-2.5); __P.yaw=0; __P.pitch=-0.05; __input.pressed.add('KeyX'); __sim(0.5); __input.lmbPressed=true; __input.lmb=true; __sim(0.05); __input.lmb=false; __sim(3);
+              const n1=n; __P.pitch=-1.2; __sim(0.1); __input.lmbPressed=true; __input.lmb=true; __sim(0.05); __input.lmb=false; __sim(1.5); __G.fx.explosion=ex; return {armedHitExplosions:n1, closeDudExplosions:n-n1, ubOn:__WP.ubOn, err:window.__errors.slice(0,3)}; })()""")
             await out("gl", """(()=>{ const give=window.__wpn.giveWeapon; give('m4',30,90,{optic:'reddot',under:'gl'}); __sim(0.8);
               __input.pressed.add('KeyX'); __sim(0.5); const on=__WP.ubOn, a0=__WP.ammo;
               __P.pitch=0.25; __input.lmbPressed=true; __input.lmb=true; __sim(0.05); __input.lmb=false; const n=window.__wpn.GL.length; __sim(3.0);
@@ -88,7 +91,18 @@ async def main():
               // facing -x... yaw=+pi/2 faces -x, so the wall (at smaller x) is in front; lean must go sideways: use yaw=0 -> right is +x, left is -x (wall)
               __P.yaw=0; __sim(0.1); __input.down.add('KeyQ'); __sim(0.7); const off=__P.leanOff, eyeX=__P.eye.x; __input.down.delete('KeyQ'); __sim(0.4);
               return {wallX:found[2], playerX:+__P.pos.x.toFixed(2), off:+off.toFixed(3), eyeX:+eyeX.toFixed(3), ok: eyeX > found[2]}; })()""")
+            await out("audio", """(()=>{ const A=window.__A; if(!A.on) return {on:false};
+              const pk=(b)=>{ let m=0,r=0; const d=b.getChannelData(0); for(let i=0;i<d.length;i++){ m=Math.max(m,Math.abs(d[i])); r+=d[i]*d[i]; } return [+m.toFixed(2), +Math.sqrt(r/d.length).toFixed(3), +b.duration.toFixed(2)]; };
+              const r={old_ak:pk(A.b.ak), m4:pk(A.gun.m4.close[0]), pkm:pk(A.gun.pkm.close[1]), far:pk(A.far.rifle[0]), tailOpen:pk(A.tail.open[0]), tailTunnel:pk(A.tail.tunnel[0]), step:pk(A.steps.snow[0]), mech:pk(A.mech.ar[0])};
+              window.__wpn.giveWeapon('pkm'); __sim(0.8); let vmax=0; __input.lmb=true; for(let i=0;i<180;i++){ __sim(1/60); vmax=Math.max(vmax,A.voices); } __input.lmb=false; r.voicesPKM=vmax; r.space=A.space;
+              A.nSteps=0; __P.pos.set(-0.5,0,-2.5); __P.yaw=0; __input.down.add('KeyW'); __sim(3); __input.down.delete('KeyW'); r.ownSteps=A.nSteps%1000;
+              r.err=window.__errors.slice(0,3); return r; })()""")
             await out("f11", """(()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{code:'F11',key:'F11',bubbles:true,cancelable:true})); return {fsT:!!__input.fsT, paused:__G.paused, lockFailed:__input.lockFailed}; })()""")
+        if MODE == "npc":
+            await ev("__begin(4)"); await ev("__sim(2.0)")
+            await out("npcSteps", """(()=>{ const A=window.__A; A.nSteps=0; __P.pos.set(0.2,0.15,-3.6); __sim(12); const n=Math.floor(A.nSteps/1000), own=A.nSteps%1000;
+              let vmax=0; for(let i=0;i<600;i++){ __sim(1/60); vmax=Math.max(vmax,A.voices); } return {npcSteps:n, own, space:A.space, voicesMax:vmax, humans:__G.humans.length, err:window.__errors.slice(0,3)}; })()""")
+            await out("roomSpace", """(()=>{ __P.pos.set(0,0.15,0); __sim(0.5); const a=window.__A.space; __P.pos.set(0,0,20); __sim(0.5); return {inside:a, outside:window.__A.space}; })()""")
         if MODE == "shots":
             await ev("__begin(4)"); await ev("__sim(2.0)")
             await ev("__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.02; __G.enemies.forEach(e=>e.h.hidden=true); __sim(0.3)")
@@ -131,7 +145,9 @@ async def main():
             if not only or "gl" in only or "all" in only:
                 await ev(f"__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.06; {give}('m4',30,90,{{optic:'reddot',under:'gl'}}); __sim(0.8); __G.hud.show(false); __sim(0.1)")
                 await snap("shots/w_m4_m203_hip_nohud.png")
-                await ev("__G.hud.show(true); __input.pressed.add('KeyX'); __sim(0.5)")
+                await ev("__G.hud.show(true); __input.pressed.add('KeyX'); __sim(0.5); __G.hud.show(false); window.__freeze=true")
+                await snap("shots/w_m4_m203_selected_nohud.png")
+                await ev("window.__freeze=false; __G.hud.show(true)")
                 await ev("__input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.12)")
                 await snap("shots/w_gl_flight.png")
                 await ev("for(let i=0;i<120 && window.__wpn.GL.length;i++) __sim(1/60); __sim(0.1)")
@@ -142,8 +158,9 @@ async def main():
             if not only or "tb" in only or "all" in only:
                 await ev("__sim(1); __P.pitch=-0.2; const n=window.__wpn.throwNade(new __THREE.Vector3(__P.pos.x,__P.pos.y+0.05,__P.pos.z-1.3), new __THREE.Vector3(0,0,0), 'enemy'); n.fuse=2.5; __sim(0.1)")
                 await snap("shots/w_tb_prompt.png")
-                await ev("__P.pitch=0.1; __input.pressed.add('KeyG'); __sim(0.16)")
+                await ev("__P.pitch=0.1; __input.pressed.add('KeyG'); __sim(0.13); window.__freeze=true")
                 await snap("shots/w_tb_throw.png")
+                await ev("window.__freeze=false")
                 await ev("__sim(3)")
         print("errors", await ev("window.__errors"), flush=True)
         for l in logs[:20]: print(l)

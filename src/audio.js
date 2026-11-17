@@ -311,7 +311,7 @@ export function footstep(surf, o = {}) {
   else if (ctx.createStereoPanner && o.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = o.pan; g.connect(pn); pn.connect(A.sfx); }
   else g.connect(A.sfx);
   if (o.rev) g.connect(gain(o.rev, A.revSend));
-  A.voices++; s.onended = () => { A.voices--; }; s.start(ctx.currentTime + (o.delay || 0));
+  A.voices++; A.nSteps = (A.nSteps || 0) + (o.pos ? 1000 : 1); s.onended = () => { A.voices--; }; s.start(ctx.currentTime + (o.delay || 0));
 }
 
 function gain(v, dest) { const g = A.ctx.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; }
@@ -630,3 +630,5 @@ function brass(t, root, tri) {
     o.connect(lp); o.start(t); o.stop(t + 0.85);
   }
 }
+
+if (typeof window !== 'undefined') window.__A = A; // test hook

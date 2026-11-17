@@ -670,9 +670,11 @@ export function updateViewmodel(dt, p) {
   const bx = Math.sin(p.bobPhase * Math.PI * 2) * 0.012 * bobA, by = -Math.abs(Math.cos(p.bobPhase * Math.PI * 2)) * 0.012 * bobA;
   const breathe = Math.sin(G.real * 1.6) * 0.0015 * (1 - ads * 0.7);
   const hip = mdl.hip, ad = [0, -mdl.sightY, mdl.adsZ - mdl.rearZ], sp = mdl.sprint;
-  let x = lerp(hip[0], ad[0], ads), y = lerp(hip[1], ad[1], ads), z = lerp(hip[2], ad[2], ads);
+  W.ubK = damp(W.ubK || 0, W.ubOn && W.cur === W.prim ? 1 : 0, 10, dt);
+  const ubh = mdl.ub && W.cur === W.prim ? 1 - ads : 0;                    // hip carry raised a little so the launcher shows
+  let x = lerp(hip[0], ad[0], ads) - ubh * 0.012, y = lerp(hip[1], ad[1], ads) + ubh * (0.028 + W.ubK * 0.012), z = lerp(hip[2], ad[2], ads);
   x = lerp(x, sp[0], spr); y = lerp(y, sp[1], spr); z = lerp(z, sp[2], spr);
-  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32;
+  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32 + W.ubK * 0.12 * (1 - ads * 0.6);
   // weapon switch: lower, swap, raise
   if (W.sw) {
     W.sw.t += dt;
