@@ -79,7 +79,10 @@ export function shootAt(shooter, muzzle, target, o = {}) {
   let killed = false;
   if (h) {
     if (h.ent && h.ent.hurt && o.dmg) {
-      if (h.ent.faction === 'us' || !(o.hitChance !== undefined && Math.random() > o.hitChance)) killed = h.ent.hurt(o.dmg, _d, h.part, h.joint, { force: 5, bullet: true });
+      if (h.ent.faction === 'us' || !(o.hitChance !== undefined && Math.random() > o.hitChance)) {
+        const hp0 = h.ent.hp; killed = h.ent.hurt(o.dmg, _d, h.part, h.joint, { force: 5, bullet: true });
+        if (o.by && AI.dbg) AI.dbg.push([Math.round(hp0), Math.round(h.ent.hp), h.part, h.ent.alive, !!h.ent.downed, !!h.ent.invuln, !!h.ent.sit, h.ent.faction]);
+      }
       G.fx.impact(h.point, h.normal, h.ent.faction ? 'flesh' : 'metal');
     } else G.fx.impact(h.point, h.normal, h.mat);
   }
