@@ -52,9 +52,10 @@ async def main():
             for i in range(60):
                 await ev("__sim(1/60)")
                 if await ev("__dn.h.recoil>0.8"): break
+            await ev("__P.pos.set(-3.6,__G.groundFn(-3.6,38.6),38.6); __P.yaw=0.15; __P.pitch=-0.45; __sim(1/60)")
             await snap("ai_downed_fire.png")
             # side view of the pose
-            await ev("__P.pos.set(-1.0,__G.groundFn(-1.0,35.2),35.2); __P.yaw=Math.PI/2-0.1; __P.pitch=-0.35; __sim(0.05)")
+            await ev("__P.pos.set(-1.9,__G.groundFn(-1.9,35.9),35.9); __P.yaw=Math.PI/2-0.15; __P.pitch=-0.5; __sim(0.05)")
             await snap("ai_downed_side.png")
             await ev("__dn.bleedT=0.01; __sim(4)")
             await snap("ai_downed_dead.png")
