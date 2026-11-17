@@ -301,7 +301,7 @@ G.startPart5 = (k, cont) => {
     setPower(false); S.dish.off = 0;
     resetPlayer(new THREE.Vector3(-3, ground5(-3, 44), 44), 0);
     P.crouched = true; P.pitch = -0.25;
-    placeMate(t, -4.6, 42.2); placeMate(g, -1.8, 45.8);
+    placeMate(t, -6.0, 43.3); placeMate(g, -1.8, 45.8);
     for (const m of [t, g]) m.h.yaw = 0;
     P5.ph = 'approach';
     HUD.fade(1, 0); setTimeout(() => HUD.fade(0, 3), 50);

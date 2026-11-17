@@ -197,7 +197,8 @@ export function updateHUD(dt) {
     const behind = _v.z > 1;
     let x = (_v.x * 0.5 + 0.5) * innerWidth, y = (-_v.y * 0.5 + 0.5) * innerHeight;
     if (behind) { x = innerWidth - x; y = innerHeight - 40; }
-    x = clamp(x, 40, innerWidth - 40); y = clamp(y, 60, innerHeight - 60);
+    { const cx = innerWidth / 2, cy = innerHeight / 2, rx = innerWidth * 0.4, ry = innerHeight * 0.36, ex = (x - cx) / rx, ey = (y - cy) / ry, e = Math.hypot(ex, ey);
+      if (e > 1 || behind) { const k = 1 / Math.max(e, 1e-3); x = cx + (x - cx) * k; y = cy + (y - cy) * k; } }
     HUD.marker.style.transform = `translate(${x}px, ${y}px)`;
     const d = G.camera.position.distanceTo(HUD.mk.pos);
     HUD.markerT.textContent = `${HUD.mk.label ? HUD.mk.label + ' ' : ''}${Math.round(d)}米`;
