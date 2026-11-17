@@ -36,6 +36,11 @@ async def main():
         if SHOTS and 'hitT' in f and 's3' not in shots and 's2' in shots:
             shots['s3'] = 1; await ev("__P.yaw=-0.04; __P.pitch=-0.05; __sim(1.5)"); await P.snap("t_br_fall.png")
             print("riders", await j("{cars:__T.cars.map(c=>(c.riders||[]).length), dead:__G.humans.filter(h=>!h.alive&&h.faction!=='us').map(h=>[+h.j[2].y.toFixed(1),+h.j[2].z.toFixed(0)])}"))
+        if SHOTS and any(ch in r['cars'] for ch in 'FT') and shots.get('fv', 0) < 3 and t - shots.get('fvt', -9) >= 1.0:
+            shots['fv'] = shots.get('fv', 0) + 1; shots['fvt'] = t
+            print("riders", await j("{cars:__T.cars.map(c=>[c.falling?1:0,(c.riders||[]).length,+c.group.position.y.toFixed(1),+c.group.position.z.toFixed(0)]), dev:__T.cars.filter(c=>c.riders&&c.riders.length).map(c=>Math.max(...c.riders.map(r=>Math.hypot(r.h.j[2].x-c.group.position.x,r.h.j[2].y-c.group.position.y,r.h.j[2].z-c.group.position.z)))).map(v=>+v.toFixed(1))}"))
+            await ev("(()=>{const c=__T.cars.filter(c=>c.falling).sort((a,b)=>b.idx-a.idx)[0]||__T.cars[0],p=c.group.position,P=__P;P.pos.set(6,p.y+4,p.z+9);const dx=-6,dy=p.y-(P.pos.y+1.6),dz=-9;P.yaw=Math.atan2(-dx,-dz);P.pitch=Math.atan2(dy,Math.hypot(dx,dz));P.autoLook=null;P.lockLook=true;__sim(0.05)})()")
+            await P.snap(f"t_br_cars{shots['fv']}.png")
         if r['st'] != 'play' or r['ph'] == 'p5': break
         if 'jumpOpen' in f and not jumped:
             await ev("__P.autoLook=null; __P.yaw=-0.05; __P.pitch=0.0; __sim(2.0)")
