@@ -82,7 +82,12 @@ function flashlight(on) {
 
 // ---------- geometry helpers ----------
 let B;
-function solid(x0, y0, z0, x1, y1, z1, key, color, mat = 'rock', vis = true) { if (vis) B.box(x0, y0, z0, x1, y1, z1, key, color); CV.cols.push([x0, y0, z0, x1, y1, z1, mat]); }
+// Part 2 terrain is uneven (surfG): while buildSurface runs (SURF) every prop with its base at y 0 is re-seated on the lowest snow under its footprint (sunk 0.12 so no gap shows) and short props keep their height
+let SURF = false;
+const gS = (x, z) => (inHH(x, z) && Math.abs(x) < 8 && z > -6 && z < 9.5 ? 0.04 : surfGround(x, z));
+function gLo(x0, z0, x1, z1) { let m = 1e9; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m = Math.min(m, gS(x0 + (x1 - x0) * i / 2, z0 + (z1 - z0) * j / 2)); return m; }
+function gLoR(x, z, hw, hd, ry) { const c = Math.cos(ry), s = Math.sin(ry); let m = 1e9; for (const [a, b] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) { const lx = a * hw, lz = b * hd; m = Math.min(m, gS(x + lx * c + lz * s, z - lx * s + lz * c)); } return m; }
+function solid(x0, y0, z0, x1, y1, z1, key, color, mat = 'rock', vis = true) { if (SURF && y0 === 0) { const d = gLo(x0, z0, x1, z1); y0 = d - 0.12; if (y1 <= 5) y1 += d; } if (vis) B.box(x0, y0, z0, x1, y1, z1, key, color); CV.cols.push([x0, y0, z0, x1, y1, z1, mat]); }
 function cover(x, z, tier, list) { (list || CV.cover).push({ x, z, tier, used: null }); }
 
 // ---------- mine cage (bottom landing in Part 1, the ride up in Part 2) ----------
@@ -218,8 +223,14 @@ function buildMine() {
 }
 
 // ---------- Part 2: hoist house + yard ----------
-function truckLike(b, x, z, ry) { b.boxC(x, 1.4, z, 2.6, 2.2, 7, 'paint', 0x8a6a2a, 0, ry, 0, 0.1); b.boxC(x, 2.7, z, 2.4, 0.15, 6.6, 'snow', 0xffffff, 0, ry, 0); }
+function truckLike(b, x, z, ry) { // box truck seated on the snow: body above a dark chassis with six wheels
+  const d = gLoR(x, z, 1.3, 3.5, ry), c = Math.cos(ry), s = Math.sin(ry), at = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  b.boxC(x, d + 1.5, z, 2.6, 2.0, 7, 'paint', 0x8a6a2a, 0, ry, 0, 0.1); b.boxC(x, d + 0.3, z, 2.0, 0.7, 6.8, 'dark', 0x2a2a28, 0, ry, 0, 0.05); b.boxC(x, d + 2.6, z, 2.4, 0.15, 6.6, 'snow', 0xffffff, 0, ry, 0);
+  for (const lz of [-2.4, 0.2, 2.6]) for (const sx of [-1, 1]) { const [wx, wz] = at(sx * 1.2, lz); b.cyl(wx, d + 0.1 + 0.4, wz, 0.5, 0.5, 0.4, 'dark', 0x1c1c1c, 0, ry, Math.PI / 2, 14); }
+  return d;
+}
 function buildSurface() {
+  SURF = true;
   const g = new THREE.Group(); G.scene.add(g); CV.root.surf = g;
   CV.cols = []; CV.coverS = []; CV.cover = CV.coverS;
   B = new Builder();
@@ -283,27 +294,27 @@ function buildSurface() {
   solid(4.4, 0, -5.4, 6.2, 0.7, -4.4, 'paint', 0x4f5b3f, 'metal'); B.boxC(5.3, 0.78, -4.9, 1.0, 0.1, 0.16, 'pGreen', 0xffffff); B.cyl(5.3, 0.84, -4.9, 0.04, 0.012, 0.22, 'pGreen', 0xffffff, 0, 0, Math.PI / 2);
   CV.rpgPos = new THREE.Vector3(5.3, 0, -3.6);
   // yard: sheds, trucks, crates, conveyor, blocks
-  const shed = (x, z, w, d, h) => { solid(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, 'concrete', 0x8a867e, 'concrete'); B.boxC(x, h + 0.08, z, w + 0.4, 0.16, d + 0.4, 'snow', 0xffffff); for (const [cx, cz] of [[x, z + d / 2 + 0.7], [x, z - d / 2 - 0.7], [x - w / 2 - 0.7, z], [x + w / 2 + 0.7, z]]) cover(cx, cz, 1); };
+  const shed = (x, z, w, d, h) => { const g0 = gLo(x - w / 2, z - d / 2, x + w / 2, z + d / 2); solid(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, 'concrete', 0x8a867e, 'concrete'); B.boxC(x, g0 + h + 0.08, z, w + 0.4, 0.16, d + 0.4, 'snow', 0xffffff); for (const [cx, cz] of [[x, z + d / 2 + 0.7], [x, z - d / 2 - 0.7], [x - w / 2 - 0.7, z], [x + w / 2 + 0.7, z]]) cover(cx, cz, 1); };
   shed(-16, -30, 8, 6, 4); shed(15, -48, 7, 9, 4.5); shed(-14, -78, 10, 6, 5); shed(17, -96, 8, 6, 4);
-  for (const [x, z, ry] of [[9, -22, 0.2], [-8, -60, -0.3], [8, -84, 0.1]]) { truckLike(B, x, z, ry); CV.cols.push([x - 1.8, 0, z - 3.6, x + 1.8, 2.5, z + 3.6, 'metal']); cover(x - 2.4, z, 0); cover(x + 2.4, z, 0); }
+  for (const [x, z, ry] of [[9, -22, 0.2], [-8, -60, -0.3], [8, -84, 0.1]]) { const d = truckLike(B, x, z, ry); CV.cols.push([x - 1.8, d - 0.12, z - 3.6, x + 1.8, d + 2.7, z + 3.6, 'metal']); cover(x - 2.4, z, 0); cover(x + 2.4, z, 0); }
   for (const [x, z] of [[-4, -40], [5, -66], [-5, -102], [4, -115], [-20, -55], [22, -70]]) { solid(x - 1.1, 0, z - 0.35, x + 1.1, 1.0, z + 0.35, 'concrete', 0xa09d94, 'concrete'); cover(x, z - 0.9, 0); cover(x, z + 0.9, 1); }
   for (const [x, z] of [[-9, -18], [12, -36], [-2, -88], [11, -110]]) { solid(x - 0.7, 0, z - 0.7, x + 0.7, 1.4, z + 0.7, 'crate', 0xffffff, 'wood'); cover(x, z - 1.3, 0); }
   // v7: more cover between the hoist house and the yard (the player and the yard squads both use it) + the spots
   // the door squad runs to (coverHH, tier 0 only) when it storms the hoist house after the ride up
   CV.coverHH = [];
   const bags = (x, z, len, rows, alongZ) => {
-    const n = Math.round(len / 0.5);
+    const n = Math.round(len / 0.5), g0 = (alongZ ? gLo(x - 0.3, z - len / 2, x + 0.3, z + len / 2) : gLo(x - len / 2, z - 0.3, x + len / 2, z + 0.3)) - 0.06;
     for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) {
       const u = -len / 2 + (i + 0.5 + (r % 2) * 0.25) * (len / n); if (Math.abs(u) > len / 2) continue;
-      B.capsule(alongZ ? x : x + u, 0.13 + r * 0.24, alongZ ? z + u : z, 0.13, 0.36, 'cloth', 0xa39a78, Math.PI / 2, alongZ ? 0 : Math.PI / 2, 0, 1.15, 1.0);
+      B.capsule(alongZ ? x : x + u, g0 + 0.13 + r * 0.24, alongZ ? z + u : z, 0.13, 0.36, 'cloth', 0xa39a78, Math.PI / 2, alongZ ? 0 : Math.PI / 2, 0, 1.15, 1.0);
     }
-    B.box(alongZ ? x - 0.2 : x - len / 2, rows * 0.24 + 0.02, alongZ ? z - len / 2 : z - 0.2, alongZ ? x + 0.2 : x + len / 2, rows * 0.24 + 0.08, alongZ ? z + len / 2 : z + 0.2, 'snow', 0xffffff);
-    CV.cols.push(alongZ ? [x - 0.3, 0, z - len / 2, x + 0.3, rows * 0.24 + 0.05, z + len / 2, 'soft'] : [x - len / 2, 0, z - 0.3, x + len / 2, rows * 0.24 + 0.05, z + 0.3, 'soft']);
+    B.box(alongZ ? x - 0.2 : x - len / 2, g0 + rows * 0.24 + 0.02, alongZ ? z - len / 2 : z - 0.2, alongZ ? x + 0.2 : x + len / 2, g0 + rows * 0.24 + 0.08, alongZ ? z + len / 2 : z + 0.2, 'snow', 0xffffff);
+    CV.cols.push(alongZ ? [x - 0.3, g0 - 0.06, z - len / 2, x + 0.3, g0 + rows * 0.24 + 0.05, z + len / 2, 'soft'] : [x - len / 2, g0 - 0.06, z - 0.3, x + len / 2, g0 + rows * 0.24 + 0.05, z + 0.3, 'soft']);
   };
   bags(-4.6, -11.6, 2.8, 4, false); cover(-4.6, -12.5, 0, CV.coverHH); cover(-4.6, -10.6, 1);
-  solid(4.1, 0, -13.2, 5.5, 1.4, -11.8, 'crate', 0xffffff, 'wood'); solid(4.4, 1.4, -13.0, 5.3, 2.2, -12.1, 'crate', 0xffffff, 'wood'); B.boxC(4.8, 2.25, -12.55, 0.85, 0.08, 0.85, 'snow', 0xffffff);
+  solid(4.1, 0, -13.2, 5.5, 1.4, -11.8, 'crate', 0xffffff, 'wood'); solid(4.4, 1.4 + gLo(4.1, -13.2, 5.5, -11.8), -13.0, 5.3, 2.2 + gLo(4.1, -13.2, 5.5, -11.8), -12.1, 'crate', 0xffffff, 'wood'); B.boxC(4.8, gLo(4.1, -13.2, 5.5, -11.8) + 2.25, -12.55, 0.85, 0.08, 0.85, 'snow', 0xffffff);
   cover(4.8, -13.9, 0, CV.coverHH); cover(4.8, -11.1, 1);
-  solid(-0.5, 0, -17.85, 1.7, 1.0, -17.15, 'concrete', 0xa09d94, 'concrete'); B.boxC(0.6, 1.04, -17.5, 2.1, 0.06, 0.6, 'snow', 0xffffff);
+  solid(-0.5, 0, -17.85, 1.7, 1.0, -17.15, 'concrete', 0xa09d94, 'concrete'); B.boxC(0.6, gLo(-0.5, -17.85, 1.7, -17.15) + 1.04, -17.5, 2.1, 0.06, 0.6, 'snow', 0xffffff);
   cover(0.6, -18.5, 0, CV.coverHH); cover(0.6, -16.5, 1);
   bags(11, -31, 2.4, 3, true); cover(11.9, -31, 0); cover(10.1, -31, 1);
   bags(-7, -93, 3.0, 3, false); cover(-7, -93.9, 0); cover(-7, -92.1, 1);
@@ -312,9 +323,9 @@ function buildSurface() {
   for (let z = -16; z > -112; z -= 12) for (const sx of [-1, 1]) solid(-26 + sx * 1.2 - 0.15, 0, z - 0.15, -26 + sx * 1.2 + 0.15, 6.2, z + 0.15, 'steel', 0x6a5a3a, 'metal');
   B.box(-27.8, 6.2, -116, -24.2, 7.6, -10, 'paint', 0x7a6a4a);
   // rail yard (north)
-  for (const x of [-60, 60]) for (const z of [-140, -141.5]) B.box(-90, 0.1, z - 0.04, 90, 0.22, z + 0.04, 'steel', 0x6a6e70);
-  for (let x = -90; x < 90; x += 0.9) B.boxC(x, 0.08, -140.75, 0.22, 0.08, 2.6, 'wood', 0x4e4032);
-  for (const x of [-30, 34]) { B.boxC(x, 2.2, -146, 13, 3.4, 2.9, 'paint', 0x6e3a2a, 0, Math.PI / 2 * 0 + 0, 0); }
+  for (const z of [-140, -141.5]) for (let x = -90; x < 90; x += 3) { const d = gLo(x, z, x + 3, z); B.box(x, d + 0.02, z - 0.04, x + 3.02, d + 0.22 + (gS(x + 3, z) - d), z + 0.04, 'steel', 0x6a6e70); } // rail in 3 m pieces that follow the snow
+  for (let x = -90; x < 90; x += 0.9) B.boxC(x, gS(x, -140.75) + 0.04, -140.75, 0.22, 0.2, 2.6, 'wood', 0x4e4032);
+  for (const x of [-30, 34]) { const d = gLo(x - 6.5, -147.4, x + 6.5, -144.6); B.boxC(x, d + 2.35, -146, 13, 3.4, 2.9, 'paint', 0x6e3a2a, 0, 0, 0); B.boxC(x, d + 0.3, -146, 11, 0.7, 2.2, 'dark', 0x242422, 0, 0, 0); }
   // perimeter scatter
   const rng = mulberry32(77);
   const tg = [W.geo.tree1, W.geo.tree2], mt = [[], []];
@@ -354,14 +365,14 @@ function buildSurface() {
   sb.build(cageMats(), sh);
   for (const [y, txt] of ST) { const sg2 = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.3), new THREE.MeshBasicMaterial({ map: labelTex(txt, { bg: '#2a3a2a', fg: '#e8e2c8', font: 'bold 64px Arial' }), fog: true })); sg2.position.set(0, y + 3.3, SZ0 + 0.02); sh.add(sg2); }
   g.add(sh); CV.shaft = sh;
-  CV.colsSurf = CV.cols;
+  CV.colsSurf = CV.cols; SURF = false;
 }
 
 // ---------- BTR-80 ----------
 const _inv = new THREE.Matrix4(), _lo = new THREE.Vector3(), _ld = new THREE.Vector3();
 class BTR {
   constructor(path) {
-    this.isSled = true; this.kind = 'btr'; this.path = path.map(([x, z]) => new THREE.Vector3(x, 0, z)); this.i = 1; this.dir = 1;
+    this.isSled = true; this.kind = 'btr'; this.path = path.map(([x, z]) => new THREE.Vector3(x, surfGround(x, z), z)); this.i = 1; this.dir = 1;
     this.pos = this.path[0].clone(); this.yaw = Math.PI; this.v = 0; this.hp = 1900; this.dead = false; this.driver = null; this.gunner = null;
     const g = new THREE.Group(), b = new Builder();
     b.boxC(0, 1.25, 0, 2.7, 1.1, 7.4, 'paint', 0x5d6a4a, 0, 0, 0, 0.12);
@@ -411,7 +422,7 @@ class BTR {
     explodeAt(this.pos.clone().setY(this.pos.y + 1.8), 2.8, 10, 90);
     this.group.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.25); } });
     this.tur.rotation.z = 0.4; this.tur.position.y += 0.2;
-    CV.cols.push([this.pos.x - 1.6, 0, this.pos.z - 1.6, this.pos.x + 1.6, 2.4, this.pos.z + 1.6]);
+    CV.cols.push([this.pos.x - 1.6, this.pos.y - 0.12, this.pos.z - 1.6, this.pos.x + 1.6, this.pos.y + 2.4, this.pos.z + 1.6]);
     const c = CV.cols[CV.cols.length - 1]; addBox(c[0], c[1], c[2], c[3], c[4], c[5], 'metal');
     if (G.p2BtrDown) G.p2BtrDown();
   }
