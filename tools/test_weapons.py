@@ -129,7 +129,9 @@ async def main():
                     await snap(f"shots/w_{tag}.png")
                     await ev(f"__input.down.delete('{kk}'); __sim(0.5)")
             if not only or "gl" in only or "all" in only:
-                await ev(f"__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.06; {give}('m4',30,90,{{optic:'reddot',under:'gl'}}); __sim(0.8); __input.pressed.add('KeyX'); __sim(0.5)")
+                await ev(f"__P.pos.set(0.2,0.15,-3.6); __P.yaw=0; __P.pitch=0.06; {give}('m4',30,90,{{optic:'reddot',under:'gl'}}); __sim(0.8); __G.hud.show(false); __sim(0.1)")
+                await snap("shots/w_m4_m203_hip_nohud.png")
+                await ev("__G.hud.show(true); __input.pressed.add('KeyX'); __sim(0.5)")
                 await ev("__input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.12)")
                 await snap("shots/w_gl_flight.png")
                 await ev("for(let i=0;i<120 && window.__wpn.GL.length;i++) __sim(1/60); __sim(0.1)")
