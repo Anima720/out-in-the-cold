@@ -29,6 +29,8 @@
   - `cc0ec0c`：首轮截图意见修订、GL 调试钩子修复、武器业务断言、24 条实际围栏行走测试和补充固定机位。
   - `789445c`：接地尸体残余速度耗散、截图 rAF 队列排空、三组独立 Chrome 回归与超时进程清理。
   - `25e3818`：近战胸高与受击姿态、倒地手枪光、结局分段袖子/手指接触、投掷袖口，以及事件同步截图和两项测试隔离修正。
+  - `bc7d449`：修正 Playwright 在安装榴弹事件监听器时误调用返回函数的测试错误，显式返回 undefined。
+  - `3fe2927`：按用户新指令提前发布测试版，加入发布流程与明确的未完成验收说明。
 - `wip-ai` 的 `git diff 0caec10 origin/wip-ai` 已完整阅读并整合进上述本地分支；不要再次整包应用。保留了 `ai.js` 的列车机枪手实现和 `humans.js` 的 P4 布娃娃修复。
 - 原先 GitHub 连接返回 403；用户重新授权后，已确认应用安装与真实对象写入成功，并以非强制、校验旧分支头的方式更新 `v6-sandman`。本地原提交有备份分支 `local-before-api-push-20261117`，当前本地分支与远端同步。
 - 先前的恢复包仅保存授权恢复前的本地版本，现已被远端提交取代。继续工作请以最新 `origin/v6-sandman` 为准，不要把旧补丁重复套用。
@@ -90,7 +92,8 @@ git diff --check
 | `23e6ace` / [44033589746](https://github.com/Anima720/out-in-the-cold/actions/runs/44033589746) | 17/19；107 张图；美术未通过 | GL 循环导入钩子改为 getter，补业务断言；据盲审修 HUD、枪械、结局、尾声 |
 | `cc0ec0c` / [44039371029](https://github.com/Anima720/out-in-the-cold/actions/runs/44039371029) | 14/20；93 张图；尸体与 AI 断言失败、四项截图超时 | 旧版 headless shell；补截图阶段日志、rAF 排空和超时进程清理，不把超时自动归因于渲染慢 |
 | `789445c` / [44044799104](https://github.com/Anima720/out-in-the-cold/actions/runs/44044799104) | 18/20；122 张图；场景 12/12、结局 3/3、战斗 3/5 | 尸体真实 Chrome 已通过；修两个测试场景干扰，继续美术迭代 |
-| `25e3818` / [44049646851](https://github.com/Anima720/out-in-the-cold/actions/runs/44049646851) | **正在执行，尚未验收** | 重新跑完下面 20 项，按原机位复拍并盲审 |
+| `25e3818` / [44049646851](https://github.com/Anima720/out-in-the-cold/actions/runs/44049646851) | 场景 12/12、武器逻辑/NPC 和 AI 逻辑已通过；武器截图监听器安装错误 | 错误已在 `bc7d449` 修正；其余结果仍须读取最终汇总，不算整轮通过 |
+| `3fe2927` / [44051936862](https://github.com/Anima720/out-in-the-cold/actions/runs/44051936862) | **完整回归仍在执行** | 生产游戏代码与 `25e3818` 一致，修正测试后重跑 20 项 |
 
 第三轮两个失败的原因及修法：
 
@@ -141,7 +144,7 @@ git diff --check
 
 ## 6. 提前发布与后续验收
 
-1. 用户 2026-11-17 授权提前发布：使用 `release-preview.yml` 构建并发布 `v6-sandman-playtest-20261117` 预发布版，附件为完整单文件 HTML 和 SHA-256。保持 `main` 不变，不把发布等同于验收通过。
+1. 用户 2026-11-17 授权提前发布，已成功发布 [v6-sandman-playtest-20261117](https://github.com/Anima720/out-in-the-cold/releases/tag/v6-sandman-playtest-20261117)，目标提交 `3fe2927`。发布流程 [44051936987](https://github.com/Anima720/out-in-the-cold/actions/runs/44051936987) 成功；附件 HTML 为 12,526,471 字节，SHA-256 `b8dde2bfca6ab34fd9e0302178c5f8169e1fabf7072b20043eb4c147287defce`，与交给用户的本地构建一致。`main` 未变；发布不等同于最终验收通过。
 2. 继续当前 GitHub Actions 回归；使用最新 `v6-sandman`，不要重复整包合并 `wip-ai`。
 3. 全流程回归，修复实际失败，每项均核查运行时错误。
 4. **截图美术评审循环正在进行**：每轮保持固定机位；让只看截图、不看代码的评审按严重程度列问题，修改后复拍，直到只剩小问题。首轮 107 张图已完成独立盲审，不能把逻辑通过当成画面通过。
