@@ -391,6 +391,10 @@ export class Hind {
         if (gorge.active) { const gz = G.s - gorge.D - 45; this.wp.set(28, 45, gz - 30); this.faceTarget.set(0, 0, gz); }
         else this.wp.set(30, 50, -420);
         break;
+      case 'lineup': // swings out over the gorge, side-on to the bridge, nose on the near span (rockets come from here)
+        maxSp = 58;
+        if (gorge.active) { const ez = G.s - gorge.D - gorge.span0; this.wp.set(-42, 22, ez - 30); this.faceTarget.set(0, 1, ez - 10); }
+        break;
       case 'hover':
         maxSp = 60;
         if (gorge.active) { const gz = G.s - gorge.D - 45; this.wp.set(35, 50, gz - 70); this.faceTarget.set(0, 5, gz + 120); }

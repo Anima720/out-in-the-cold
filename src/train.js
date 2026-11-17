@@ -482,17 +482,21 @@ export function setInvWalls(on) { for (const w of T.invWalls) w.enabled = on && 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _x = new THREE.Vector3(1, 0, 0);
 export function updateTrain(dt) {
   // falling cars into the gorge
+  const ez = G.s - gorge.D - gorge.span0; // train-frame z of the gap's near edge (blown span)
   for (const c of T.cars) {
-    const zc = (c.z0 + c.z1) / 2;
-    if (!c.falling && gorge.active && gorge.broken) {
-      const front = c.z0 + 1.5;
-      if (groundY(0, front) < -3) {
-        c.falling = true; c.vy = -1; c.av = c.type === 'loco' ? -0.55 : -0.45 - Math.random() * 0.2; c.ar = (Math.random() - 0.5) * 0.25;
-        for (const bx of c.boxes) bx.enabled = false;
-        if (G.onCarFall) G.onCarFall(c);
-      }
+    const zc = (c.z0 + c.z1) / 2, L = c.z1 - c.z0;
+    if (!c.falling && gorge.active && gorge.broken && c.z0 < ez - 0.2) {
+      c.falling = true; c.tip = true; c.vy = 0; c.av = c.type === 'loco' ? -0.62 : -0.5 - Math.random() * 0.2; c.ar = (Math.random() - 0.5) * 0.25;
+      for (const bx of c.boxes) bx.enabled = false;
+      if (G.onCarFall) G.onCarFall(c);
     }
-    if (c.falling && !c.landed) {
+    if (c.tip) { // still rolling over the edge: pivots nose-down on the lip until its middle is past it, then drops
+      const u = (ez - c.z0) / (L * 0.5);
+      if (u < 1) {
+        const th = -0.24 * u * u, s = Math.sin(th), co = Math.cos(th), ry = DECK - 0.45, rz = zc - ez;
+        c.group.position.set(0, 0.45 + ry * co - rz * s, ez + ry * s + rz * co); c.group.rotation.x = th;
+      } else { c.tip = false; c.vy = -3.2; c.group.position.z = zc; }
+    } else if (c.falling && !c.landed) {
       c.vy -= 19 * dt;
       c.group.position.y += c.vy * dt;
       c.group.rotation.x = Math.max(-1.2, c.group.rotation.x + c.av * dt);

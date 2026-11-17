@@ -34,6 +34,8 @@ export const LINES = {
   TRUCK_07: ['TRUCK', 'More sleds — both sides!', '又来一批雪地摩托——两边都有！'],
   GRIN_06: ['GRINCH', 'Got sleds coming up the left!', '左边又上来几辆雪地摩托！', true],
   TRUCK_08: ['TRUCK', 'Right side! Swing it around!', '右边！把枪转过去！'],
+  GRIN_07: ['GRINCH', "Bridge is gone! I'm on the brakes — she won't stop!", '桥没了！我在刹车——停不下来了！', true],
+  TRUCK_09: ['TRUCK', 'Get to the side! Get ready to jump!', '到车边上去！准备跳车！'],
 };
 
 export const D = { phase: '', t: 0, rt: 0, ck: 0, q: [], cur: null, f: {}, timers: [], slow: null };
@@ -72,7 +74,7 @@ function clearAll() {
   G.boxes.length = 0;
   buildTrain();
   T.dshk.yaw.rotation.y = Math.PI; T.dshk.pitch.rotation.x = 0;
-  gorge.active = false; gorge.broken = false; gorge.D = 1e9;
+  gorge.active = false; gorge.broken = false; gorge.D = 1e9; gorge.span0 = 0; gorge.span1 = 30;
   if (W.gorgeGroup) { W.root.remove(W.gorgeGroup); W.gorgeGroup = null; }
   W.fogTarget = W.fogDensity = 0.0115;
   G.s = 0; rebuildChunks();
@@ -244,7 +246,7 @@ function sledWave() {
     for (let i = 0; i < n; i++, k++) {
       const ahead = D.wave > 0 && i === 1;
       after(k * 0.9, () => {
-        if (D.phase !== 'turret' && D.phase !== 'bridge') return;
+        if (D.phase !== 'turret') return;
         new Sled(side, ahead ? rr(-175, -160) : rr(95, 125), { offs: offs[i], lane: i === 2 ? 11.5 : i ? 9.5 : 7.8, noGunner: i === 2 && Math.random() < 0.5 });
       });
     }
@@ -257,7 +259,7 @@ function enterBridge() {
   D.phase = 'bridge'; D.ck = 3; D.bridgeT = 0;
   const h = G.hind;
   if (h) { h.state = 'retreat'; h.stT = 0; h.hp = Math.min(h.hp, h.maxHp * 0.4); }
-  gorge.D = G.s + 70 + 640; gorge.active = true; gorge.broken = false;
+  gorge.D = G.s + 70 + 640; gorge.active = true; gorge.broken = false; gorge.span0 = 0; gorge.span1 = 30; // the near span gets blown
   buildGorge();
   W.fogTarget = 0.0042;
   HUD.objective('坚持住');
@@ -266,47 +268,59 @@ function enterBridge() {
 
 function edgeDist(z) { return z - (G.s - gorge.D); } // >0 while the gorge edge is still ahead of z
 
+const spanZ = (u) => G.s - gorge.D - (gorge.span0 + (gorge.span1 - gorge.span0) * u); // train-frame z along the blown span
 function bridgeHit() {
   if (gorge.broken) { return; }
-  gorge.broken = true;
-  const ms = W.midSpan; ms.userData.falling = true; ms.userData.vy = 0; ms.userData.av = 0.22; ms.userData.az = 0.06;
-  const zc = G.s - gorge.D - 45;
-  for (const [x, dz, s] of [[0, -6, 2.4], [2, 5, 1.8], [-2, 12, 1.6]]) setTimeout(() => explodeAt(new THREE.Vector3(x, 2, G.s - gorge.D - 45 + dz), s, 1, 0, { noPlayerDmg: true, wind: 0.6 }), (Math.abs(dz) * 25));
-  P.addShake(0.5);
-  D.f.brakeAt = D.rt + 1.4;
+  gorge.broken = true; D.f.hitT = D.t;
+  const ms = W.midSpan; ms.userData.falling = true; ms.userData.vy = 1.5; ms.userData.av = 0.3; ms.userData.az = 0.07;
+  [[0, 0.15, 2.6, 0], [1.6, 0.45, 2.0, 0.14], [-1.8, 0.75, 1.8, 0.3], [0.5, 0.05, 1.6, 0.45]].forEach(([x, u, sz, dl]) =>
+    after(dl, () => { const p = new THREE.Vector3(x, 1.5, spanZ(u)); explodeAt(p, sz, 1, 0, { noPlayerDmg: true, wind: 0.6 }); G.fx.flash(p, 0xffa050, 60, 40, 0.15); }));
+  P.addShake(0.6);
+  D.f.brakeAt = D.rt + 0.9;
   HUD.objective('抓稳了');
   musicMode('bridge');
+  say('GRIN_07', 0.7); say('TRUCK_09', 1.2);
+  const g = D.grinch;
+  if (g && g.cab) { after(0.5, () => { if (g.cab) g.cab.brake = true; }); after(1.6, () => { if (g.cab && g.cab.st === 'ctl') { g.cab.st = 'out'; g.cab.i = 0; } }); }
 }
 
-function mateJump(m) {
-  if (m.custom) { m.custom = null; m.h.grips = null; m.h.noWeapon = false; m.noCrowd = false; }
-  const z = m.h.pos.z;
-  setTimeout(() => {
-    m.mode = 'jump';
-    m.jumpTo(rr(5.5, 8), 0, z + rr(-1, 2), 0.9, 1.6);
-    m.onArcDone = () => { m.mode = 'ground'; m.target.copy(m.h.pos); m.h.crouchT = 1; };
-  }, rr(150, 900));
+function mateJump(m, delay) {
+  if (m.custom && m.cab && m.cab.st === 'ctl') { m.cab.st = 'out'; m.cab.i = 0; } // still at the controls: get out first
+  after(delay, () => {
+    if (m.custom) { m.custom = null; m.cab = null; m.h.grips = null; m.h.noWeapon = false; m.noCrowd = false; }
+    // land on solid ground: in the train frame the lip moves back at G.v during the 0.9 s arc
+    const z = Math.max(m.h.pos.z + rr(-0.5, 1.5), G.s - gorge.D - gorge.span0 + G.v * 0.95 + 3.5);
+    m.mode = 'jump'; m.noCrowd = true;
+    m.jumpTo(rr(5.5, 7.5) * (m === D.grinch ? 1 : 1.1), 0, z, 0.9, 1.5);
+    m.onArcDone = () => { m.mode = 'ground'; m.target.copy(m.h.pos); m.h.crouchT = 1; m.noCrowd = false; };
+  });
 }
 
 function doJump() {
   D.f.jumped = true; D.f.jumpOpen = false;
   if (D.screech) { D.screech.stop(); D.screech = null; }
+  if (P.pos.z < CAB.z1 + 0.1 && P.pos.y > 1.6) { P.pos.x = 1.75; P.pos.y = Math.max(P.pos.y, 2.4); } // out through the cab side window
   jumpOff(); setInvWalls(false);
+  // keep the landing on this side of the lip: the jumper carries the train's speed relative to the ground
+  const e = edgeDist(P.pos.z), fwd = clamp((e - 4.6) / 0.8, 0, G.v + 1.5);
+  P.vel.z = G.v - fwd;
+  P.autoLook = { target: new THREE.Vector3(0, -4, G.s - gorge.D - 6), rate: 1.4 }; D.f.lookEdge = true;
   HUD.setPrompt(null); HUD.objective(null);
-  D.slow = { t: 0, hold: 2.4, out: 1.2, k: 0.22 };
+  D.slow = { t: 0.25, hold: 1.9, out: 1.3, k: 0.3 };
   HUD.setSlowmo(true);
-  play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });
   musicMode('silence'); muffle(900, 0.1);
 }
 
 G.onJumpLand = () => {
-  P.autoLook = { target: new THREE.Vector3(0, -6, P.pos.z - 80), rate: 2.2 };
+  P.autoLook = { target: new THREE.Vector3(0, -12, G.s - gorge.D - 8), rate: 2.0 };
   P.lockLook = true;
   D.f.landed = true; D.landT = D.t; D.landRT = D.rt;
 };
 
 G.onCarFall = (c) => {
-  if (c.type === 'loco') play('horn', { pos: new THREE.Vector3(0, 4, c.z0), vol: 0.9, ref: 30, noSlow: true });
+  if (c.type === 'loco') { play('horn', { pos: new THREE.Vector3(0, 4, c.z0), vol: 0.9, ref: 30, noSlow: true }); play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 1.2, ref: 20, noSlow: true }); }
+  else play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 0.7, ref: 14 });
+  if (!D.f.jumped && P.pos.z >= c.z0 - 0.6 && P.pos.z <= c.z1 + 0.6) D.f.doomT = D.t + 0.4; // still aboard this car: it goes over with you
 };
 G.onCarLand = (c) => {
   const p = new THREE.Vector3(0, gorge.iceY + 1, c.group.position.z);
@@ -318,7 +332,7 @@ G.onCarLand = (c) => {
   D.lastCarLand = D.t;
 };
 G.onSpanLanded = () => {
-  const p = new THREE.Vector3(0, gorge.iceY + 2, G.s - gorge.D - 45);
+  const p = new THREE.Vector3(0, gorge.iceY + 2, spanZ(0.5));
   G.fx.splash(p, 2.0); play('crash', { pos: p, vol: 1.6, ref: 50, roll: 0.5, rev: 0.6 }); play('icecrack', { pos: p, vol: 1.5, ref: 50, roll: 0.5 });
 };
 G.onBridgeHit = () => bridgeHit();
@@ -415,18 +429,24 @@ export function updateDirector(dt, rdt) {
       if (D.sledT <= 0 && G.sleds.filter((x) => !x.dead).length < 2) { D.sledT = rr(6, 9); D.sledSide *= -1; new Sled(D.sledSide, rr(95, 120), { offs: rr(-9, 7) }); }
     } else if (!D.f.sledsAway) { D.f.sledsAway = 1; for (const x of G.sleds) x.offs = 90; }
     if (!D.f.g4 && dLoco < 430) { D.f.g4 = 1; say('GRIN_04'); }
-    if (!D.f.t4 && dLoco < 345) {
-      D.f.t4 = 1; say('TRUCK_04');
-      const h = G.hind; if (h) { h.state = 'hover'; h.stT = 0; }
-      for (let i = 0; i < 4; i++) setTimeout(() => {
-        if (!G.hind) return;
-        const from = G.hind.pod(i, new THREE.Vector3());
-        const dd = gorge.D + 38 + i * 5;
-        fireRocket(from, new THREE.Vector3(0, -0.3, 1).normalize(), { speed: 110, home: () => new THREE.Vector3((i % 2 ? 1 : -1) * 1.5, 2.5, G.s - dd) });
-      }, 500 + i * 220);
+    const h = G.hind;
+    // the Hind breaks off, swings out over the gorge and lines up side-on to the near span
+    if (!D.f.lineup && dLoco < 345) { D.f.lineup = 1; if (h) { h.state = 'lineup'; h.stT = 0; } }
+    if (!D.f.t4 && dLoco < 240) { D.f.t4 = 1; say('TRUCK_04'); }
+    if (!D.f.salvo && dLoco < 172) { // ripple of rockets into the near span; the camera is drawn to it for a moment
+      D.f.salvo = 1; D.f.lookT = D.t + 2.4;
+      if (!P.autoLook) { P.autoLook = { target: new THREE.Vector3(0, 3, spanZ(0.3)), rate: 1.3 }; D.f.lookSalvo = true; }
+      for (let i = 0; i < 6; i++) after(i * 0.17, () => {
+        const from = G.hind ? G.hind.pod(i, new THREE.Vector3()) : new THREE.Vector3(-40, 22, spanZ(0.9));
+        const u = 0.12 + (i % 3) * 0.28, x = (i % 2 ? 1 : -1) * 1.2;
+        const tgt = () => new THREE.Vector3(x, 1.8, spanZ(u));
+        fireRocket(from, tgt().sub(from).normalize(), { speed: 95, home: tgt });
+      });
+      after(2.2, () => { if (G.hind && G.hind.state === 'lineup') { G.hind.state = 'retreat'; G.hind.stT = 0; } });
     }
-    if (!gorge.broken && dLoco < 240) bridgeHit(); // fallback if the rockets were too far away
-    if (D.f.brakeAt && D.rt > D.f.brakeAt) { D.f.brakeAt = 0; D.f.braking = true; G.vTarget = 17; G.vRate = 1.1; D.screech = loop('screech', { vol: 0.45, rev: 0.3 }); play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 0.8, ref: 30 }); }
+    if (D.f.lookSalvo && P.autoLook) { P.autoLook.target.set(0, 3, spanZ(0.3)); if (D.t > D.f.lookT) { P.autoLook = null; D.f.lookSalvo = false; } }
+    if (!gorge.broken && dLoco < 125) bridgeHit(); // fallback if the rockets were too far away
+    if (D.f.brakeAt && D.rt > D.f.brakeAt) { D.f.brakeAt = 0; D.f.braking = true; G.vTarget = 13; G.vRate = 1.5; D.screech = loop('screech', { vol: 0.5, rev: 0.3 }); play('horn', { pos: new THREE.Vector3(0, 4.7, -66), vol: 0.8, ref: 30 }); }
     if (D.f.braking && !D.f.jumped) {
       for (let i = 0; i < 3; i++) {
         const w = T.wheelInfo[(Math.random() * T.wheelInfo.length) | 0];
@@ -435,22 +455,29 @@ export function updateDirector(dt, rdt) {
         G.fx.add.spawn(x, 0.45, w.pos.z + 0.4, x * rr(1, 4), rr(0.5, 3), rr(4, 12), { life: rr(0.15, 0.4), size: 0.06, c: [1, 0.75, 0.35], grav: 9, drag: 1 });
       }
     }
-    if (!D.f.jumpOpen && !D.f.jumped && gorge.broken && edgeDist(P.pos.z) < 94) { D.f.jumpOpen = true; say('SAND_06'); HUD.objective('跳车！'); for (const m of G.mates) mateJump(m); }
-    if (D.f.landed && P.autoLook) P.autoLook.target.set(0, -22, G.s - gorge.D - 36);
-    // after the jump: hit the snow, stay down a beat, get up and take a couple of unsteady steps (no long run)
+    // the engine reaches the lip: slow motion, JUMP (the player is still aboard and sees it tip over)
+    if (!D.f.jumpOpen && !D.f.jumped && gorge.broken && dLoco < 6) {
+      D.f.jumpOpen = true; D.q.length = 0; D.cur = null; say('SAND_06'); HUD.objective('跳车！');
+      D.slow = { t: 0, hold: 3.4, out: 1.1, k: 0.3 }; HUD.setSlowmo(true); play('slowmo', { vol: 1, noSlow: true, rev: 0.2 });
+      if (D.f.lookSalvo) { P.autoLook = null; D.f.lookSalvo = false; }
+      mateJump(D.truck, 0.25); mateJump(D.grinch, 0.55);
+    }
+    if (D.f.lookEdge && P.autoLook && !D.f.landed) P.autoLook.target.set(0, -4, G.s - gorge.D - 6);
+    if (D.f.landed && P.autoLook) P.autoLook.target.set(0, -12, G.s - gorge.D - 8);
+    // after the jump: hit the snow, stay down a beat, get up and take a couple of unsteady steps toward the lip
     if (D.f.landed && !D.f.ran && D.rt - D.landRT > 0.05) { D.f.ran = 1; P.prone = true; P.getUp = true; }
     if (D.f.ran === 1 && !D.f.knee && D.rt - D.landRT > 1.1) { D.f.knee = 1; P.prone = false; P.crouched = true; }
     if (D.f.ran === 1 && D.rt - D.landRT > 2.1) {
       D.f.ran = 2; P.crouched = false; P.slide = false; P.prone = false;
-      const d0 = G.s - P.pos.z + 1.8, x0 = P.pos.x + 0.35;
+      const step = clamp(edgeDist(P.pos.z) - 2.2, 0, 1.8), d0 = G.s - P.pos.z + step, x0 = P.pos.x - 0.35;
       P.scriptMove = { x: x0, zf: () => G.s - d0, speed: 1.1 };
       P.addShake(0.25);
     }
     if (D.f.jumpOpen && !D.f.jumped) {
       prompt = '<span class="urgent">按 <kbd>空格</kbd> 跳车！</span>';
-      if (hit('Space')) doJump();
-      if (edgeDist(P.pos.z) < 46) { D.f.jumpOpen = false; fail('你随列车坠入了冰河。', '提示：听到“跳”的时候马上按空格。'); }
+      if (hit('Space') && !D.f.doomT) doJump();
     }
+    if (D.f.doomT && !D.f.jumped && D.t > D.f.doomT) { D.f.jumpOpen = false; D.f.doomT = 0; fail('你随列车坠入了冰河。', '提示：车头冲出断桥的一瞬间按空格跳车。'); }
     if (D.f.landed && !D.f.ending) {
       const allDown = T.cars.every((c) => c.landed);
       if ((allDown && D.t - (D.lastCarLand || 0) > 2.5) || D.t - D.landT > 16) endSequence();
