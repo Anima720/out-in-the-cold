@@ -69,7 +69,7 @@ export function shootAtPlayer(muzzle, o = {}) {
   }
   if (Math.random() < (o.tracer ?? 0.45)) G.fx.tracer(muzzle, end, { start: 1, width: o.width || 0.025, speed: 300 });
   G.fx.muzzle(muzzle, _sd, o.flash || 1);
-  G.fx.flash(muzzle, 0xffb060, 10, 8, 0.05);
+  G.fx.flash(muzzle, 0xffb060, o.light ?? 10, o.lightRange ?? 8, o.lightTime ?? 0.05);
   play(o.snd || 'ak_far', { pos: muzzle, vol: o.vol ?? 0.8, ref: 6, rev: 0.5, rate: o.rate });
   AI.lastFireT = G.t;
   return hitP;
@@ -274,8 +274,8 @@ export function downedUpdate(e, dt) {
   if ((e.dfT -= dt) <= 0 && h.aimT > 0.75) {
     e.dfT = rr(1.3, 2.3); h.recoil = 1;
     const mz = _t.copy(h.j[J.W1]);
-    if (tg === P) shootAtPlayer(mz, { dmg: 5, acc: 0.45, snd: WDEF.pistol?.far ?? 'pistol', rate: 1.12, vol: 0.55, tracer: 0.25, flash: 0.6 });
-    else shootAt(h, mz, _e.copy(tp).add(_m.set(rr(-0.5, 0.5), rr(-0.3, 0.5), rr(-0.5, 0.5))), { dmg: 0, skip: h.faction, spread: 0.05, snd: WDEF.pistol?.far ?? 'pistol', rate: 1.12, vol: 0.5, tracer: 0.25, flash: 0.6 });
+    if (tg === P) shootAtPlayer(mz, { dmg: 5, acc: 0.45, snd: WDEF.pistol?.far ?? 'pistol', rate: 1.12, vol: 0.55, tracer: 0.25, flash: 0.35, light: 0.8, lightRange: 2.2, lightTime: 0.03 });
+    else shootAt(h, mz, _e.copy(tp).add(_m.set(rr(-0.5, 0.5), rr(-0.3, 0.5), rr(-0.5, 0.5))), { dmg: 0, skip: h.faction, spread: 0.05, snd: WDEF.pistol?.far ?? 'pistol', rate: 1.12, vol: 0.5, tracer: 0.25, flash: 0.35 });
   }
 }
 
@@ -287,9 +287,9 @@ function meleeClear(h, target) {
   _ma.copy(h.pos); _ma.y += 1; _mb.copy(target.pos); _mb.y += target.downed ? 0.3 : 1; _mb.sub(_ma);
   const d = _mb.length(); return d < 0.01 || !rayBoxes(_ma, _mb.multiplyScalar(1 / d), d, false);
 }
-function meleeFace(h, tp, dt) {
+function meleeFace(h, tp, dt, chestY) {
   _o.subVectors(tp, h.pos); _o.y = 0; const d = _o.length();
-  if (d > 1e-3) { h.yaw += clamp(angDiff(h.yaw, yawOf(_o)), -11 * dt, 11 * dt); h.aim.copy(_o).multiplyScalar(1 / d); h.aim.y = -0.05; }
+  if (d > 1e-3) { h.yaw += clamp(angDiff(h.yaw, yawOf(_o)), -11 * dt, 11 * dt); h.aim.copy(_o).multiplyScalar(1 / d); h.aim.y = clamp((chestY - h.j[J.Ne].y) / Math.max(0.5, d), -0.7, 0.3); h.aim.normalize(); }
   // One short, collision-tested approach during the wind-up. Copy only the horizontal result so the
   // caller's ordinary movement step still owns gravity, and cannot apply the lunge velocity twice.
   const reach = h.meleeKind === 'knife' ? 1.23 : 1.08;
@@ -306,7 +306,7 @@ export function enemyMelee(e, dt) {
   const h = e.h, P = G.player;
   if (e.mel) {
     const m = e.mel, isP = m.tgt === P;
-    const d = meleeFace(h, isP ? P.pos : m.tgt.h.pos, dt);
+    const d = meleeFace(h, isP ? P.pos : m.tgt.h.pos, dt, isP ? P.chest.y : m.tgt.h.j[J.Ne].y - 0.18);
     h.crouchT = 0; h.aimTarget = 0.4; h.vel.x = h.vel.z = 0;
     if (!m.hit && h.meleeT >= MS) {
       m.hit = true;
@@ -338,7 +338,7 @@ export function mateMelee(m, dt) {
   const h = m.h;
   if (m.mel) {
     const e = m.mel.tgt;
-    const d = meleeFace(h, e.h.pos, dt);
+    const d = meleeFace(h, e.h.pos, dt, e.h.j[J.Ne].y - 0.18);
     h.crouchT = 0; h.aimTarget = 0.4; h.vel.x = h.vel.z = 0;
     if (!m.mel.hit && h.meleeT >= MS) {
       m.mel.hit = true;

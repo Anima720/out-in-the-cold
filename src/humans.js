@@ -136,17 +136,17 @@ function faction(name) {
     b.cap(0, 0.22, 0, 0.165, 0.3, C.cloth, 1, 1.22, 0.82);                 // chest
     b.rb(0, -0.05, 0, 0.34, 0.18, 0.23, C.cloth, 1);                        // hips
     for (const sx of [-1, 1]) b.sph(sx * 0.165, 0.455, 0.0, 0.082, C.cloth, 1, 1, 0.9, 1);   // deltoids
-    b.cyl(0, 0.53, 0.01, 0.075, 0.095, 0.07, C.cloth, 1);                   // collar
+    b.cyl(0, 0.53, 0.01, 0.075, 0.095, 0.07, ru ? 0x78838b : C.cloth, ru ? 0 : 1); // exposed inner collar
     b.rb(0, -0.03, 0, 0.36, 0.055, 0.27, C.belt, 0);
     b.rb(0, -0.03, -0.138, 0.06, 0.045, 0.012, 0x6a6a62, 0);              // buckle
     if (ru) {
       b.rb(0, 0.26, -0.135, 0.31, 0.27, 0.06, C.rig, 0);
       b.rb(0, 0.28, 0.135, 0.3, 0.3, 0.05, C.rig, 0);
-      for (const sx of [-1, 1]) { b.rb(sx * 0.1, 0.44, 0, 0.065, 0.035, 0.3, C.rig, 0); b.rb(sx * 0.162, 0.21, 0, 0.035, 0.15, 0.24, C.rig, 0); }
+      for (const sx of [-1, 1]) { b.rb(sx * 0.1, 0.44, 0, 0.065, 0.035, 0.3, 0x929da5, 0); b.rb(sx * 0.162, 0.21, 0, 0.035, 0.15, 0.24, 0x89959d, 0); }
       for (const x of [-0.105, 0, 0.105]) { b.rb(x, 0.2, -0.178, 0.085, 0.13, 0.05, C.pouch, 0); b.rb(x, 0.27, -0.182, 0.088, 0.025, 0.056, 0x858b8f, 0); }
       b.rb(0.17, 0.08, -0.06, 0.06, 0.08, 0.07, C.pouch, 0);                 // grenade pouch
       b.rb(0, 0.27, 0.17, 0.26, 0.28, 0.1, 0xa3aaae, 0);                     // pack
-      b.rb(0, 0.43, 0.175, 0.24, 0.06, 0.09, 0x8e959a, 0);
+      b.rb(0, 0.43, 0.175, 0.24, 0.06, 0.09, 0x7b8790, 0);
     } else {
       b.rb(0, 0.26, -0.138, 0.32, 0.3, 0.06, C.rig, 0);
       b.rb(0, 0.28, 0.14, 0.32, 0.32, 0.06, C.rig, 0);
@@ -420,6 +420,7 @@ function segMatrix(A, B, ref, m = _m) {
 
 const V = () => new THREE.Vector3();
 const _f = V(), _r = V(), _tf = V(), _tr = V(), _tu = V(), _a = V(), _s0 = V(), _dir = V(), _wu = V(), _g1 = V(), _g2 = V(), _pole = V(), _fl = V(), _fr = V(), _t1 = V(), _hb = V(), _fw = V(), _mv = V();
+const _hitQ = new THREE.Quaternion();
 
 export class Human {
   constructor(fname, opts = {}) {
@@ -495,7 +496,7 @@ export class Human {
     // pelvis
     if (this.sit) j[J.P].copy(this.sit.seat);
     else j[J.P].set(root.x, root.y + lerp(0.98, 0.56, c) - Math.abs(Math.sin(this.phase * Math.PI * 2)) * 0.045 * walkW, root.z);
-    if (mk > 0) j[J.P].addScaledVector(fwd, mk * lerp(-0.04, 0.16, ms)).addScaledVector(UP, -0.07 * mk);
+    if (mk > 0) j[J.P].addScaledVector(fwd, mk * lerp(-0.04, 0.16, ms)).addScaledVector(UP, -mk * (0.07 + 0.4 * ms * Math.max(0, -_a.y)));
     const aimPitch = Math.asin(clamp(_a.y, -1, 1));
     let pitch = this.sit ? 0.28 : 0.05 + c * 0.2 + run * 0.22 * (1 - this.aimT) - aimPitch * 0.25 * this.aimT - this.flinch * 0.5 + mk * lerp(-0.08, 0.26, ms);
     _tu.copy(UP).multiplyScalar(Math.cos(pitch)).addScaledVector(tf, Math.sin(pitch));
@@ -518,9 +519,9 @@ export class Human {
       if (this.meleeKind === 'knife') { // rifle hangs in the left hand, low; the right hand stabs (see _g1 below)
         _t1.copy(ne).addScaledVector(tr, -0.12).addScaledVector(UP, -0.5).addScaledVector(tf, 0.12);
         _hb.copy(tf).multiplyScalar(0.5).addScaledVector(UP, -0.85).addScaledVector(tr, -0.1).normalize();
-      } else { // butt stroke: cock over the right shoulder, then drive into the upper chest
-        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.58, ms)).addScaledVector(tr, lerp(0.3, -0.02, ms)).addScaledVector(UP, lerp(-0.1, -0.16, ms));
-        _hb.copy(UP).multiplyScalar(lerp(0.45, 0.2, ms)).addScaledVector(tf, lerp(-0.55, -0.85, ms)).addScaledVector(tr, lerp(0.7, 0.42, ms)).normalize();
+      } else { // chest-side butt stroke follows target height, including a crouched player's chest
+        _t1.copy(ne).addScaledVector(tf, lerp(0.02, 0.58, ms)).addScaledVector(tr, lerp(0.3, 0.12, ms)).addScaledVector(UP, lerp(-0.1, -0.16 + Math.min(0, _a.y) * 0.3, ms));
+        _hb.copy(UP).multiplyScalar(lerp(0.45, 0.12, ms)).addScaledVector(tf, lerp(-0.55, -0.85, ms)).addScaledVector(tr, lerp(0.7, -0.5, ms)).normalize();
       }
       _s0.lerp(_t1, mk); _dir.lerp(_hb, mk).normalize();
     }
@@ -539,7 +540,7 @@ export class Human {
       _g2.copy(_s0).addScaledVector(_dir, gk.g2).addScaledVector(_wu, -0.045);
       if (mk > 0 && this.meleeKind === 'knife') { // keep the fist outside the face; thrust straight into the chest
         _g2.lerp(_t1.copy(_s0).addScaledVector(_dir, 0.3), mk);
-        _t1.copy(j[J.Ne]).addScaledVector(tr, lerp(0.34, 0.1, ms)).addScaledVector(UP, lerp(0.02, -0.13, ms)).addScaledVector(tf, lerp(-0.06, 0.53, ms));
+        _t1.copy(j[J.Ne]).addScaledVector(tr, lerp(0.34, 0.1, ms)).addScaledVector(UP, lerp(0.02, -0.13 + Math.min(0, _a.y) * 0.2, ms)).addScaledVector(tf, lerp(-0.06, 0.53, ms));
         _g1.lerp(_t1, mk);
       }
     }
@@ -727,6 +728,15 @@ export class Human {
     if (this.hp <= 0) {
       // last stand: the AI may decide a lethal hit knocks him down instead (onLethal returns true)
       if (!this.downed && this.onLethal && this.onLethal(dmg, dir, part, opts)) { this.goDown(dir); return false; }
+      if (opts.melee && dir && !this.downed && !this.sit) { // immediate chest recoil before the ragdoll takes over
+        _r.crossVectors(UP, dir); if (_r.lengthSq() > 1e-6) {
+          _hitQ.setFromAxisAngle(_r.normalize(), 0.14);
+          for (let i = 0; i < NJ; i++) if (i !== J.P && (i <= J.HR || i === J.W0 || i === J.W1)) {
+            this.j[i].sub(this.j[J.P]).applyQuaternion(_hitQ).add(this.j[J.P]);
+            this.lj[i].sub(this.j[J.P]).applyQuaternion(_hitQ).add(this.j[J.P]);
+          }
+        }
+      }
       this.die(dir, joint ?? J.P, opts.force || 5, part); return true;
     }
     return false;

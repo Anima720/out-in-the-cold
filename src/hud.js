@@ -306,7 +306,7 @@ function updateMinimap(dt) {
   // north tick
   if (toMap(P.pos.x, P.pos.z - 1e4, P, s, c, sn, half + 1 * k, 1e9)) {
     g.fillStyle = 'rgba(8,10,12,0.75)'; g.beginPath(); g.arc(mx, my, 6.5 * k, 0, 6.283); g.fill();
-    g.fillStyle = '#ebe7dc'; g.font = MM.font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', mx, my + 0.5 * k);
+    g.fillStyle = '#ebe7dc'; g.font = MM.font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('北', mx, my + 0.5 * k);
   }
   // vehicles
   for (const v of G.sleds) {

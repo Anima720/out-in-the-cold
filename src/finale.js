@@ -12,7 +12,7 @@ import { S, setDoor, blowDoor, setUplink, ground5 } from './station.js';
 import { key } from './input.js';
 import { los } from './physics.js';
 import { Builder } from './geom.js';
-import { M } from './mats.js';
+import { M, TX, stdMat } from './mats.js';
 
 Object.assign(LINES, {
   P5_GRIN_13: ['GRINCH', 'Sandman! SANDMAN! Stay with me!', '睡魔！睡魔！撑住！'],
@@ -62,24 +62,48 @@ function mono(text) { const u = ui(); if (u.mt !== text) { u.mt = text; u.m.text
 let ARM = null;
 function arm() {
   if (ARM) return ARM;
-  const g = new THREE.Group(), sl = new THREE.Group(), hd = new THREE.Group();
-  const b1 = new Builder(); b1.boxC(0, 0, -0.5, 0.09, 0.09, 1, 'paint', 0x6a6350); b1.boxC(0.01, 0.046, -0.7, 0.05, 0.004, 0.16, 'paint', 0x4a0a07); b1.build(M, sl, { cast: false });
-  const b2 = new Builder(); b2.boxC(0, 0, -0.04, 0.085, 0.04, 0.1, 'paint', 0x4e2219); for (let k = 0; k < 4; k++) b2.boxC(-0.03 + k * 0.02, -0.005, -0.12, 0.016, 0.016, 0.07, 'paint', k % 2 ? 0x3f1a12 : 0x5a1a10);
-  b2.boxC(0.05, 0, -0.06, 0.018, 0.018, 0.06, 'paint', 0x4e2219); b2.build(M, hd, { cast: false });
-  g.add(sl, hd); g.visible = false; G.camera.add(g);
-  ARM = { g, sl, hd };
+  const g = new THREE.Group(), up = new THREE.Group(), el = new THREE.Group(), sl = new THREE.Group(), hd = new THREE.Group();
+  const mats = { ...M, sleeve: stdMat(TX.camoUS, { env: 1.1, vc: true }),
+    glove: new THREE.MeshStandardMaterial({ color: 0xa08866, normalMap: TX.glove.normalMap, roughnessMap: TX.glove.orm, roughness: 1, vertexColors: true, envMapIntensity: 1.1 }),
+    armBlood: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true }) };
+  // Two tapered cloth sleeves bend at the elbow; the hand and cuff never stretch with the reach.
+  const b0 = new Builder(); b0.cyl(0, 0, -0.5, 0.049, 0.043, 1, 'sleeve', 0xffffff, Math.PI / 2, 0, 0, 14); b0.build(mats, up, { cast: false });
+  const be = new Builder(); be.sphere(0, 0, 0, 0.044, 'sleeve', 0xffffff, 1, 0.94, 1, 14); be.build(mats, el, { cast: false });
+  const b1 = new Builder(); b1.cyl(0, 0, -0.5, 0.044, 0.032, 1, 'sleeve', 0xffffff, Math.PI / 2, 0, 0, 14); b1.build(mats, sl, { cast: false });
+  const b2 = new Builder();
+  b2.cyl(0, 0, 0.012, 0.036, 0.035, 0.024, 'sleeve', 0xffffff, Math.PI / 2, 0, 0, 14);
+  b2.cyl(0, 0, -0.007, 0.03, 0.029, 0.028, 'glove', 0xffffff, Math.PI / 2, 0, 0, 14);
+  b2.boxC(0, 0, -0.053, 0.071, 0.035, 0.082, 'glove', 0xffffff, 0, 0, 0, 0.014);
+  for (let k = 0; k < 4; k++) b2.capsule(-0.026 + k * 0.017, -0.001, -0.122 + (k === 3 ? 0.008 : k ? 0.002 : 0), 0.008, k === 3 ? 0.028 : k ? 0.04 : 0.044, 'glove', 0xffffff, Math.PI / 2);
+  b2.capsule(0.042, -0.002, -0.052, 0.01, 0.025, 'glove', 0xffffff, Math.PI / 2, -0.45);
+  b2.capsule(0.047, -0.004, -0.075, 0.009, 0.02, 'glove', 0xffffff, Math.PI / 2, 0.25);
+  b2.boxC(-0.006, 0.018, -0.054, 0.028, 0.002, 0.033, 'armBlood', 0x66221a);
+  b2.build(mats, hd, { cast: false });
+  g.add(up, el, sl, hd); g.visible = false; G.camera.add(g);
+  ARM = { g, up, el, sl, hd };
   return ARM;
 }
-const SH = V(0.17, -0.3, 0.02), REST = V(0.16, -0.5, -0.3);
+const SH = V(0.27, -0.36, 0.04), REST = V(0.25, -0.46, -0.22), AZ = V(0, 0, -1);
+const TIP = V(-0.026, -0.001, -0.152), GRIP = V(0, 0.026, 0.01);
+const _at = V(), _aw = V(), _ae = V(), _ad = V(), _ag = V();
+function armSegment(mesh, a, b) {
+  _ad.subVectors(b, a); const L = _ad.length(); _ad.multiplyScalar(1 / Math.max(0.001, L));
+  mesh.position.copy(a); mesh.quaternion.setFromUnitVectors(AZ, _ad); mesh.scale.z = Math.max(0.001, L);
+}
 function reach(k, target = S.keyPos) {
   const a = arm(); a.g.visible = k > 0.01;
   if (!a.g.visible) return;
+  const grab = target !== S.keyPos;
   G.camera.updateMatrixWorld(true);
-  _a.copy(target); G.camera.worldToLocal(_a);
-  _b.copy(REST).lerp(_a, smooth(k));
-  _c.subVectors(_b, SH); const L = _c.length(); _c.normalize();
-  a.sl.position.copy(SH); a.sl.quaternion.setFromUnitVectors(_a.set(0, 0, -1), _c); a.sl.scale.set(1, 1, Math.max(0.05, L - 0.08));
-  a.hd.position.copy(_b).addScaledVector(_c, -0.08); a.hd.quaternion.copy(a.sl.quaternion);
+  _at.copy(target); if (!grab) _at.x += 0.015; // outside face of the guarded transmit key
+  G.camera.worldToLocal(_at);
+  if (grab) _ad.subVectors(_at, SH).normalize(); else _ad.set(-1, 0, 0).transformDirection(G.camera.matrixWorldInverse);
+  a.hd.quaternion.setFromUnitVectors(AZ, _ad); a.hd.rotateZ(grab ? -0.55 : 0.12);
+  _aw.copy(grab ? GRIP : TIP).applyQuaternion(a.hd.quaternion); _aw.subVectors(_at, _aw);
+  // Arrive before the hold completes, then keep the index on the key as confirmation appears.
+  _aw.lerpVectors(REST, _aw, smooth(clamp(k * (grab ? 1 : 1.7), 0, 1)));
+  _ae.copy(SH).lerp(_aw, 0.5); _ae.x += 0.09; _ae.y -= 0.07;
+  armSegment(a.up, SH, _ae); a.el.position.copy(_ae); armSegment(a.sl, _ae, _aw); a.hd.position.copy(_aw);
 }
 
 // ---------- helpers ----------
@@ -260,7 +284,7 @@ function updateDrag(dt, rdt) {
     h.pos.copy(P.pos).addScaledVector(move, 0.85).addScaledVector(side, -0.48); h.pos.y = floorY(h.pos.x, h.pos.z);
     h.vel.copy(move).multiplyScalar(sp);
     h.handL.copy(P.pos).addScaledVector(move, 0.43).addScaledVector(side, -0.14).setY(P.pos.y + 0.6);
-    reach(1, h.handL);
+    _ag.subVectors(h.handL, h.j[J.EL]).normalize().multiplyScalar(0.055).add(h.handL); reach(1, _ag);
     let tgt = null; for (const a of F.actors) if (a.h.alive) { tgt = a; break; }
     h.aimTarget = 1;
     if (tgt) h.aim.subVectors(tgt.h.j[J.Ne], h.j[J.SR]).normalize(); else h.aim.copy(move).negate();

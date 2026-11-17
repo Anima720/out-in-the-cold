@@ -1,14 +1,12 @@
 # AI package visual checks (640x360 q=medium): enemy loadout models, a downed enemy firing his pistol and
 # bleeding out, enemy melee on the player (wind-up / strike), a mate's melee and a knife stab.
 # usage: timeout 900 python3 tools/shot_ai.py [shots...]   (loadouts downed melee)
-import asyncio, sys, os, pathlib
+import asyncio, sys, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-CHROME = os.environ.get("CHROME", "/usr/bin/google-chrome")
-OUT = ROOT / "shots"; os.makedirs(OUT, exist_ok=True)
 PH = sys.argv[1:] or ["loadouts", "downed", "melee"]
 from playwright.async_api import async_playwright
-from runtime import CHROME, assert_clean
+from runtime import CHROME, assert_clean, hold, shot
 
 async def main():
     async with async_playwright() as p:
@@ -19,16 +17,10 @@ async def main():
         await pg.goto(DIST + "?q=medium&god=1")
         await pg.wait_for_function("window.__ready || window.__fatal", timeout=300000)
         ev=pg.evaluate
-        await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
-          window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
+        await hold(pg)
         async def snap(name):
-            await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
-            await pg.wait_for_function("((window.__frames||0) >= window.__f0 + 2) || !!window.__fatal || !!window.__errors?.length", polling=300, timeout=600000)
+            await shot(pg, name)
             await assert_clean(pg, logs)
-            await ev("window.__rafHold=true")  # stop rendering: the canvas keeps the last frame, the compositor is idle
-            await pg.screenshot(path=str(OUT / name), timeout=200000)
-            await ev("window.__freeze=false")
-            print("shot", name, flush=True)
         # helpers: a frozen raider (no AI) with a given loadout, posed toward a point
         await ev("""window.__pose=(x,z,wk,o={})=>{ const e=new window.__Raider(x,z,{maxTier:0,wk,...o}); e.update=()=>{}; const h=e.h; h.pos.y=(__G.groundFn?__G.groundFn(x,z):0);
             h.yaw=o.yaw??Math.PI; h.aim.set(-Math.sin(o.ayaw??h.yaw),o.ay??-0.05,-Math.cos(o.ayaw??h.yaw)).normalize(); h.aimTarget=o.at??1; h.crouchT=0; h.firstPose=true; return e; };
@@ -98,19 +90,35 @@ async def main():
             assert await ev("__G.mates[0].h.meleeT>=0.44 && __G.mates[0].h.meleeT<0.85"), "mate melee strike was missed"
             await snap("ai_mate_melee_strike.png")
             print("mate melee kind", await ev("__G.mates[0].h.meleeKind"), "victim alive", await ev("__mv.h.alive"))
-            await ev("""(()=>{ const g=__G.mates[1]; const e=new window.__Raider(g.h.pos.x+1.3,g.h.pos.z,{maxTier:0,wk:'smg'}); e.h.pos.y=g.h.pos.y; e.state='cover'; e.coverT=99; e.t=9; e.h.firstPose=true; window.__mk2=e; __G.mates[0].p5='idle';
-              __P.pos.set(-8.5,__G.groundFn(-8.5,37.2),37.2); __P.yaw=0.1; __P.pitch=-0.15; __sim(0.05); })()""")
-            for i in range(60):
-                await ev("__sim(1/60)")
-                if await ev("__mk2.h.meleeT>=0.25"): break
-            assert await ev("__mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.25 && __mk2.h.meleeT<0.42"), "knife wind-up was missed"
-            await snap("ai_knife_windup.png")
-            for i in range(20):
-                await ev("__sim(1/60)")
-                if await ev("__mk2.h.meleeT>=0.44||__mk2.h.meleeT<0"): break
-            assert await ev("__mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.44 && __mk2.h.meleeT<0.85"), "knife strike was missed"
-            await snap("ai_knife_strike.png")
-            print("knife kind", await ev("__mk2.h.meleeKind"))
+            assert await ev("__G.enemies.every(e=>!e.h.alive) && !__G.mates[1].mel"), "knife fixture still has an active prior duel"
+            # 'idle' mates still defend themselves. Pause their decisions only for this
+            # single-sided visual sample; the live Raider must start and land its own stab.
+            # Otherwise Grinch kills it at meleeT=.433, before the .44 strike sample.
+            await ev("""(()=>{ window.__knifeMates=__G.mates.map(m=>[m,m.custom]); for(const [m] of __knifeMates){m.custom=()=>{};m.h.vel.set(0,0,0);}
+              const g=__G.mates[1]; const e=new window.__Raider(g.h.pos.x+1.3,g.h.pos.z,{maxTier:0,wk:'smg'}); e.h.pos.y=g.h.pos.y; e.state='cover'; e.coverT=99; e.t=9; e.h.firstPose=true; window.__mk2=e;
+              window.__knifeHits=__ai.stats.melee.enemyOnMate||0; window.__knifeStep=0;
+              window.__knifeSample=()=>{const a=o=>({alive:o.h.alive,hp:o.h.hp,meleeT:o.h.meleeT,kind:o.h.meleeKind,mel:!!o.mel,hit:o.mel?.hit??false,
+                target:o.mel?.tgt===__P?'player':o.mel?.tgt?.name||(o.mel?.tgt?'enemy':null),targetAlive:o.mel?.tgt?.h?.alive??null,pos:o.h.pos.toArray()});
+                return {step:__knifeStep,actor:a(__mk2),mates:__G.mates.map(m=>({name:m.name,...a(m)})),enemyOnMate:__ai.stats.melee.enemyOnMate||0};};
+              __P.pos.set(-8.5,__G.groundFn(-8.5,37.2),37.2); __P.yaw=0.1; __P.pitch=-0.15; })()""")
+            trace=[]
+            try:
+                for i in range(60):
+                    state=await ev("__sim(1/60); ++__knifeStep; __knifeSample()")
+                    trace.append(state)
+                    if state["actor"]["meleeT"]>=0.25 or not state["actor"]["alive"]: break
+                print("knife windup", state, flush=True)
+                assert await ev("__mk2.h.alive && __mk2.mel?.tgt===__G.mates[1] && __mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.25 && __mk2.h.meleeT<0.42"), "knife wind-up was missed: "+str(trace)
+                await snap("ai_knife_windup.png")
+                for i in range(20):
+                    state=await ev("__sim(1/60); ++__knifeStep; __knifeSample()")
+                    trace.append(state)
+                    if state["actor"]["meleeT"]>=0.44 or state["actor"]["meleeT"]<0 or not state["actor"]["alive"]: break
+                print("knife strike", state, flush=True)
+                assert await ev("__mk2.h.alive && __mk2.mel?.tgt===__G.mates[1] && __mk2.mel.hit && (__ai.stats.melee.enemyOnMate||0)===__knifeHits+1 && __mk2.h.meleeKind==='knife' && __mk2.h.meleeT>=0.44 && __mk2.h.meleeT<0.85"), "knife strike was missed: "+str(trace)
+                await snap("ai_knife_strike.png")
+            finally:
+                await ev("for(const [m,custom] of __knifeMates)m.custom=custom;")
         print("\n".join(logs[-20:]))
         print("errors:", await ev("window.__errors"))
         await assert_clean(pg, logs)

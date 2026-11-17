@@ -185,9 +185,10 @@ async def main():
 
         if "fence" in PH:
             await ev("__begin(5); __sim(0.2)")
-            # Isolate walking from waves/shooters, retaining every real station collider. takeSpot
-            # calls production route(); each __sim tick runs Raider.update -> walk -> moveChar.
-            r=await ev("""(()=>{const G=__G,T=__THREE,level=G.levelUpdate,mates=G.mates.map(m=>[m,m.update,m.h.hidden]),boxes=G.boxes.slice();
+            # Isolate walking from waves/shooters and vehicles already dispatched by the checkpoint.
+            # updateVehicles runs outside levelUpdate: freeze those actors, retaining every real collider.
+            # takeSpot calls production route(); each __sim tick runs Raider.update -> walk -> moveChar.
+            r=await ev("""(()=>{const G=__G,T=__THREE,level=G.levelUpdate,mates=G.mates.map(m=>[m,m.update,m.h.hidden]),vehicles=G.sleds.map(v=>[v,v.update,Object.hasOwn(v,'update')]),boxes=G.boxes.slice();
               const geometry=JSON.stringify(boxes.map(b=>[b.min.toArray(),b.max.toArray(),b.enabled,b.tag]));
               const expected=[[-3,-34,-3,-26.5],[0,-34,0,-26.5],[3,-34,3,-26.5],[-20.5,-34,-20.5,-26.5],[0,30,0,22.5],
                 [-34,-12.5,-26.5,-12.5],[-34,4.5,-26.5,4.5],[-34,19.5,-26.5,19.5],[34,-27.5,26.5,-27.5],[34,-4.5,26.5,-4.5],[34,15.5,26.5,15.5]];
@@ -204,6 +205,7 @@ async def main():
                 {name:'NE corner outward',from:[20,-27.5],to:[31,-25],gate:[34,-27.5]});
               try{clear();G.levelUpdate=()=>{};__D.timers.length=0;__D.q.length=0;
                 for(const [m] of mates){m.update=()=>{};m.h.hidden=true;}
+                for(const [v] of vehicles)v.update=()=>{};
                 __input.down.clear();__input.pressed.clear();__input.lmb=__input.rmb=false;__P.god=true;__P.pos.set(0,.15,0);__P.vel.set(0,0,0);
                 for(const c of cases){clear();actor=new window.__Raider(...c.from,{wk:'ak',maxTier:0});const h=actor.h;
                   actor.takeSpot({x:c.to[0],z:c.to[1],tier:0});h.firstPose=true;h.update(0);const path=actor.path.map(p=>[p.x,p.z]);
@@ -222,7 +224,7 @@ async def main():
                 }
                 if(G.boxes.length!==boxes.length||!boxes.every((b,i)=>G.boxes[i]===b)||JSON.stringify(boxes.map(b=>[b.min.toArray(),b.max.toArray(),b.enabled,b.tag]))!==geometry)throw Error('Real colliders changed during walking test');
                 window.__fenceWalkActor=actor;return {cases:results.length,colliders:boxes.length,fences:boxes.filter(b=>b.tag==='fence').length,results};
-              }finally{G.levelUpdate=level;for(const [m,update,hidden] of mates){m.update=update;m.h.hidden=hidden;}}})()""")
+              }finally{G.levelUpdate=level;for(const [m,update,hidden] of mates){m.update=update;m.h.hidden=hidden;}for(const [v,update,own] of vehicles){if(own)v.update=update;else delete v.update;}}})()""")
             show("real station fence walks",r)
             assert r['cases']==24 and all(x['arrived'] and x['crossings']==1 for x in r['results']),r
             # One evidence image after the final actual crossing; camera placement is only for documentation.

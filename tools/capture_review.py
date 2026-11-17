@@ -2,6 +2,8 @@
 Usage: timeout 900 python3 tools/capture_review.py [title train hud room truck supply]
 Uses real HUD/story strings and real vehicle/passenger animation. The truck shot stages one
 normal reinforcement via the existing test hook; it is not a campaign-progression test.
+The extra Hind rocket view waits for the natural side attack, then selects its existing
+rocket state as a visual fixture; flight, rockets, smoke and geometry remain unchanged.
 """
 import argparse, asyncio, json
 from playwright.async_api import async_playwright
@@ -81,6 +83,35 @@ async def main(names):
                   __P.yaw=Math.atan2(-d.x,-d.z);__P.pitch=Math.asin(d.y);__P.autoLook=null;__sim(1/60);}
                   __input.lmb=true;__WP.dCool=0;__sim(1/60);__input.lmb=false;__P.shake=0;""")
                 await snap('dshk_hind', "__D.phase==='turret'&&__P.mounted&&__G.hind.visible&&__WP.heat>0&&__reviewScreen(__G.hind.pos)", "__reviewVisible('.ammo')")
+                # Keep the original forward camera above for comparison. This additional view
+                # stays on the same gun, after the real Hind has flown clear of the locomotive.
+                await until("__D.phase==='turret'&&__P.mounted&&['side','gun','rockets'].includes(__G.hind.state)&&Math.abs(__G.hind.pos.x)>34&&__G.hind.pos.z>-70&&__G.hind.pos.z<0", 55)
+                print('visual fixture: natural side position; select existing Hind rocket attack', await ev('({state:__G.hind.state,pos:__G.hind.pos.toArray(),t:__D.turretT})'), flush=True)
+                await ev("window.__reviewOldRockets=new Set(__G.rockets);__G.hind.goTo('rockets');__G.hind.rk=0;")
+                await until("__G.rockets.some(r=>!__reviewOldRockets.has(r)&&r.life>=.12&&r.life<.2)", 2, 1/60)
+                await ev("""window.__reviewRocket=__G.rockets.find(r=>!__reviewOldRockets.has(r)&&r.life>=.12&&r.life<.2);
+                  for(let i=0;i<3;i++){const d=__G.hind.pos.clone().add(new __THREE.Vector3(0,-3,0)).sub(__G.camera.position).normalize();
+                    __P.yaw=Math.atan2(-d.x,-d.z);__P.pitch=Math.asin(d.y);__P.autoLook=null;__sim(1/60);}
+                  __P.shake=0;
+                  window.__reviewHindProof=()=>{
+                    const G=__G,T=__THREE,h=G.hind,r=__reviewRocket;G.scene.updateMatrixWorld(true);G.camera.updateMatrixWorld(true);
+                    const origin=G.camera.position,ray=new T.Raycaster(),inHind=o=>{for(;o;o=o.parent)if(o===h.group)return true;return false;};
+                    const solid=hit=>{for(let o=hit.object;o;o=o.parent)if(!o.visible)return false;
+                      const m=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex||0]:hit.object.material;
+                      return !!m&&m.visible!==false&&m.depthWrite!==false&&(m.opacity??1)>=.85;};
+                    const first=(v,far)=>{ray.set(origin,v.clone().sub(origin).normalize());ray.near=.05;ray.far=far;
+                      return ray.intersectObjects(G.scene.children,true).find(solid);};
+                    const points=[[0,0,-4.5],[0,0,-.4],[0,.6,5.5],[-2,-.3,-.3],[2,-.3,-.3],[0,.85,-3]].map(a=>{
+                      const v=new T.Vector3(...a).applyMatrix4(h.group.matrixWorld),hit=first(v,origin.distanceTo(v)+.5);
+                      return {screen:__reviewScreen(v),clear:!!hit&&inHind(hit.object),first:hit?.object.name||hit?.object.type||null};});
+                    const rocketScreen=__reviewScreen(r.pos),rocketBlocked=first(r.pos,Math.max(.05,origin.distanceTo(r.pos)-.2));
+                    return {visible:h.visible&&h.group.visible,side:Math.abs(h.pos.x)>30,points,visiblePoints:points.filter(p=>p.screen&&p.clear).length,
+                      rocketLive:G.rockets.includes(r),rocketLife:r.life,rocketSpeed:r.vel.length(),rocketScreen,rocketClear:!rocketBlocked,
+                      hind:h.pos.toArray(),rocket:r.pos.toArray(),camera:origin.toArray()};
+                  };""")
+                valid="(()=>{const q=__reviewHindProof();return __D.phase==='turret'&&__P.mounted&&q.visible&&q.side&&q.visiblePoints>=3&&q.rocketLive&&q.rocketLife>=.1&&q.rocketLife<.25&&Math.abs(q.rocketSpeed-75)<.01&&q.rocketScreen&&q.rocketClear;})()"
+                print('Hind rocket visibility proof', json.dumps(await ev('__reviewHindProof()')), flush=True)
+                await snap('dshk_hind_rockets', valid, "__reviewVisible('.ammo')")
 
             if 'hud' in names or 'room' in names:
                 await begin(5)

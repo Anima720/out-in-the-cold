@@ -337,7 +337,9 @@ function buildThrowArm() {
   const pivot = new THREE.Group(), b = new Builder();
   segm(b, [0, 0, 0], [0.02, 0.0, -0.3], 0.055, 0.047, 'sleeve');
   for (const t of [0.15, 0.4, 0.7]) b.add(new THREE.TorusGeometry(0.05, 0.005, 6, 18), 'sleeve', 0xd0d0d0, mat4(0.006 * t * 3, 0, -0.3 * t));
-  segm(b, [0.02, 0.0, -0.3], [0.035, 0.01, -0.47], 0.036, 0.032, 'glove');
+  segm(b, [0.02, 0.0, -0.3], [0.031, 0.008, -0.43], 0.047, 0.039, 'sleeve');
+  b.add(new THREE.TorusGeometry(0.039, 0.004, 6, 18), 'sleeve', 0xd0d0d0, mat4(0.031, 0.008, -0.425));
+  segm(b, [0.031, 0.008, -0.43], [0.035, 0.01, -0.47], 0.034, 0.032, 'glove');
   b.boxC(0.04, 0.012, -0.5, 0.06, 0.075, 0.07, 'glove', 0xffffff, 0, 0, 0, 0.02);
   for (let k = 0; k < 3; k++) b.capsule(0.012 + k * 0.018, 0.04, -0.53, 0.0105, 0.03, 'glove', 0xffffff, 0.4, 0, 0);
   b.build(VM, pivot, { cast: false });

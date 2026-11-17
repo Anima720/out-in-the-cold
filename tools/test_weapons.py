@@ -4,7 +4,7 @@
 import asyncio, json, sys, os, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIST = (ROOT / "dist" / "index.html").as_uri()
-from runtime import CHROME, assert_clean
+from runtime import CHROME, assert_clean, hold, shot
 MODE = sys.argv[1] if len(sys.argv) > 1 else "logic"
 os.makedirs(ROOT / "shots", exist_ok=True)
 from playwright.async_api import async_playwright
@@ -21,16 +21,10 @@ async def main():
         await pg.wait_for_function("window.__ready || window.__fatal", timeout=300000)
         ev = pg.evaluate
         assert await ev("Array.isArray(window.__wpn?.GL)"), "__wpn.GL must expose the live grenade array"
-        await ev("""(()=>{const raf=window.requestAnimationFrame.bind(window); window.__raf=raf; window.__rafHold=true;
-          window.__pend=[]; window.requestAnimationFrame=(cb)=>{ if(window.__rafHold){ window.__pend.push(cb); return 0; } return raf(cb); }; })()""")
+        await hold(pg)
         async def snap(path):
-            await ev("window.__freeze=true; window.__rafHold=false; window.__f0=window.__frames||0; {const q=window.__pend.splice(0); for(const c of q) window.__raf(c);}")
-            await pg.wait_for_function("((window.__frames||0) >= window.__f0 + 1) || !!window.__fatal || !!window.__errors?.length", polling=300, timeout=600000)
+            await shot(pg, pathlib.Path(path).name)
             await assert_clean(pg, logs)
-            await ev("window.__rafHold=true")
-            await pg.screenshot(path=str(ROOT / path), timeout=200000)
-            await ev("window.__rafHold=true; window.__freeze=false")
-            print("shot", path, flush=True)
         async def out(tag, js):
             r = await ev(js)
             print(tag, json.dumps(r, ensure_ascii=False), flush=True)
@@ -204,12 +198,54 @@ async def main():
                 await ev("__G.hud.show(true); __input.pressed.add('KeyX'); __sim(0.5); __G.hud.show(false); window.__freeze=true")
                 await snap("shots/w_m4_m203_selected_nohud.png")
                 await ev("window.__freeze=false; __G.hud.show(true)")
-                await ev("__input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.12)")
-                await snap("shots/w_gl_flight.png")
-                await ev("for(let i=0;i<120 && window.__wpn.GL.length;i++) __sim(1/60); __sim(0.1)")
-                await snap("shots/w_gl_boom.png")
+                # Keep the original firing camera. Detail views use fixed offsets from
+                # the same real event, with simulation paused and no model/FX changes.
+                async def detail(name, point, offset, model=False):
+                    await ev("""({point,offset})=>{const c=__G.camera;window.__eventCamera={p:c.position.clone(),q:c.quaternion.clone(),fov:c.fov,paused:__G.paused,hidden:__WP.hidden,hud:__G.hud.root.classList.contains('hud-on')};
+                      __G.paused=true;__WP.hidden=true;__G.hud.show(false);c.position.fromArray(point).add(new __THREE.Vector3(...offset));c.lookAt(new __THREE.Vector3(...point));c.fov=60;c.updateProjectionMatrix();c.updateMatrixWorld(true);}""", {"point":point,"offset":offset})
+                    try:
+                        if model:
+                            r=await out("gl detail bounds", """(()=>{const g=__glRound.g,b=new __THREE.Box3().setFromObject(g),p=new __THREE.Vector3();let l=1,r=-1,bottom=1,top=-1,near=1,far=-1;
+                              for(let i=0;i<8;i++){p.set(i&1?b.max.x:b.min.x,i&2?b.max.y:b.min.y,i&4?b.max.z:b.min.z).project(__G.camera);l=Math.min(l,p.x);r=Math.max(r,p.x);bottom=Math.min(bottom,p.y);top=Math.max(top,p.y);near=Math.min(near,p.z);far=Math.max(far,p.z);}
+                              const d=__glRound.pos.clone().sub(__G.camera.position),distance=d.length(),hit=__phys.rayBoxes(__G.camera.position,d.normalize(),distance,true);
+                              return {alive:__wpn.GL.includes(__glRound),scale:g.scale.toArray(),bounds:[l,r,bottom,top,near,far],pixels:(r-l)*innerWidth/2,clear:!hit||hit.t>distance-.05,camera:__G.camera.position.toArray()};})()""")
+                            assert r['alive'] and r['scale']==[1,1,1] and r['clear'] and r['pixels']>=10, r
+                            l,rgt,bt,tp,nr,fr=r['bounds']
+                            assert -.9<l<rgt<.9 and -.9<bt<tp<.9 and -1<nr<fr<1, r
+                        await snap("shots/"+name)
+                    finally:
+                        await ev("{const s=__eventCamera,c=__G.camera;c.position.copy(s.p);c.quaternion.copy(s.q);c.fov=s.fov;c.updateProjectionMatrix();c.updateMatrixWorld(true);__G.paused=s.paused;__WP.hidden=s.hidden;__G.hud.show(s.hud);delete window.__eventCamera;}")
+                assert await ev("__WP.ubOn && __WP.ub.kind==='gl' && __WP.ammo===1 && __wpn.GL.length===0"), "GL fixture is not ready"
+                await ev("""window.__glEvents=[];window.__glExplosion=__G.fx.explosion;
+                  __G.fx.explosion=function(pos,size,o){const r=__wpn.GL[0],before=__G.fx.add.n;const result=__glExplosion.call(this,pos,size,o);
+                    if(r&&Math.abs(size-1.05)<1e-6)__glEvents.push({t:__G.t,pos:pos.toArray(),size,dist:r.dist,life:r.life,fireAdded:__G.fx.add.n-before});return result;};""")
+                try:
+                    r=await out("gl flight event", """(()=>{__input.lmb=true;__input.lmbPressed=true;__sim(1/60);__input.lmb=false;__sim(1/60);window.__glRound=__wpn.GL[0];
+                      const r=__glRound;if(!r)return {alive:false,events:__glEvents};__G.camera.updateMatrixWorld(true);const p=r.pos.clone().project(__G.camera);
+                      return {alive:r.g.parent===__G.scene,ammo:__WP.ammo,life:r.life,dist:r.dist,pos:r.pos.toArray(),screen:p.toArray(),events:__glEvents.length};})()""")
+                    assert r['alive'] and r['ammo']==0 and 0<r['life']<=2/60+1e-6 and r['dist']>1 and r['events']==0, r
+                    assert abs(r['screen'][0])<.9 and abs(r['screen'][1])<.9 and -1<r['screen'][2]<1, r
+                    await snap("shots/w_gl_flight.png")
+                    await detail("w_gl_flight_detail.png",r['pos'],[.55,.15,.35],True)
+                    r=await out("gl explosion event", """(()=>{let step=0;for(;step<120&&!__glEvents.length&&__wpn.GL.includes(__glRound);step++)__sim(1/60);
+                      const e=__glEvents[0];return {step,count:__glEvents.length,event:e||null,left:__wpn.GL.length,age:e?__G.t-e.t:null,
+                        flash:__G.fx.lights.some(l=>Math.abs(l.I-126)<1e-5&&l.max===.25&&l.t<=1/60+1e-6),fire:__G.fx.add.geo.instanceCount};})()""")
+                    assert r['count']==1 and r['left']==0 and r['event']['dist']>6 and r['event']['fireAdded']>0, r
+                    assert 0<=r['age']<=1/60+1e-6 and r['flash'] and r['fire']>0, r
+                    await snap("shots/w_gl_boom.png")
+                    await detail("w_gl_boom_detail.png",r['event']['pos'],[5,3,6])
+                finally:
+                    await ev("__G.fx.explosion=__glExplosion;delete window.__glExplosion;")
                 await ev("__sim(1.5); __input.pressed.add('KeyX'); __sim(0.5)")
-                await ev(f"{give}('ak12',30,90,{{optic:'reddot',under:'shotgun'}}); __sim(0.8); __input.pressed.add('KeyX'); __sim(0.5); __input.lmb=true; __input.lmbPressed=true; __sim(0.02); __input.lmb=false; __sim(0.01)")
+                await ev(f"{give}('ak12',30,90,{{optic:'reddot',under:'shotgun'}}); __sim(0.8); __input.pressed.add('KeyX'); __sim(0.5)")
+                # One actual firing tick: .02+.01 used to round up to 50 ms, after
+                # the 45 ms muzzle flash had already expired.
+                r=await out("underbarrel shotgun event", """(()=>{const ammo=__WP.ammo,shots=__WP.shotN;__input.lmb=true;__input.lmbPressed=true;__sim(1/60);__input.lmb=false;
+                  __WP.scene.updateMatrixWorld(true);__WP.cam.updateMatrixWorld(true);const p=__WP.flash.getWorldPosition(new __THREE.Vector3()).project(__WP.cam);
+                  return {kind:__WP.ub.kind,on:__WP.ubOn,pellets:__wpn.curDef().pellets,spent:ammo-__WP.ammo,shots:__WP.shotN-shots,flashT:__WP.flashT,visible:__WP.flash.visible,
+                    underMuzzle:__WP.flash.position.distanceTo(__WP.m.ubMuzzle)<1e-8,screen:p.toArray()};})()""")
+                assert r['kind']=='shotgun' and r['on'] and r['pellets']==8 and r['spent']==1 and r['shots']==1, r
+                assert r['visible'] and r['underMuzzle'] and 0<r['flashT']<.045 and abs(r['screen'][0])<1 and abs(r['screen'][1])<1 and -1<r['screen'][2]<1, r
                 await snap("shots/w_ubsg_fire.png")
             if not only or "tb" in only or "all" in only:
                 await ev("__sim(1); __P.pitch=-0.2; const n=window.__wpn.throwNade(new __THREE.Vector3(__P.pos.x,__P.pos.y+0.05,__P.pos.z-1.3), new __THREE.Vector3(0,0,0), 'enemy'); n.fuse=2.5; __sim(0.1)")
