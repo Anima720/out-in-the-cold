@@ -540,12 +540,12 @@ G.startCave = (k, cont) => {
     CV.cageBoxes = [[addBox(-1.7, 0, 4.6, 1.7, 0, 7.8, 'metal'), -0.1, 0.04], [addBox(-1.92, 0, 4.5, -1.66, 0, 7.9, 'metal'), 0, 2.78], [addBox(1.66, 0, 4.5, 1.92, 0, 7.9, 'metal'), 0, 2.78],
       [addBox(-1.92, 0, 7.78, 1.92, 0, 7.98, 'metal'), 0, 2.78], [addBox(-1.92, 0, 4.4, 1.92, 0, 4.6, 'metal'), 0, 2.78], [addBox(-1.92, 0, 4.4, 1.92, 0, 8.0, 'metal'), 2.72, 2.95]];
     CV.gateBox = CV.cageBoxes[4][0];
-    lights([[0, F + 2.45, 6.8, 0xffd9a0, 5.5, 9]]);
+    lights([[0, F + 2.45, 6.8, 0xffd9a0, 6.5, 11]]);
     setCageY(Y0, 0); CV.gateK = 0; CV.cageObj.setGate(0);
     resetPlayer(new THREE.Vector3(0.35, F, 7.05), 0.08);
     placeMate(t, -1.05, 5.3, F); placeMate(g, 1.15, 6.55, F);
     t.h.yaw = 0; t.yaw0 = 0; g.h.yaw = 2.2; g.yaw0 = 2.2;
-    C.ph = 'ride'; C.rideT = 0; C.v = 0; C.rat = 1;
+    C.ph = 'ride'; C.rideT = 0; C.v = 0; C.rat = 1; HUD.objective(null); HUD.setMarker(null);
     blendLook(0);
     musicMode('p2ride');
     after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第二部分']));

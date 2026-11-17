@@ -43,7 +43,7 @@ export function explodeAt(pos, size = 1, radius = 7, maxDmg = 70, o = {}) {
 
 // ---------- rockets ----------
 export function fireRocket(from, dir, o = {}) {
-  const r = { pos: from.clone(), vel: dir.clone().multiplyScalar(o.speed || 80), life: 0, home: o.home || null, smokeT: 0, wind: o.wind ?? 0, owner: o.owner || null };
+  const r = { pos: from.clone(), vel: dir.clone().multiplyScalar(o.speed || 80), life: 0, home: o.home || null, smokeT: 0, wind: o.wind ?? 0, owner: o.owner || null, hitR: o.hitR || 0, lastT: null };
   G.rockets.push(r);
   play('rocket', { pos: from, vol: 1, ref: 20, roll: 0.7, rev: 0.4 });
   G.fx.flash(from, 0xffb070, 30, 15, 0.08);
@@ -54,11 +54,14 @@ export function updateRockets(dt) {
   for (let i = G.rockets.length - 1; i >= 0; i--) {
     const r = G.rockets[i];
     r.life += dt;
-    if (r.home) {
-      const tgt = r.home(); _d.subVectors(tgt, r.pos);
-      const L = _d.length(); _d.normalize();
-      const sp = r.vel.length(); r.vel.lerp(_d.multiplyScalar(sp), Math.min(1, dt * 4));
-      if (L < 3.5) { explodeAt(r.pos, 2.2, 10, 40, { noPlayerDmg: true, wind: 0.5 }); G.rockets.splice(i, 1); if (G.onBridgeHit) G.onBridgeHit(); continue; }
+    if (r.home) { // homing with lead on a moving target (the bridge scrolls toward the rocket at train speed); keeps its speed
+      const tgt = r.home(), sp = r.vel.length();
+      if (!r.lastT) r.lastT = tgt.clone();
+      _w.subVectors(tgt, r.lastT).multiplyScalar(dt > 0 ? 1 / dt : 0); r.lastT.copy(tgt);
+      _d.subVectors(tgt, r.pos); const L = _d.length();
+      _d.addScaledVector(_w, Math.min(2, L / Math.max(1, sp))).normalize();
+      r.vel.lerp(_d.multiplyScalar(sp), Math.min(1, dt * 6)).setLength(sp);
+      if (L < (r.hitR || 3.5)) { explodeAt(r.pos, 2.2, 10, 40, { noPlayerDmg: true, wind: 0.5 }); G.rockets.splice(i, 1); if (G.onBridgeHit) G.onBridgeHit(); continue; }
     }
     const step = r.vel.length() * dt; _d.copy(r.vel).normalize();
     let hit = null;

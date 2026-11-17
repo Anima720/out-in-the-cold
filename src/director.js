@@ -302,7 +302,7 @@ function doJump() {
   if (P.pos.z < CAB.z1 + 0.1 && P.pos.y > 1.6) { P.pos.x = 1.75; P.pos.y = Math.max(P.pos.y, 2.4); } // out through the cab side window
   jumpOff(); setInvWalls(false);
   // keep the landing on this side of the lip: the jumper carries the train's speed relative to the ground
-  const e = edgeDist(P.pos.z), fwd = clamp((e - 4.6) / 0.8, 0, G.v + 1.5);
+  const e = edgeDist(P.pos.z), fwd = clamp((e - 3.0) / 0.8, 0, G.v + 2); // aim to come to rest ~2.5 m short of the lip
   P.vel.z = G.v - fwd;
   P.autoLook = { target: new THREE.Vector3(0, -4, G.s - gorge.D - 6), rate: 1.4 }; D.f.lookEdge = true;
   HUD.setPrompt(null); HUD.objective(null);
@@ -312,12 +312,13 @@ function doJump() {
 }
 
 G.onJumpLand = () => {
-  P.autoLook = { target: new THREE.Vector3(0, -12, G.s - gorge.D - 8), rate: 2.0 };
+  P.autoLook = { target: new THREE.Vector3(0, -5, G.s - gorge.D - 5), rate: 2.0 };
   P.lockLook = true;
   D.f.landed = true; D.landT = D.t; D.landRT = D.rt;
 };
 
 G.onCarFall = (c) => {
+  if (c.type === 'loco') { G.vTarget = 7.5; G.vRate = 3.2; } // the rest of the train grinds over the lip car by car
   if (c.type === 'loco') { play('horn', { pos: new THREE.Vector3(0, 4, c.z0), vol: 0.9, ref: 30, noSlow: true }); play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 1.2, ref: 20, noSlow: true }); }
   else play('crash', { pos: new THREE.Vector3(0, 1, c.z0), vol: 0.7, ref: 14 });
   if (!D.f.jumped && P.pos.z >= c.z0 - 0.6 && P.pos.z <= c.z1 + 0.6) D.f.doomT = D.t + 0.4; // still aboard this car: it goes over with you
@@ -441,7 +442,7 @@ export function updateDirector(dt, rdt) {
         const from = G.hind ? G.hind.pod(i, new THREE.Vector3()) : new THREE.Vector3(-40, 22, spanZ(0.9));
         const u = 0.12 + (i % 3) * 0.28, x = (i % 2 ? 1 : -1) * 1.2;
         const tgt = () => new THREE.Vector3(x, 1.8, spanZ(u));
-        fireRocket(from, tgt().sub(from).normalize(), { speed: 95, home: tgt });
+        fireRocket(from, tgt().sub(from).normalize(), { speed: 95, home: tgt, hitR: 5 });
       });
       after(2.2, () => { if (G.hind && G.hind.state === 'lineup') { G.hind.state = 'retreat'; G.hind.stT = 0; } });
     }
@@ -464,14 +465,14 @@ export function updateDirector(dt, rdt) {
       mateJump(D.truck, 0.25); mateJump(D.grinch, 0.55);
     }
     if (D.f.lookEdge && P.autoLook && !D.f.landed) P.autoLook.target.set(0, -4, G.s - gorge.D - 6);
-    if (D.f.landed && P.autoLook) P.autoLook.target.set(0, -12, G.s - gorge.D - 8);
+    if (D.f.landed && P.autoLook) P.autoLook.target.set(0, -5 - clamp(D.rt - D.landRT - 2, 0, 6), G.s - gorge.D - 5);
     // after the jump: hit the snow, stay down a beat, get up and take a couple of unsteady steps toward the lip
     if (D.f.landed && !D.f.ran && D.rt - D.landRT > 0.05) { D.f.ran = 1; P.prone = true; P.getUp = true; }
     if (D.f.ran === 1 && !D.f.knee && D.rt - D.landRT > 1.1) { D.f.knee = 1; P.prone = false; P.crouched = true; }
     if (D.f.ran === 1 && D.rt - D.landRT > 2.1) {
       D.f.ran = 2; P.crouched = false; P.slide = false; P.prone = false;
-      const step = clamp(edgeDist(P.pos.z) - 2.2, 0, 1.8), d0 = G.s - P.pos.z + step, x0 = P.pos.x - 0.35;
-      P.scriptMove = { x: x0, zf: () => G.s - d0, speed: 1.1 };
+      const step = clamp(edgeDist(P.pos.z) - 1.5, 0, 16), d0 = G.s - P.pos.z + step, x0 = P.pos.x - 0.6;
+      P.scriptMove = { x: x0, zf: () => G.s - d0, speed: step > 4 ? 2.2 : 1.2 };
       P.addShake(0.25);
     }
     if (D.f.jumpOpen && !D.f.jumped) {
@@ -481,7 +482,7 @@ export function updateDirector(dt, rdt) {
     if (D.f.doomT && !D.f.jumped && D.t > D.f.doomT) { D.f.jumpOpen = false; D.f.doomT = 0; fail('你随列车坠入了冰河。', '提示：车头冲出断桥的一瞬间按空格跳车。'); }
     if (D.f.landed && !D.f.ending) {
       const allDown = T.cars.every((c) => c.landed);
-      if ((allDown && D.t - (D.lastCarLand || 0) > 2.5) || D.t - D.landT > 16) endSequence();
+      if ((allDown && D.t - (D.lastCarLand || 0) > 2.5) || D.t - D.landT > 20) endSequence();
     }
   }
   // fell off the train
