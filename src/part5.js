@@ -38,7 +38,7 @@ Object.assign(LINES, {
   P5_GRIN_03: ['GRINCH', 'Twenty-five percent!', '百分之二十五！'],
   P5_GRIN_04: ['GRINCH', "Fifty percent! Keep 'em off me!", '百分之五十！别让他们靠近我！'],
   P5_GRIN_05: ['GRINCH', 'The dish took a hit! We lost the signal!', '天线被打中了！信号断了！'],
-  P5_TRUCK_07: ['TRUCK', "Sandman, roof! Somebody's gotta realign that dish!", '队长，上楼顶！得有人把天线重新对准！'],
+  P5_TRUCK_07: ['TRUCK', "Boss, roof! Somebody's gotta realign that dish!", '队长，上楼顶！得有人把天线重新对准！'],
   P5_SAND_09: ['SANDMAN', 'Dish is aligned. Try it now!', '天线对好了，再试试！'],
   P5_GRIN_06: ['GRINCH', "Signal's back! Seventy-five… come on, come on…", '信号回来了！百分之七十五……快点，快点……'],
   P5_TRUCK_02: ['TRUCK', 'Juggernauts! Three of them, coming through the gate!', '重装兵！三个，正从大门冲进来！'],

@@ -19,7 +19,7 @@ import { clear5 } from './part5.js';
 import { hideStation } from './station.js';
 
 Object.assign(LINES, {
-  P1_TRUCK_00: ['TRUCK', 'Sandman. Sandman! You with us, boss?', '头儿。头儿！还清醒吗？'],
+  P1_TRUCK_00: ['TRUCK', 'Boss. Boss! You with us?', '头儿。头儿！还清醒吗？'],
   P1_GRIN_01: ['GRINCH', "Whole mountain came down. Price got the President out — bird's long gone.", '整座山都塌了。普莱斯把总统带出去了——直升机早飞了。'],
   P1_SAND_02: ['SANDMAN', 'Then we walk out. Truck, take point.', '那就自己走出去。特拉克，打头。'],
   P1_TRUCK_01: ['TRUCK', 'Lights ahead. Not ours.', '前面有灯光。不是我们的人。'],
@@ -34,7 +34,7 @@ Object.assign(LINES, {
   P2_SAND_01: ['SANDMAN', 'Ore train in the rail yard runs north, past the old radar station. That dish can reach Price.', '货场那列运矿车往北开，会经过旧雷达站。那口天线能联系上普莱斯。'],
   P2_TRUCK_01: ['TRUCK', "Top's hot. Get ready.", '上面有人。准备好。'],
   P2_TRUCK_02: ['TRUCK', 'BTR! Get off the road!', 'BTR！离开路面！'],
-  P2_GRIN_02: ['GRINCH', 'Sandman — RPGs in the hoist house! Kill that thing!', '队长——提升机房里有 RPG！干掉那铁家伙！'],
+  P2_GRIN_02: ['GRINCH', 'Chief — RPGs in the hoist house! Kill that thing!', '队长——提升机房里有 RPG！干掉那铁家伙！'],
   P2_GRIN_03: ['GRINCH', 'Scratch one BTR!', 'BTR 报销了！'],
   P2_SAND_03: ['SANDMAN', 'Rail yard. Move, move!', '去货场。快，快！'],
 });
