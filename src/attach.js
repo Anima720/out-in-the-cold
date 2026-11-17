@@ -68,12 +68,12 @@ let RM = null;
 function mats(VM) {
   if (RM) return RM;
   const glass = (c, o = 0.16) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.03, metalness: 0.1, transparent: true, opacity: o, envMapIntensity: 2.2, depthWrite: false });
-  const hdr = (map, c) => new THREE.MeshBasicMaterial({ map, color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const hdr = (map, c) => new THREE.MeshBasicMaterial({ map, color: c, transparent: true, depthWrite: false, fog: false }); // normal blend: stays red over snow
   RM = { ...VM,
     lensR: glass(0xb6a6d8), lensH: glass(0xa6d2c0, 0.13), lensA: glass(0x86aed8, 0.1),
-    retDot: hdr(dotTex(), new THREE.Color(5, 0.32, 0.22)), retHolo: hdr(holoTex(), new THREE.Color(4.2, 0.3, 0.2)),
+    retDot: hdr(dotTex(), new THREE.Color(2.6, 0.07, 0.04)), retHolo: hdr(holoTex(), new THREE.Color(2.3, 0.08, 0.05)),
     retAcog: new THREE.MeshBasicMaterial({ map: acogTex(true), transparent: true, depthWrite: false, fog: false }),
-    retChev: hdr(acogTex(false), new THREE.Color(4, 0.55, 0.12)),
+    retChev: hdr(acogTex(false), new THREE.Color(2.6, 0.5, 0.06)),
     fiber: new THREE.MeshStandardMaterial({ color: 0x200800, emissive: 0xff5a1a, emissiveIntensity: 1.5, roughness: 0.4 }),
     bore: new THREE.MeshBasicMaterial({ color: 0x050505 }),
     dull: new THREE.MeshStandardMaterial({ color: 0x0a0a0b, roughness: 0.9, metalness: 0.2 }),
@@ -182,7 +182,7 @@ function buildMasterkey(R) {
 // and the reticle remain, fixed on the view axis (bullets go there); W's vignette dims the world around it
 function buildScopeView(R) {
   const g = new THREE.Group(), E = OPT.x2.eye;
-  const rim = new THREE.Mesh(new THREE.RingGeometry(0.0166, 0.06, 48), R.dull); rim.position.z = -E; g.add(rim);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(0.0166, 0.03, 48), R.dull); rim.position.z = -E; g.add(rim);
   const lip = new THREE.Mesh(new THREE.RingGeometry(0.0163, 0.0176, 48), R.gun); lip.position.z = -E + 0.0004; g.add(lip);
   g.add(plane(0.03, 0.03, R.retAcog, 0, 0, -E - 0.07, 11));
   g.add(plane(0.03, 0.03, R.retChev, 0, 0, -E - 0.0705, 12));
