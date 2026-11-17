@@ -29,16 +29,16 @@ import { WP, giveIgla, resetWeapons, giveWeapon, WDEF } from './weapon.js';
 Object.assign(LINES, {
   P5_GRIN_01: ['GRINCH', "Tell me that's the radar station. Tell me it's not another train.", '告诉我那是雷达站。别又是一列火车。'],
   P5_TRUCK_00: ['TRUCK', 'Old Soviet early-warning site. Dish on the roof looks intact.', '苏联时期的预警站。楼顶那口天线看着还完整。'],
-  P5_SAND_02: ['SANDMAN', 'If it still talks, Price gets his intel. Move.', '只要它还能用，情报就能送到 Price 手上。走。'],
+  P5_SAND_02: ['SANDMAN', 'If it still talks, Price gets his intel. Move.', '只要它还能用，情报就能送到普莱斯手上。走。'],
   P5_TRUCK_06: ['TRUCK', "Generator's on the west wall, boss. Somebody's gotta wake it up.", '发电机在西墙外，头儿。得有人去把它弄醒。'],
   P5_TRUCK_01: ['TRUCK', 'Contacts on the ridge! They followed our tracks!', '山脊上有敌人！他们顺着脚印追来了！'],
-  P5_SAND_03: ['SANDMAN', 'Grinch, get that uplink running. Truck, on the sandbags. We hold this building!', 'Grinch，把上行链路弄起来。Truck，守沙袋。守住这栋楼！'],
+  P5_SAND_03: ['SANDMAN', 'Grinch, get that uplink running. Truck, on the sandbags. We hold this building!', '格林奇，把上行链路弄起来。卡车，守沙袋。守住这栋楼！'],
   P5_GRIN_02: ['GRINCH', "Uplink's live. Upload's slow — this thing's older than my dad.", '链路通了。上传很慢——这玩意儿比我爸岁数还大。'],
   P5_KRAS_01: ['克拉辛', 'Американцы. Вам некуда идти. Верните то, что взяли, — и умрёте быстро.', '美国人，你们无路可走了。把拿走的东西交出来——可以让你们死得痛快点。', true],
   P5_GRIN_03: ['GRINCH', 'Twenty-five percent!', '百分之二十五！'],
   P5_GRIN_04: ['GRINCH', "Fifty percent! Keep 'em off me!", '百分之五十！别让他们靠近我！'],
   P5_GRIN_05: ['GRINCH', 'The dish took a hit! We lost the signal!', '天线被打中了！信号断了！'],
-  P5_TRUCK_07: ['TRUCK', "Sandman, roof! Somebody's gotta realign that dish!", 'Sandman，上楼顶！得有人把天线重新对准！'],
+  P5_TRUCK_07: ['TRUCK', "Sandman, roof! Somebody's gotta realign that dish!", '睡魔，上楼顶！得有人把天线重新对准！'],
   P5_SAND_09: ['SANDMAN', 'Dish is aligned. Try it now!', '天线对好了，再试试！'],
   P5_GRIN_06: ['GRINCH', "Signal's back! Seventy-five… come on, come on…", '信号回来了！百分之七十五……快点，快点……'],
   P5_TRUCK_02: ['TRUCK', 'Juggernauts! Three of them, coming through the gate!', '重装兵！三个，正从大门冲进来！'],
@@ -46,8 +46,8 @@ Object.assign(LINES, {
   P5_GRIN_07: ['GRINCH', "Last one's down! Big boys are down!", '最后一个也倒了！大块头全趴下了！'],
   P5_GRIN_07A: ['GRINCH', "One down! Keep hitting 'em!", '倒了一个！接着打！'],
   P5_TRUCK_03: ['TRUCK', "That Hind's back!", '那架雌鹿又回来了！'],
-  P5_GRIN_10: ['GRINCH', 'Truck! TRUCK!', 'Truck！TRUCK！'],
-  P5_SAND_07: ['SANDMAN', "…He's gone. Stay on that uplink, Grinch.", '……他走了。盯住上行链路，Grinch。'],
+  P5_GRIN_10: ['GRINCH', 'Truck! TRUCK!', '卡车！卡车！'],
+  P5_SAND_07: ['SANDMAN', "…He's gone. Stay on that uplink, Grinch.", '……他走了。盯住上行链路，格林奇。'],
   P5_GRIN_11: ['GRINCH', 'Igla in the armory, boss! Kill that son of a bitch!', '军械库里有针式导弹，头儿！把那狗娘养的打下来！'],
   P5_GRIN_08: ['GRINCH', "It's down! It's down!", '打下来了！打下来了！'],
   P5_GRIN_12: ['GRINCH', 'Ninety… ninety-five… almost there!', '九十……九十五……就差一点了！'],
@@ -305,7 +305,7 @@ G.startPart5 = (k, cont) => {
     for (const m of [t, g]) m.h.yaw = 0;
     P5.ph = 'approach';
     HUD.fade(1, 0); setTimeout(() => HUD.fade(0, 3), 50);
-    after(1.2, () => HUD.locCard(['最后阵地', '西伯利亚 · 废弃预警雷达站 · 07:40', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第四部分']));
+    after(1.2, () => HUD.locCard(['最后阵地', '西伯利亚 · 废弃预警雷达站 · 07:40', '“睡魔” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第四部分']));
     musicMode('p5calm');
     say('P5_GRIN_01', cont ? 1.5 : 2.5); say('P5_TRUCK_00', 0.5); say('P5_SAND_02', 0.5);
     after(5.5, () => { for (const m of [t, g]) toPost(m); });

@@ -15,13 +15,13 @@ import { Builder } from './geom.js';
 import { M } from './mats.js';
 
 Object.assign(LINES, {
-  P5_GRIN_13: ['GRINCH', 'Sandman! SANDMAN! Stay with me!', 'Sandman！SANDMAN！撑住！'],
+  P5_GRIN_13: ['GRINCH', 'Sandman! SANDMAN! Stay with me!', '睡魔！睡魔！撑住！'],
   P5_GRIN_14: ['GRINCH', "I got you. I got you, boss. Don't you quit on me.", '我拖着你呢。我拖着你，头儿。别给我放弃。'],
   P5_GRIN_15: ['GRINCH', 'Ninety-nine percent. It needs a manual send. Boss… they\'re at the door.', '百分之九十九。得手动确认发送。头儿……他们到门口了。'],
   P5_GRIN_16: ['GRINCH', 'Not a chance, you son of a bitch!', '你休想！'],
   P5_KRAS_02: ['克拉辛', 'Где данные?', '数据在哪？'],
 });
-const MONO = ['Price……剩下的，交给你了。', 'Metal 0-1……完毕。'];
+const MONO = ['普莱斯……剩下的，交给你了。', 'Metal 0-1……完毕。'];
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V(), _c = V();
@@ -370,7 +370,7 @@ function updateRoom(dt, rdt, P5) {
       P.damage(500, K.h.pos, true);
       if (!P.alive) {
         G.timeScale = 1; HUD.setSlowmo(false); F.red = 1;
-        D.timers.push({ atR: D.rt + 1.3, fn: () => D.fail && D.fail('克拉辛先开了枪。', '提示：子弹时间里手枪会自动举起，把克拉辛和剩下那名士兵都打倒（打中一两枪即可）。') });
+        D.timers.push({ atR: D.rt + 1.3, fn: () => D.fail && D.fail('俄军高级将领先开了枪。', '提示：子弹时间里手枪会自动举起，把俄军高级将领和剩下那名士兵都打倒（打中一两枪即可）。') });
       }
     }
     if (F.red) ov('r', F.red);

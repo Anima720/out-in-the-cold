@@ -19,22 +19,22 @@ import { clear5 } from './part5.js';
 import { hideStation } from './station.js';
 
 Object.assign(LINES, {
-  P1_TRUCK_00: ['TRUCK', 'Sandman. Sandman! You with us, boss?', 'Sandman。Sandman！头儿，还清醒吗？'],
-  P1_GRIN_01: ['GRINCH', "Whole mountain came down. Price got the President out — bird's long gone.", '整座山都塌了。Price 把总统带出去了——直升机早飞了。'],
-  P1_SAND_02: ['SANDMAN', 'Then we walk out. Truck, take point.', '那就自己走出去。Truck，打头。'],
+  P1_TRUCK_00: ['TRUCK', 'Sandman. Sandman! You with us, boss?', '睡魔。睡魔！头儿，还清醒吗？'],
+  P1_GRIN_01: ['GRINCH', "Whole mountain came down. Price got the President out — bird's long gone.", '整座山都塌了。普莱斯把总统带出去了——直升机早飞了。'],
+  P1_SAND_02: ['SANDMAN', 'Then we walk out. Truck, take point.', '那就自己走出去。卡车，打头。'],
   P1_TRUCK_01: ['TRUCK', 'Lights ahead. Not ours.', '前面有灯光。不是我们的人。'],
   P1_SAND_03: ['SANDMAN', "Makarov's men. Weapons free.", '马卡洛夫的人。自由开火。'],
   P1_GRIN_02: ['GRINCH', 'Office on the right. They were hauling something out of here in a hurry.', '右边有间办公室。他们急着把什么东西运出去。'],
   P1_GRIN_03: ['GRINCH', 'Flight manifests, wire transfers… all pointing at one word. "Oasis."', '航班清单、转账记录……全指向同一个词：「绿洲」。'],
-  P1_SAND_04: ['SANDMAN', "That's where Makarov's running. Price needs this.", '马卡洛夫就是往那儿跑的。得让 Price 知道。'],
+  P1_SAND_04: ['SANDMAN', "That's where Makarov's running. Price needs this.", '马卡洛夫就是往那儿跑的。得让普莱斯知道。'],
   P1_TRUCK_02: ['TRUCK', 'Cage elevator, north end. Still got power.', '北头有罐笼，还通着电。'],
   P1_SAND_05: ['SANDMAN', "Everybody in. We're going up.", '全员进笼。我们上去。'],
   P2_GRIN_01: ['GRINCH', 'Anybody else think elevator music would help?', '有人觉得这时候放点电梯音乐会好点吗？'],
   P2_TRUCK_03: ['TRUCK', 'Radios are fried. No comms, no extraction.', '电台全烧了。联系不上，也没人来接。'],
-  P2_SAND_01: ['SANDMAN', 'Ore train in the rail yard runs north, past the old radar station. That dish can reach Price.', '货场那列运矿车往北开，会经过旧雷达站。那口天线能联系上 Price。'],
+  P2_SAND_01: ['SANDMAN', 'Ore train in the rail yard runs north, past the old radar station. That dish can reach Price.', '货场那列运矿车往北开，会经过旧雷达站。那口天线能联系上普莱斯。'],
   P2_TRUCK_01: ['TRUCK', "Top's hot. Get ready.", '上面有人。准备好。'],
   P2_TRUCK_02: ['TRUCK', 'BTR! Get off the road!', 'BTR！离开路面！'],
-  P2_GRIN_02: ['GRINCH', 'Sandman — RPGs in the hoist house! Kill that thing!', 'Sandman——提升机房里有 RPG！干掉那铁家伙！'],
+  P2_GRIN_02: ['GRINCH', 'Sandman — RPGs in the hoist house! Kill that thing!', '睡魔——提升机房里有 RPG！干掉那铁家伙！'],
   P2_GRIN_03: ['GRINCH', 'Scratch one BTR!', 'BTR 报销了！'],
   P2_SAND_03: ['SANDMAN', 'Rail yard. Move, move!', '去货场。快，快！'],
 });
@@ -521,7 +521,7 @@ G.startCave = (k, cont) => {
     t.h.crouchT = 1; t.p5 = 'kneel'; t.look = new THREE.Vector3(-0.5, 0, -2.5);
     C.ph = 'wake';
     musicMode('p1dark');
-    after(1.0, () => HUD.locCard(['坍塌', '西伯利亚 · 钻石矿 · 地下 430 米', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第一部分']));
+    after(1.0, () => HUD.locCard(['坍塌', '西伯利亚 · 钻石矿 · 地下 430 米', '“睡魔” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第一部分']));
     say('P1_TRUCK_00', 1.5); say('P1_GRIN_01', 0.6); say('P1_SAND_02', 0.4);
     after(3.0, () => { P.prone = false; P.crouched = true; });
     after(4.5, () => { P.crouched = false; });
@@ -548,7 +548,7 @@ G.startCave = (k, cont) => {
     C.ph = 'ride'; C.rideT = 0; C.v = 0; C.rat = 1; HUD.objective(null); HUD.setMarker(null);
     blendLook(0);
     musicMode('p2ride');
-    after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '“Sandman” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第二部分']));
+    after(0.8, () => HUD.locCard(['升井', '西伯利亚 · 钻石矿 · 主井提升机', '“睡魔” 军士长 · 三角洲部队 · Metal 0-1', '“弃于寒冬” · 第二部分']));
     say('P2_GRIN_01', 5.2); say('P2_TRUCK_03', 0.8); say('P2_SAND_01', 0.8); say('P2_TRUCK_01', 0.9);
     C.rideSnd = loop('train', { vol: 0.12, rate: 0.42 });
   }
