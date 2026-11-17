@@ -136,6 +136,188 @@ function buildBuffers() {
   B.lp_noise = mk(1.0, (d, n) => noiseShape(d, n, 3000, () => 1));
 }
 
+// ---------- guns (v7): per-class transient variants, a mechanical layer for the player's own gun, tails that depend
+// on the space the listener is in (open snow / concrete room / mine tunnel) and distance filtering for NPC fire.
+// Everything is prebuilt at boot; a shot is 2-3 buffer sources + 1-2 biquads.
+export const GUNS = {
+  m4: { body: 2900, f0: 92, f1: 46, bd: 0.03, td: 0.05, thump: 0.9, crack: 0.85, ring: 1900, ringA: 0.1, mech: 'ar', far: 'rifle', tail: 1.0, tr: 1.0 },
+  ak: { body: 3300, f0: 112, f1: 50, bd: 0.036, td: 0.06, thump: 1.15, crack: 1.15, ring: 1250, ringA: 0.07, mech: 'ak', far: 'rifle', tail: 1.05, tr: 0.96 },
+  ak12: { body: 3100, f0: 104, f1: 48, bd: 0.033, td: 0.055, thump: 1.05, crack: 1.0, ring: 1500, ringA: 0.08, mech: 'ak', far: 'rifle', tail: 1.0, tr: 0.98 },
+  smg: { body: 4300, f0: 128, f1: 58, bd: 0.024, td: 0.042, thump: 1.0, crack: 1.5, ring: 2300, ringA: 0.06, mech: 'smg', far: 'smg', tail: 0.9, tr: 1.06 },
+  saiga: { body: 1600, f0: 76, f1: 36, bd: 0.07, td: 0.11, thump: 2.1, crack: 0.5, ring: 900, ringA: 0.05, mech: 'heavy', far: 'shotgun', tail: 1.35, tr: 0.84 },
+  ubsg: { body: 1900, f0: 84, f1: 40, bd: 0.06, td: 0.09, thump: 1.8, crack: 0.55, ring: 1100, ringA: 0.04, mech: null, far: 'shotgun', tail: 1.2, tr: 0.88 },
+  svd: { body: 2400, f0: 86, f1: 36, bd: 0.05, td: 0.09, thump: 1.9, crack: 1.6, ring: 1000, ringA: 0.06, mech: 'heavy', far: 'heavy', tail: 1.45, tr: 0.8 },
+  pkm: { body: 2600, f0: 90, f1: 40, bd: 0.046, td: 0.075, thump: 1.6, crack: 1.25, ring: 1150, ringA: 0.07, mech: 'belt', far: 'heavy', tail: 1.25, tr: 0.88 },
+  pistol: { body: 3500, f0: 140, f1: 60, bd: 0.026, td: 0.05, thump: 1.15, crack: 0.8, ring: 2600, ringA: 0.08, mech: 'slide', far: 'pistol', tail: 0.75, tr: 1.12 },
+  gl: { body: 700, f0: 150, f1: 55, bd: 0.05, td: 0.07, thump: 2.4, crack: 0.15, ring: 420, ringA: 0.05, mech: 'gl', far: 'shotgun', tail: 0.7, tr: 1.0 },
+};
+const FAR = {
+  rifle: { body: 1500, tail: 520, f0: 70, f1: 40, bd: 0.05, td: 0.06, thump: 0.6, crack: 0.35, pre: 0.03, tl: 0.42, tailA: 0.55 },
+  smg: { body: 1900, tail: 600, f0: 82, f1: 46, bd: 0.04, td: 0.05, thump: 0.55, crack: 0.45, pre: 0.025, tl: 0.34, tailA: 0.5 },
+  shotgun: { body: 1000, tail: 420, f0: 60, f1: 32, bd: 0.07, td: 0.09, thump: 1.1, crack: 0.15, pre: 0.035, tl: 0.5, tailA: 0.65 },
+  heavy: { body: 1300, tail: 450, f0: 64, f1: 34, bd: 0.06, td: 0.08, thump: 1.0, crack: 0.5, pre: 0.03, tl: 0.55, tailA: 0.6 },
+  pistol: { body: 1700, tail: 560, f0: 90, f1: 50, bd: 0.035, td: 0.05, thump: 0.5, crack: 0.3, pre: 0.025, tl: 0.3, tailA: 0.45 },
+};
+// enemy weapons call play('<key>_far', {pos}) -> routed to gunShot
+const FARN = { ak_far: 'ak', m4_far: 'm4', ak12_far: 'ak12', smg_far: 'smg', saiga_far: 'saiga', svd_far: 'svd', pkm_far: 'pkm', pistol_far: 'pistol' };
+const TAILG = { open: 0.2, room: 0.34, tunnel: 0.42 };
+const J = (v, k) => v * (1 + (Math.random() * 2 - 1) * k);
+
+function closeShot(d, n, o) {
+  const body = J(o.body, 0.08), bd = J(o.bd, 0.12), td = J(o.td, 0.1), f0 = J(o.f0, 0.06), f1 = J(o.f1, 0.06), crack = J(o.crack, 0.15), thump = J(o.thump, 0.1);
+  const ring = J(o.ring, 0.1), ra = J(o.ringA, 0.3), rph = Math.random() * TAU, nw = 0.00035 + Math.random() * 0.0003;
+  const aB = lpA(body), a2 = lpA(body * 0.4); let lp = 0, lp2 = 0, prev = 0, ph = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, x = rnd(); lp += aB * (x - lp); lp2 += a2 * (lp - lp2); const hp = x - prev; prev = x;
+    ph += (TAU * (f0 * Math.exp(-t / 0.025) + f1)) / SR;
+    let s = 0;
+    if (t < nw * 2) s += (t < nw ? 1 : -1) * crack * 0.8;                      // supersonic N-wave
+    if (t < 0.005) s += hp * crack * 0.8 * (1 - t / 0.005);
+    s += lp * Math.exp(-t / bd) * 1.5 + lp2 * Math.exp(-t / (bd * 1.8)) * 0.9;
+    s += Math.sin(ph) * Math.exp(-t / td) * thump * Math.min(1, t / 0.0015);
+    s += (Math.sin(TAU * ring * t + rph) + 0.5 * Math.sin(TAU * ring * 1.53 * t + rph * 2)) * ra * Math.exp(-t / 0.02);
+    d[i] = Math.tanh(s * 1.25);
+  }
+}
+function farShot(d, n, o) {
+  gunshot(d, n, { ...o, body: J(o.body, 0.1), f0: J(o.f0, 0.08), tl: J(o.tl, 0.15), bd: J(o.bd, 0.1) });
+  for (let e = 0; e < 2; e++) { // distant terrain echoes
+    const D = Math.floor(J(e ? 0.42 : 0.2, 0.25) * SR), g = J(e ? 0.18 : 0.3, 0.3), src = Float32Array.from(d); let lp = 0; const a = lpA(700);
+    for (let i = D; i < n; i++) { lp += a * (src[i - D] - lp); d[i] += lp * g; }
+  }
+}
+// short clicks: [time, [freqs], decay, amp, noise]
+const MECH = {
+  ar: [[0, [2300, 3500], 0.01, 0.6, 0.5], [0.026, [1800, 2900, 4100], 0.03, 0.5, 0.3]],
+  ak: [[0, [900, 1600], 0.012, 0.8, 0.6], [0.034, [700, 1250, 2100], 0.02, 0.9, 0.5]],
+  smg: [[0, [1300, 2400], 0.008, 0.7, 0.5], [0.022, [1100, 1900], 0.012, 0.7, 0.4]],
+  heavy: [[0, [600, 1100], 0.015, 0.9, 0.6], [0.045, [520, 980, 1700], 0.03, 1.0, 0.5]],
+  belt: [[0, [800, 1400], 0.012, 0.8, 0.5], [0.03, [650, 1200], 0.02, 0.8, 0.4]],
+  slide: [[0, [2000, 3300], 0.008, 0.6, 0.5], [0.02, [1500, 2600, 3900], 0.02, 0.8, 0.4]],
+  gl: [[0, [1500, 2600], 0.01, 0.5, 0.4]],
+  pump: [[0, [700, 1300], 0.02, 0.6, 0.6], [0.12, [900, 1700, 2600], 0.022, 0.9, 0.5]],
+};
+function mechSnd(d, n, list, type) {
+  for (const [t0, fs, dec, amp, nz] of list) {
+    const o = Math.floor(J(t0, 0.12) * SR), dc = J(dec, 0.15), fj = fs.map((f) => J(f, 0.06)), ph = fj.map(() => Math.random() * TAU);
+    for (let i = o; i < n; i++) {
+      const t = (i - o) / SR, e = Math.exp(-t / dc); if (e < 0.002) break;
+      let s = rnd() * nz * Math.exp(-t / 0.002); for (let k = 0; k < fj.length; k++) s += Math.sin(TAU * fj[k] * t + ph[k]) * e / (k + 1);
+      d[i] += s * amp;
+    }
+  }
+  if (type === 'ar') for (let i = Math.floor(0.03 * SR), ph = 0; i < n; i++) { const t = i / SR - 0.03; ph += (TAU * (1150 - t * 2500)) / SR; d[i] += Math.sin(ph) * 0.18 * Math.exp(-t / 0.05); } // buffer spring
+  if (type === 'belt') for (let k = 0; k < 7; k++) { const o = Math.floor(J(0.05 + k * 0.009, 0.3) * SR), f = J(3200, 0.2); for (let i = o; i < Math.min(n, o + 400); i++) { const t = (i - o) / SR; d[i] += Math.sin(TAU * f * t) * 0.25 * Math.exp(-t / 0.003); } }
+}
+function tailSnd(d, n, c, sp) {
+  let lp = 0, lp2 = 0; const R = Math.random;
+  if (sp === 'open') { // snow swallows most of it: dark rumble + two slap echoes off distant terrain
+    const a = lpA(1100), a2 = lpA(220), e1 = J(0.22, 0.25) + c * 0.03, e2 = J(0.55, 0.2) - c * 0.04;
+    for (let i = 0; i < n; i++) { const t = i / SR, x = rnd(); lp += a * (x - lp); lp2 += a2 * (x - lp2);
+      let s = lp * Math.exp(-t / 0.26) * Math.min(1, t / 0.02) + lp2 * Math.exp(-t / 0.9) * 0.9;
+      if (t > e1) s += lp * Math.exp(-(t - e1) / 0.07) * 0.55; if (t > e2) s += lp * Math.exp(-(t - e2) / 0.1) * 0.3;
+      d[i] = s; }
+  } else if (sp === 'room') { // concrete room: dense early reflections, short bright decay, flutter between walls
+    const a = lpA(3800), er = []; for (let k = 0; k < 14; k++) er.push([Math.floor((0.003 + R() * 0.03) * SR), (R() * 2 - 1) * 0.9]);
+    for (let i = 0; i < n; i++) { const t = i / SR; lp += a * (rnd() - lp); d[i] = lp * Math.exp(-t / 0.11) * Math.min(1, t / 0.004); }
+    for (const [o, g] of er) for (let i = o; i < Math.min(n, o + 90); i++) d[i] += rnd() * g * Math.exp(-(i - o) / 25);
+    const D = Math.floor(J(0.009, 0.2) * SR); for (let i = D; i < n; i++) d[i] += d[i - D] * 0.32;
+  } else { // mine tunnel: long dark decay with a metallic flutter echo and a low tube mode
+    const a = lpA(1600), D = Math.floor(J(0.045, 0.15) * SR);
+    for (let i = 0; i < n; i++) { const t = i / SR; lp += a * (rnd() - lp); d[i] = lp * Math.exp(-t / 0.42) * Math.min(1, t / 0.008) + Math.sin(TAU * 92 * t) * 0.18 * Math.exp(-t / 0.5) * Math.min(1, t / 0.02); }
+    for (let i = D; i < n; i++) d[i] += d[i - D] * 0.5;
+  }
+}
+// footsteps: grain clusters for snow/gravel, resonant knocks for metal/wood, taps for concrete; heel + toe
+function grains(d, n, t0, len, rate, amp, lo, hi) {
+  let l1 = 0, l2 = 0; const a1 = lpA(hi), a2 = lpA(lo), o = Math.floor(t0 * SR), L = Math.floor(len * SR); let g = 0;
+  for (let i = o; i < Math.min(n, o + L); i++) { const u = (i - o) / L; if (Math.random() < rate / SR) g = 0.4 + Math.random() * 0.8; g *= 0.996;
+    const x = rnd(); l1 += a1 * (x - l1); l2 += a2 * (x - l2); d[i] += (l1 - l2) * g * amp * Math.sin(Math.PI * Math.min(1, u * 1.4)) ** 0.7; }
+}
+function knock(d, n, t0, fs, dec, amp, click = 0.5) {
+  const o = Math.floor(t0 * SR), ph = fs.map(() => Math.random() * TAU);
+  for (let i = o; i < n; i++) { const t = (i - o) / SR; let s = rnd() * click * Math.exp(-t / 0.0025);
+    for (let k = 0; k < fs.length; k++) s += Math.sin(TAU * fs[k] * t + ph[k]) * Math.exp(-t / (dec / (1 + k * 0.4))) / (1 + k * 0.6);
+    d[i] += s * amp; }
+}
+function stepSnd(d, n, surf) {
+  const toe = J(0.062, 0.25), R = Math.random;
+  if (surf === 'snow') { grains(d, n, 0, J(0.07, 0.2), 2600, 1, 900, 4800); grains(d, n, toe, J(0.06, 0.2), 1800, 0.7, 800, 4200); knock(d, n, 0, [J(85, 0.1)], 0.025, 0.35, 0); }
+  else if (surf === 'gravel') { grains(d, n, 0, J(0.08, 0.2), 3600, 1, 500, 3200); grains(d, n, toe, J(0.07, 0.2), 2800, 0.8, 500, 3000);
+    for (let k = 0; k < 3; k++) knock(d, n, R() * 0.11, [J(900, 0.4)], 0.006, 0.25, 0.2); knock(d, n, 0, [J(95, 0.1)], 0.03, 0.4, 0); }
+  else if (surf === 'metal') { knock(d, n, 0, [J(118, 0.1), J(430, 0.1), J(790, 0.1), J(1350, 0.1), J(2100, 0.1)], J(0.05, 0.2), 0.8, 0.6); knock(d, n, toe, [J(140, 0.1), J(520, 0.1), J(1500, 0.1)], 0.03, 0.45, 0.4); }
+  else if (surf === 'wood') { knock(d, n, 0, [J(205, 0.1), J(330, 0.1), J(560, 0.12)], J(0.045, 0.2), 0.8, 0.5); knock(d, n, toe, [J(240, 0.1), J(420, 0.1)], 0.03, 0.45, 0.4); }
+  else { // concrete / stone floor
+    knock(d, n, 0, [J(140, 0.1)], 0.02, 0.5, 1.0); grains(d, n, 0.002, 0.03, 900, 0.5, 1500, 6000);
+    knock(d, n, toe, [J(170, 0.1)], 0.015, 0.3, 0.6); grains(d, n, toe, 0.025, 700, 0.35, 1500, 6000);
+    let lp = 0; const a = lpA(3000); for (let i = 0; i < n; i++) { lp += a * (d[i] - lp); d[i] = lp; }
+  }
+}
+function buildGunBank() {
+  A.gun = {}; A.far = {}; A.mech = {}; A.tail = {}; A.steps = {}; A.lastV = {};
+  for (const [k, o] of Object.entries(GUNS)) A.gun[k] = { close: [0, 1, 2, 3].map(() => mk(0.32, (d, n) => closeShot(d, n, o))) };
+  for (const [k, o] of Object.entries(FAR)) A.far[k] = [0, 1, 2].map(() => mk(1.1, (d, n) => farShot(d, n, o)));
+  for (const [k, l] of Object.entries(MECH)) A.mech[k] = [0, 1, 2].map(() => mk(0.2, (d, n) => mechSnd(d, n, l, k), 1, 0.8));
+  for (const [sp, len] of [['open', 1.3], ['room', 0.6], ['tunnel', 1.8]]) A.tail[sp] = [0, 1].map(() => mk(len, (d, n, c) => tailSnd(d, n, c, sp), 2, 0.85));
+  for (const s of ['snow', 'gravel', 'metal', 'wood', 'concrete']) A.steps[s] = [0, 1, 2, 3, 4, 5].map(() => mk(0.2, (d, n) => stepSnd(d, n, s), 1, 0.85));
+  A.b.pump = A.mech.pump; A.b.gl = A.gun.gl.close;
+}
+function pickV(list, key) { let i = (Math.random() * list.length) | 0; if (list.length > 1 && i === A.lastV[key]) i = (i + 1) % list.length; A.lastV[key] = i; return list[i]; }
+function voice(buf, rate, v, dest, when) {
+  const s = A.ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate;
+  const g = gain(v, dest); s.connect(g); A.voices++; s.onended = () => { A.voices--; }; s.start(when); g.src = s; return g;
+}
+const CLOSE_G = 0.6; // the v7 transients are denser than the old one-shot buffers: keep overall loudness where it was
+// o.self: the player's own gun (centred, with mechanics); otherwise o.pos (or a far-away default) gets distance treatment
+export function gunShot(cls, o = {}) {
+  if (!A.on || !A.gun) return null;
+  const C = GUNS[cls] || GUNS.ak, B = A.gun[cls] || A.gun.ak, ctx = A.ctx, t0 = ctx.currentTime + (o.delay || 0);
+  const self = !!o.self, slow = o.noSlow ? 1 : Math.max(0.35, G.timeScale ** 0.5), vol = o.vol ?? 1, sp = A.space || 'open';
+  const d = self ? 0 : o.pos && A.lpos ? o.pos.distanceTo(A.lpos) : 90;
+  if (!self && A.voices > 70 && d > 25) return null;
+  const rate = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * 0.03) * slow;
+  const pk = ctx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 700 + Math.random() * 2800; pk.Q.value = 0.8; pk.gain.value = (Math.random() * 2 - 1) * 3;
+  let out = pk, lpf = 0;
+  if (!self) { lpf = o.lp || clamp(15000 * Math.exp(-d / 38), 650, 15000) * (sp === 'open' ? 1 : 0.8); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lpf; lp.Q.value = 0.6; pk.connect(lp); out = lp; }
+  if (o.pos) { const p = panner(o.pos, o.ref || 6, o.roll ?? 1); out.connect(p); out = p; }
+  out.connect(A.sfx);
+  if (o.rev !== 0) out.connect(gain(self ? 0.07 : (o.rev ?? 0.3) * 0.6, A.revSend));
+  if (self) {
+    voice(pickV(B.close, cls), rate, vol * CLOSE_G, pk, t0);
+    if (C.mech) voice(pickV(A.mech[C.mech], 'm' + C.mech), rate * J(1, 0.04), vol * 0.22, A.sfx, t0 + 0.006 + Math.random() * 0.008);
+  } else {
+    const near = clamp(1 - d / 45, 0, 1);
+    if (near > 0.05) voice(pickV(B.close, cls), rate, vol * near * near * CLOSE_G, pk, t0);
+    voice(pickV(A.far[C.far], 'f' + C.far), rate, vol * clamp(0.25 + d / 35, 0.25, 1), pk, t0);
+  }
+  // reflections of the listener's space (diffuse: not panned)
+  const tg = vol * C.tail * TAILG[sp] * (self ? 1 : 0.5 * clamp(1.2 - d / 110, 0.12, 1));
+  if (tg > 0.01) {
+    let dst = A.sfx;
+    if (!self) { const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(lpf * 1.4, 9000); lp.connect(A.sfx); dst = lp; }
+    const g = voice(pickV(A.tail[sp], 't' + sp), C.tr * slow * J(1, 0.03), tg, dst, t0 + (self ? 0.003 : 0.01 + d / 1200));
+    if (self) { // a new shot chokes the previous tail (and frees its voice) so long bursts don't pile up
+      const pt = A.selfTail; if (pt) { pt.gain.setTargetAtTime(0, t0, 0.07); try { pt.src.stop(t0 + 0.35); } catch {} }
+      A.selfTail = g;
+    }
+  }
+  return pk;
+}
+// footstep: surface = snow | gravel | metal | wood | concrete. o.pos -> positional (other people), else centred (own)
+export function footstep(surf, o = {}) {
+  if (!A.on || !A.steps) return;
+  const ctx = A.ctx, s = ctx.createBufferSource(), slow = Math.max(0.35, G.timeScale ** 0.5);
+  s.buffer = pickV(A.steps[surf] || A.steps.snow, (o.pos ? 'n' : 'p') + surf);
+  s.playbackRate.value = (o.rate || 1) * J(1, 0.06) * slow;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = o.lp || 9000; lp.Q.value = 0.5;
+  const g = gain((o.vol ?? 0.5) * J(1, 0.15)); s.connect(lp); lp.connect(g);
+  if (o.pos) { const p = panner(o.pos, o.ref || 2.5, o.roll ?? 1.3); g.connect(p); p.connect(A.sfx); }
+  else if (ctx.createStereoPanner && o.pan) { const pn = ctx.createStereoPanner(); pn.pan.value = o.pan; g.connect(pn); pn.connect(A.sfx); }
+  else g.connect(A.sfx);
+  if (o.rev) g.connect(gain(o.rev, A.revSend));
+  A.voices++; A.nSteps = (A.nSteps || 0) + (o.pos ? 1000 : 1); s.onended = () => { A.voices--; }; s.start(ctx.currentTime + (o.delay || 0));
+}
+
 function gain(v, dest) { const g = A.ctx.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; }
 
 export function initAudio() {
@@ -162,6 +344,7 @@ export function initAudio() {
   A.revOut = gain(0.28, A.lp); A.rev.connect(A.revOut);
   A.revSend = gain(1, A.rev);
   buildBuffers();
+  buildGunBank();
   initMusic();
   A.on = true;
   return true;
@@ -180,6 +363,7 @@ function setP(p, v) { if (p.positionX) { p.positionX.value = v.x; p.positionY.va
 
 export function play(name, o = {}) {
   if (!A.on) return null;
+  if (FARN[name]) return gunShot(FARN[name], o);
   let buf = A.b[name]; if (!buf) return null;
   if (Array.isArray(buf)) buf = buf[(Math.random() * buf.length) | 0];
   if (A.voices > 64 && !o.prio) return null;
@@ -223,7 +407,7 @@ export function stopAllLoops() { for (const h of [...A.loops]) h.stop(); }
 
 export function updateListener(cam) {
   if (!A.on) return;
-  const L = A.ctx.listener, p = cam.position;
+  const L = A.ctx.listener, p = cam.position; A.lpos = p;
   const f = cam.getWorldDirection(_fw), t = A.ctx.currentTime;
   if (L.positionX) {
     L.positionX.setValueAtTime(p.x, t); L.positionY.setValueAtTime(p.y, t); L.positionZ.setValueAtTime(p.z, t);
@@ -450,3 +634,5 @@ function brass(t, root, tri) {
     o.connect(lp); o.start(t); o.stop(t + 0.85);
   }
 }
+
+if (typeof window !== 'undefined') window.__A = A; // test hook

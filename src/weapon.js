@@ -3,7 +3,9 @@ import { fireRocket } from './vehicles.js';
 import { Builder, TEX, mat4, rbox } from './geom.js';
 import { M, TX, stdMat } from './mats.js';
 import { raycast } from './physics.js';
-import { play } from './audio.js';
+import { play, gunShot } from './audio.js';
+import { fireGL, GL, throwNade } from './grenade.js';
+import { buildAttachments, fitAttachments } from './attach.js';
 import { T } from './train.js';
 
 // First-person viewmodel (separate scene rendered over the world) + firing for rifle, pistol, DShK.
@@ -32,8 +34,9 @@ function sleeves(b, R0, R1, L0, L1) {
   }
 }
 
-// hands on a rifle: right hand on the pistol grip at (0,-0.078,0.13), left hand under the handguard around z=-0.29
-function rifleHands(b, fy = 0) {
+// hands on a rifle: right hand on the pistol grip at (0,-0.078,0.13), left hand under the handguard around z=-0.29.
+// The left hand goes into its own builder `lb` (own group) so an underbarrel can move it down onto the launcher tube.
+function rifleHands(b, fy = 0, lb = b) {
   // right hand on grip
   b.boxC(0.002, -0.08, 0.14, 0.052, 0.092, 0.056, 'glove', 0xffffff, -0.3, 0, 0, 0.018);
   for (let k = 0; k < 3; k++) b.capsule(-0.004, -0.064 - k * 0.022, 0.108 + k * 0.007, 0.011, 0.034, 'glove', 0xffffff, 0, 0, H);
@@ -41,15 +44,25 @@ function rifleHands(b, fy = 0) {
   b.capsule(0.024, -0.034, 0.072, 0.0098, 0.04, 'glove', 0xffffff, H);
   segm(b, [0.004, -0.115, 0.16], [0.03, -0.17, 0.25], 0.034, 0.031, 'glove');
   // left hand on handguard (fy lowers the wrapping fingers/thumb for a slimmer handguard)
-  b.boxC(-0.004, -0.032, -0.28, 0.072, 0.036, 0.1, 'glove', 0xffffff, 0, 0, 0, 0.014);
-  b.capsule(-0.037, 0.03 + fy, -0.29, 0.0105, 0.055, 'glove', 0xffffff, H - 0.15);
-  for (let k = 0; k < 4; k++) b.capsule(0.035, 0.024 + fy + (k % 2) * 0.003, -0.32 + k * 0.022, 0.0098, 0.03, 'glove', 0xffffff, 0, 0, 0.15);
-  segm(b, [-0.012, -0.018, -0.24], [-0.06, -0.074, -0.15], 0.034, 0.031, 'glove');
+  lb.boxC(-0.004, -0.032, -0.28, 0.072, 0.036, 0.1, 'glove', 0xffffff, 0, 0, 0, 0.014);
+  lb.capsule(-0.037, 0.03 + fy, -0.29, 0.0105, 0.055, 'glove', 0xffffff, H - 0.15);
+  for (let k = 0; k < 4; k++) lb.capsule(0.035, 0.024 + fy + (k % 2) * 0.003, -0.32 + k * 0.022, 0.0098, 0.03, 'glove', 0xffffff, 0, 0, 0.15);
+  segm(lb, [-0.012, -0.018, -0.24], [-0.06, -0.074, -0.15], 0.034, 0.031, 'glove');
   sleeves(b, [0.025, -0.16, 0.23], [0.12, -0.34, 0.56], [-0.05, -0.065, -0.17], [-0.4, -0.37, 0.22]);
+}
+function leftHand(g, lb, z = 0) { const lh = new THREE.Group(); lb.build(VM, lh, { cast: false }); lh.position.z = z; g.add(lh); return lh; }
+// AK-family side-rail optic mount: plate on the left receiver rail, bridge over the dust cover to the optic base at y=0.074
+function doveBracket(g, z) {
+  const b = new Builder(), br = new THREE.Group();
+  b.boxC(-0.031, 0.03, 0.065, 0.006, 0.07, 0.07, 'gun', 0xffffff, 0, 0, 0, 0.002);
+  b.boxC(-0.011, 0.069, (z + 0.095) / 2, 0.046, 0.01, 0.1 - z + 0.03, 'gun', 0xffffff, 0, 0, 0, 0.002);
+  b.cyl(-0.037, 0.012, 0.065, 0.007, 0.007, 0.01, 'gunW', 0xffffff, 0, 0, H, 10);
+  b.boxC(-0.04, 0.012, 0.085, 0.004, 0.006, 0.03, 'gunW', 0xffffff, 0, 0, 0, 0.001);
+  b.build(VM, br, { cast: false }); br.visible = false; g.add(br); return br;
 }
 
 function buildAK(o = {}) {
-  const g = new THREE.Group(), b = new Builder(), SY = 0.07, E = o.ext || 0, BR = o.barrel || 0.0105;
+  const g = new THREE.Group(), b = new Builder(), lb = new Builder(), SY = 0.07, E = o.ext || 0, BR = o.barrel || 0.0105, MK = o.rail ? 'poly' : 'plum';
   b.boxC(0, 0, 0.03, 0.048, 0.07, 0.3, 'gun', 0, 0, 0, 0, 0.006);
   b.boxC(0, 0.04, 0.05, 0.044, 0.024, 0.25, 'gunW', 0, 0, 0, 0, 0.009);
   for (let i = 0; i < 7; i++) b.boxC(0, 0.0535, -0.03 + i * 0.026, 0.04, 0.004, 0.006, 'gun', 0, 0, 0, 0, 0.001);
@@ -78,14 +91,22 @@ function buildAK(o = {}) {
   b.cyl(0.036, 0.024, -0.035, 0.006, 0.006, 0.026, 'gunW', 0xffffff, 0, 0, H, 10);
   b.boxC(-0.026, 0.0, 0.07, 0.005, 0.022, 0.11, 'gun', 0xffffff, 0, 0, 0, 0.0015);
   b.boxC(0.0245, 0.016, 0.04, 0.003, 0.022, 0.06, 'poly', 0xffffff, 0, 0, 0, 0); // ejection port
-  rifleHands(b);
+  if (o.rail) { // AK-12: Picatinny rail on the dust cover, side rails on the handguard, cheek riser, bigger brake
+    b.boxC(0, 0.0565, 0.045, 0.022, 0.007, 0.21, 'gun', 0, 0, 0, 0, 0.001);
+    for (let i = 0; i < 13; i++) b.boxC(0, 0.061, -0.05 + i * 0.0155, 0.024, 0.004, 0.0075, 'gun', 0, 0, 0, 0, 0.0007);
+    for (const sx of [-1, 1]) { b.boxC(sx * 0.0305, -0.004, -0.29, 0.005, 0.016, 0.19, 'gun', 0, 0, 0, 0, 0.001); for (let i = 0; i < 10; i++) b.boxC(sx * 0.033, -0.004, -0.37 + i * 0.017, 0.003, 0.018, 0.008, 'gun', 0, 0, 0, 0, 0.0005); }
+    b.boxC(0, 0.035, 0.3, 0.036, 0.022, 0.12, 'poly', 0xffffff, 0, 0, 0, 0.006);
+    b.cyl(0, 0.004, -0.645 - E, 0.019, 0.019, 0.05, 'gun', 0xffffff, H, 0, 0, 16);
+    for (const sx of [-1, 1]) b.boxC(sx * 0.016, 0.004, -0.65 - E, 0.006, 0.012, 0.02, 'poly', 0, 0, 0, 0, 0);
+  }
+  rifleHands(b, 0, lb);
   const mag = new THREE.Group(), mb = new Builder();
   if (o.mag === 'box') { mb.boxC(0, -0.09, -0.075, 0.05, 0.13, 0.085, 'plum', 0xffffff, 0.08, 0, 0, 0.006); mb.boxC(0, -0.16, -0.08, 0.054, 0.012, 0.09, 'poly', 0xffffff, 0.08, 0, 0, 0.003); }
   else if (o.mag === 'short') { mb.boxC(0, -0.07, -0.07, 0.032, 0.1, 0.07, 'gun', 0xffffff, 0.12, 0, 0, 0.005); }
   else if (o.mag === 'can') { mb.boxC(0.055, -0.08, -0.03, 0.07, 0.11, 0.13, 'pGreen', 0xffffff, 0, 0, 0, 0.008); for (let i = 0; i < 6; i++) mb.cyl(0.03 - i * 0.012, -0.015, -0.03, 0.005, 0.005, 0.05, 'shell', 0xffffff, H, 0, 0, 6); }
   else {
-  for (let i = 0; i < 5; i++) mb.boxC(0, -0.035 - i * 0.034, -0.06 - i * i * 0.0045 - i * 0.008, 0.03, 0.04, 0.074, 'plum', 0xffffff, 0.11 * i, 0, 0, 0.004);
-  for (let i = 0; i < 4; i++) mb.boxC(0.0155, -0.05 - i * 0.034, -0.06 - i * i * 0.0045 - i * 0.008, 0.002, 0.012, 0.05, 'plum', 0xffffff, 0.11 * i, 0, 0, 0);
+  for (let i = 0; i < 5; i++) mb.boxC(0, -0.035 - i * 0.034, -0.06 - i * i * 0.0045 - i * 0.008, 0.03, 0.04, 0.074, MK, 0xffffff, 0.11 * i, 0, 0, 0.004);
+  for (let i = 0; i < 4; i++) mb.boxC(0.0155, -0.05 - i * 0.034, -0.06 - i * i * 0.0045 - i * 0.008, 0.002, 0.012, 0.05, MK, 0xffffff, 0.11 * i, 0, 0, 0);
   mb.boxC(0, -0.2, -0.095, 0.034, 0.012, 0.08, 'poly', 0xffffff, 0.5, 0, 0, 0.004);
   }
   if (o.scope) { // PSO-style scope on a side rail
@@ -100,7 +121,10 @@ function buildAK(o = {}) {
   if (o.shroud) b.boxC(0, 0.004, -0.5 - E / 2, 0.03, 0.03, 0.2 + E * 0.6, 'poly', 0xffffff, 0, 0, 0, 0.006);
   b.build({ ...VM, glass: new THREE.MeshStandardMaterial({ color: 0x223844, roughness: 0.05, metalness: 0.5 }), shell: M.gun }, g, { cast: false });
   mb.build(VM, mag, { cast: false }); mag.position.set(0, -0.02, 0); g.add(mag);
-  return { g, mag, magY0: o.mag ? 0 : -0.02, sightY: o.scope ? SY + 0.045 : SY, rearZ: o.scope ? 0.09 : -0.12, muzzle: new THREE.Vector3(0, 0.004, -0.69 - E), eject: new THREE.Vector3(0.03, 0.02, 0.04),
+  const lh = leftHand(g, lb), canOpt = !o.scope && o.mag !== 'can';
+  const mount = !canOpt ? null : o.rail ? { y: 0.0645, cy: 0.094, z: 0.04 } : { y: 0.074, cy: 0.104, z: 0.03 };
+  return { g, mag, lh, mount, bracket: canOpt && !o.rail ? doveBracket(g, mount.z) : null, ubm: o.ub ? { y: -0.03, z: -0.3 } : null, ak: true,
+    magY0: o.mag ? 0 : -0.02, sightY: o.scope ? SY + 0.045 : SY, rearZ: o.scope ? 0.09 : -0.12, muzzle: new THREE.Vector3(0, 0.004, -0.69 - E), eject: new THREE.Vector3(0.03, 0.02, 0.04),
     hip: [0.12, -0.135, -0.3], adsZ: o.scope ? -0.06 : -0.17, sprint: [0.07, -0.19, -0.28] };
 }
 
@@ -108,7 +132,7 @@ function buildAK(o = {}) {
 // RIS quad rail, straight 30-round STANAG magazine, collapsible stock. Same grip/handguard spots as the AK
 // so the shared hands fit; sight line SY, rear aperture at z=RZ, front post tip exactly on the sight line.
 function buildM4() {
-  const g = new THREE.Group(), b = new Builder(), SY = 0.072, RZ = 0.095, FZ = -0.365;
+  const g = new THREE.Group(), b = new Builder(), lb = new Builder(), SY = 0.072, RZ = 0.095, FZ = -0.365;
   // upper receiver + Picatinny rail
   b.boxC(0, 0.007, 0.0, 0.04, 0.034, 0.25, 'gun', 0, 0, 0, 0, 0.004);
   b.boxC(0, 0.0265, 0.0, 0.024, 0.006, 0.245, 'gun', 0, 0, 0, 0, 0.001);
@@ -158,21 +182,69 @@ function buildM4() {
   b.cyl(0, 0, -0.545, 0.0115, 0.0115, 0.05, 'gun', 0xffffff, H, 0, 0, 14);
   for (const a of [0.75, 1.57, 2.4]) b.boxC(Math.cos(a) * 0.0105, Math.sin(a) * 0.0105, -0.55, 0.004, 0.004, 0.03, 'poly', 0xffffff, 0, 0, 0, 0);
   b.cyl(0, 0, -0.5705, 0.0062, 0.0062, 0.002, 'poly', 0xffffff, H, 0, 0, 12);
-  // flip-up rear sight: clamp, tower, aperture ring with protective wings
-  b.boxC(0, 0.036, RZ, 0.03, 0.01, 0.034, 'gun', 0, 0, 0, 0, 0.002);
-  b.boxC(0, 0.051, RZ, 0.018, 0.022, 0.01, 'gun', 0, 0, 0, 0, 0.002);
-  b.add(new THREE.TorusGeometry(0.0068, 0.0018, 8, 22), 'gun', 0xffffff, mat4(0, SY, RZ));
-  for (const s of [-1, 1]) b.boxC(s * 0.0115, SY - 0.012, RZ, 0.003, 0.024, 0.01, 'gun', 0, 0, 0, 0, 0.001);
-  rifleHands(b, -0.01);
+  // flip-up rear sight (own group, pivot on the rail so it folds flat under an optic): clamp, tower, aperture ring, wings
+  const rb = new Builder(), ry = 0.031;
+  rb.boxC(0, 0.036 - ry, 0, 0.03, 0.01, 0.034, 'gun', 0, 0, 0, 0, 0.002);
+  rb.boxC(0, 0.051 - ry, 0, 0.018, 0.022, 0.01, 'gun', 0, 0, 0, 0, 0.002);
+  rb.add(new THREE.TorusGeometry(0.0068, 0.0018, 8, 22), 'gun', 0xffffff, mat4(0, SY - ry, 0));
+  for (const s of [-1, 1]) rb.boxC(s * 0.0115, SY - 0.012 - ry, 0, 0.003, 0.024, 0.01, 'gun', 0, 0, 0, 0, 0.001);
+  const rs = new THREE.Group(); rb.build(VM, rs, { cast: false }); rs.position.set(0, ry, RZ); g.add(rs);
+  rifleHands(b, -0.01, lb);
   b.build(VM, g, { cast: false });
+  const lh = leftHand(g, lb);
   // straight 30-round STANAG magazine
   const mag = new THREE.Group(), mb = new Builder();
   mb.boxC(0, -0.15, -0.06, 0.026, 0.18, 0.066, 'gunW', 0xffffff, 0, 0, 0, 0.004);
   for (const s of [-1, 1]) mb.boxC(s * 0.0135, -0.16, -0.06, 0.002, 0.14, 0.028, 'gunW', 0xffffff, 0, 0, 0, 0.001);
   mb.boxC(0, -0.243, -0.061, 0.031, 0.012, 0.074, 'poly', 0xffffff, 0, 0, 0, 0.004);
   mb.build(VM, mag, { cast: false }); g.add(mag);
-  return { g, mag, magY0: 0, sightY: SY, rearZ: RZ, muzzle: new THREE.Vector3(0, 0, -0.575), eject: new THREE.Vector3(0.026, 0.006, 0.0),
+  return { g, mag, lh, rs, mount: { y: 0.0325, cy: 0.084, z: -0.012 }, ubm: { y: -0.03, z: -0.245 }, magY0: 0, sightY: SY, rearZ: RZ, muzzle: new THREE.Vector3(0, 0, -0.575), eject: new THREE.Vector3(0.026, 0.006, 0.0),
     hip: [0.12, -0.135, -0.3], adsZ: -0.2, sprint: [0.07, -0.19, -0.28] };
+}
+
+// АКС-74У: AK receiver, short plum handguard, front sight block, cylindrical booster, skeleton folding stock.
+// Rear flip sight sits on the dust cover (z=RZ); the left hand moves back onto the short handguard.
+function buildSMG() {
+  const g = new THREE.Group(), b = new Builder(), lb = new Builder(), SY = 0.07, RZ = 0.072, FZ = -0.322;
+  b.boxC(0, 0, 0.03, 0.048, 0.07, 0.3, 'gun', 0, 0, 0, 0, 0.006);
+  b.boxC(0, 0.04, 0.05, 0.044, 0.024, 0.25, 'gunW', 0, 0, 0, 0, 0.009);
+  for (let i = 0; i < 6; i++) b.boxC(0, 0.0535, -0.03 + i * 0.026, 0.04, 0.004, 0.006, 'gun', 0, 0, 0, 0, 0.001);
+  b.boxC(0, 0.054, RZ, 0.03, 0.012, 0.03, 'gun', 0, 0, 0, 0, 0.002);                          // rear sight base
+  for (const s of [-1, 1]) b.boxC(s * 0.009, SY - 0.004, RZ, 0.006, 0.016, 0.012, 'gun', 0, 0, 0, 0, 0.001);
+  b.boxC(0, SY - 0.008, RZ, 0.012, 0.008, 0.008, 'gun', 0, 0, 0, 0, 0.001);
+  b.boxC(0, 0.047, -0.128, 0.036, 0.03, 0.05, 'gun', 0, 0, 0, 0, 0.004);
+  b.boxC(0, 0.038, -0.205, 0.036, 0.026, 0.12, 'plum', 0, 0, 0, 0, 0.008);                   // upper handguard
+  b.boxC(0, -0.004, -0.2, 0.054, 0.054, 0.15, 'plum', 0, 0, 0, 0, 0.014);                    // lower handguard
+  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) b.boxC(s * 0.0275, -0.004, -0.255 + i * 0.03, 0.002, 0.028, 0.01, 'gun', 0, 0, 0, 0, 0.001);
+  b.boxC(0, 0.012, FZ, 0.03, 0.05, 0.04, 'gun', 0, 0, 0, 0, 0.004);                           // front sight / gas block
+  b.boxC(0, 0.046, FZ, 0.026, 0.026, 0.02, 'gun', 0, 0, 0, 0, 0.003);
+  for (const s of [-1, 1]) b.boxC(s * 0.009, SY - 0.006, FZ, 0.004, 0.022, 0.014, 'gun', 0, 0, 0, 0, 0.001);
+  b.boxC(0, SY - 0.009, FZ, 0.003, 0.018, 0.003, 'gun', 0, 0, 0, 0, 0);
+  b.cyl(0, 0.004, -0.3, 0.011, 0.011, 0.08, 'gun', 0xffffff, H, 0, 0, 14);
+  b.cyl(0, 0.004, -0.385, 0.019, 0.019, 0.075, 'gun', 0xffffff, H, 0, 0, 18);                // booster
+  b.cyl(0, 0.004, -0.429, 0.0125, 0.019, 0.014, 'gun', 0xffffff, H, 0, 0, 18);
+  b.cyl(0, 0.004, -0.437, 0.008, 0.008, 0.003, 'poly', 0xffffff, H, 0, 0, 12);
+  b.boxC(0, -0.078, 0.13, 0.032, 0.108, 0.046, 'plum', 0xffffff, -0.3, 0, 0, 0.011);          // grip
+  b.boxC(0, -0.052, 0.07, 0.007, 0.007, 0.075, 'gun', 0xffffff, 0, 0, 0, 0.002);
+  b.boxC(0, -0.038, 0.105, 0.007, 0.03, 0.007, 'gun', 0xffffff, 0, 0, 0, 0.002);
+  b.boxC(0, -0.04, 0.077, 0.005, 0.022, 0.006, 'gunW', 0xffffff, -0.25, 0, 0, 0.0015);
+  b.boxC(0.027, 0.01, 0.06, 0.004, 0.016, 0.12, 'gunW', 0xffffff, 0, 0, 0.05, 0.0015);
+  b.boxC(-0.026, 0.0, 0.07, 0.005, 0.022, 0.11, 'gun', 0xffffff, 0, 0, 0, 0.0015);
+  b.boxC(0.0245, 0.016, 0.04, 0.003, 0.022, 0.06, 'poly', 0xffffff, 0, 0, 0, 0);
+  // skeleton stock folded out: two struts and a butt plate
+  for (const [y0, y1] of [[0.012, -0.004], [-0.03, -0.075]]) segm(b, [0, y0, 0.18], [0, y1, 0.43], 0.0055, 0.0055, 'gun', 0xffffff, 8);
+  b.boxC(0, -0.04, 0.435, 0.03, 0.1, 0.012, 'gun', 0xffffff, 0, 0, 0, 0.004);
+  b.boxC(0, -0.004, 0.18, 0.03, 0.04, 0.02, 'gun', 0xffffff, 0, 0, 0, 0.004);
+  rifleHands(b, 0, lb);
+  b.build(VM, g, { cast: false });
+  const lh = leftHand(g, lb, 0.075);
+  const mag = new THREE.Group(), mb = new Builder();
+  for (let i = 0; i < 5; i++) mb.boxC(0, -0.035 - i * 0.034, -0.06 - i * i * 0.0045 - i * 0.008, 0.03, 0.04, 0.074, 'plum', 0xffffff, 0.11 * i, 0, 0, 0.004);
+  mb.boxC(0, -0.2, -0.095, 0.034, 0.012, 0.08, 'poly', 0xffffff, 0.5, 0, 0, 0.004);
+  mb.build(VM, mag, { cast: false }); mag.position.set(0, -0.02, 0); g.add(mag);
+  const mount = { y: 0.074, cy: 0.104, z: 0.0 };
+  return { g, mag, lh, mount, bracket: doveBracket(g, mount.z), ak: true, magY0: -0.02, sightY: SY, rearZ: RZ, muzzle: new THREE.Vector3(0, 0.004, -0.445), eject: new THREE.Vector3(0.03, 0.02, 0.04),
+    hip: [0.12, -0.13, -0.29], adsZ: -0.2, sprint: [0.07, -0.19, -0.27] };
 }
 
 function buildPistol() {
@@ -302,16 +374,41 @@ function aimArm(pivot, sh, hand, roll, len) {
   pivot.scale.set(1, 1, clamp(d / len, 0.6, 1.4));
 }
 
+// snd = gun sound class (audio.js GUNS), far = name enemies pass to play() for that weapon at a distance
 const DEF = {
-  m4: { name: 'M4A1', mag: 30, reserve: 270, rate: 0.08, auto: true, dmg: 31, force: 6, snd: 'm4', sndVol: 1.0, tracer: 3, spreadHip: 0.026, spreadAds: 0.0022, kick: 0.0088, reload: [1.95, 2.4] },
-  ak: { name: 'AK-74M', mag: 30, reserve: 270, rate: 0.1, auto: true, dmg: 34, force: 6, snd: 'ak', tracer: 3, spreadHip: 0.028, spreadAds: 0.0025, kick: 0.0105, reload: [2.0, 2.45] },
-  pistol: { name: 'M1911', mag: 8, reserve: 56, rate: 0.14, auto: false, dmg: 36, force: 4, snd: 'pistol', spreadHip: 0.02, spreadAds: 0.004, kick: 0.016, reload: [1.5, 1.8] },
-  pkm: { name: 'PKM', mag: 100, reserve: 200, rate: 0.085, auto: true, dmg: 40, force: 7, snd: 'ak', tracer: 2, sndRate: 0.82, sndVol: 1.0, spreadHip: 0.045, spreadAds: 0.006, kick: 0.012, reload: [4.6, 5.0], move: 0.86 },
-  svd: { name: 'СВД', mag: 10, reserve: 40, rate: 0.32, auto: false, dmg: 160, force: 10, snd: 'ak', sndRate: 0.68, sndVol: 1.2, spreadHip: 0.05, spreadAds: 0.0004, kick: 0.034, reload: [2.6, 3.0], adsFov: 22 },
-  saiga: { name: 'Сайга-12', mag: 8, reserve: 40, rate: 0.26, auto: false, pellets: 9, dmg: 22, force: 9, snd: 'pistol', sndRate: 0.55, sndVol: 1.35, spreadHip: 0.065, spreadAds: 0.05, kick: 0.032, reload: [2.6, 3.0] },
+  m4: { name: 'M4A1', mag: 30, reserve: 270, rate: 0.08, auto: true, dmg: 31, force: 6, snd: 'm4', far: 'm4_far', tracer: 3, spreadHip: 0.026, spreadAds: 0.0022, kick: 0.0088, reload: [1.95, 2.4] },
+  ak: { name: 'AK-74M', mag: 30, reserve: 270, rate: 0.1, auto: true, dmg: 34, force: 6, snd: 'ak', far: 'ak_far', tracer: 3, spreadHip: 0.028, spreadAds: 0.0025, kick: 0.0105, reload: [2.0, 2.45] },
+  ak12: { name: 'AK-12', mag: 30, reserve: 270, rate: 0.086, auto: true, dmg: 33, force: 6, snd: 'ak12', far: 'ak12_far', tracer: 3, spreadHip: 0.025, spreadAds: 0.002, kick: 0.0094, reload: [1.9, 2.35] },
+  smg: { name: 'АКС-74У', mag: 30, reserve: 240, rate: 0.068, auto: true, dmg: 26, force: 5, snd: 'smg', far: 'smg_far', tracer: 3, spreadHip: 0.02, spreadAds: 0.0045, kick: 0.0082, reload: [1.75, 2.15], move: 1.06 },
+  pistol: { name: 'M1911', mag: 8, reserve: 56, rate: 0.14, auto: false, dmg: 36, force: 4, snd: 'pistol', far: 'pistol_far', spreadHip: 0.02, spreadAds: 0.004, kick: 0.016, reload: [1.5, 1.8] },
+  pkm: { name: 'PKM', mag: 100, reserve: 200, rate: 0.085, auto: true, dmg: 40, force: 7, snd: 'pkm', far: 'pkm_far', tracer: 2, spreadHip: 0.045, spreadAds: 0.006, kick: 0.012, reload: [4.6, 5.0], move: 0.86 },
+  svd: { name: 'СВД', mag: 10, reserve: 40, rate: 0.32, auto: false, dmg: 160, force: 10, snd: 'svd', far: 'svd_far', spreadHip: 0.05, spreadAds: 0.0004, kick: 0.034, reload: [2.6, 3.0], adsFov: 22 },
+  saiga: { name: 'Сайга-12', mag: 8, reserve: 40, rate: 0.26, auto: false, pellets: 9, dmg: 22, force: 9, snd: 'saiga', far: 'saiga_far', spreadHip: 0.065, spreadAds: 0.05, kick: 0.032, reload: [2.6, 3.0] },
   rpg: { name: 'РПГ-7', mag: 1, reserve: 3, rate: 1.0, auto: false, launcher: true, kind: 'rpg', dmg: 0, force: 0, snd: 'rocket', spreadHip: 0, spreadAds: 0, kick: 0.035, reload: [2.8, 2.8] },
   igla: { name: '9K38 «Игла»', mag: 1, reserve: 1, rate: 1.2, auto: false, launcher: true, dmg: 0, force: 0, snd: 'rocket', spreadHip: 0, spreadAds: 0, kick: 0.03, reload: [3.0, 3.0] },
 };
+// underbarrels: toggled with X on a primary that carries one; ammo lives in WP.ub
+const UBDEF = {
+  gl: { name: 'M203 榴弹', mag: 1, reserve: 3, rate: 0.6, auto: false, gl: true, dmg: 0, force: 0, snd: 'gl', spreadHip: 0, spreadAds: 0, kick: 0.03, reload: [2.1, 2.1], ub: true },
+  gp: { name: 'ГП-25 榴弹', mag: 1, reserve: 3, rate: 0.6, auto: false, gl: true, dmg: 0, force: 0, snd: 'gl', spreadHip: 0, spreadAds: 0, kick: 0.03, reload: [2.2, 2.2], ub: true },
+  shotgun: { name: 'M26 霰弹', mag: 4, reserve: 8, rate: 0.75, auto: false, pellets: 8, dmg: 21, force: 8, snd: 'ubsg', spreadHip: 0.06, spreadAds: 0.045, kick: 0.03, reload: [2.2, 2.6], ub: true },
+};
+// default attachments (starting M4 has a red dot; rack weapons are plain) and plausible random sets for drops
+const ATT0 = { m4: { optic: 'reddot', under: null }, ak12: { optic: 'reddot', under: null }, svd: { optic: 'pso', under: null } };
+const NOATT = { optic: 'iron', under: null };
+const ROLL = {
+  m4: [[['reddot', 4], ['holo', 3], ['x2', 3], ['iron', 1]], [[null, 5], ['gl', 3], ['shotgun', 2]]],
+  ak: [[['iron', 5], ['reddot', 2], ['holo', 1], ['x2', 2]], [[null, 6], ['gl', 4]]],
+  ak12: [[['reddot', 3], ['holo', 3], ['x2', 3], ['iron', 1]], [[null, 5], ['gl', 3], ['shotgun', 2]]],
+  smg: [[['iron', 5], ['reddot', 3], ['holo', 2]], [[null, 1]]],
+  saiga: [[['iron', 6], ['reddot', 2], ['holo', 2]], [[null, 1]]],
+};
+function wpick(list) { let t = 0; for (const [, w] of list) t += w; let r = Math.random() * t; for (const [v, w] of list) if ((r -= w) <= 0) return v; return list[0][0]; }
+export function rollAtt(key) {
+  const R = ROLL[key]; if (!R) return { ...(ATT0[key] || NOATT) };
+  return { optic: wpick(R[0]), under: wpick(R[1]) };
+}
+G.rollAtt = rollAtt;
 
 export function initWeapon() {
   const scene = new THREE.Scene();
@@ -325,8 +422,9 @@ export function initWeapon() {
   const root = new THREE.Group(); cam.add(root);
   WP.root = root;
   VM = vmMats();
-  WP.models = { m4: buildM4(), ak: buildAK(), pistol: buildPistol(), igla: buildIgla(), rpg: buildIgla(true), pkm: buildAK({ ext: 0.16, barrel: 0.015, muzR: 0.02, mag: 'can', bipod: true, shroud: true }), svd: buildAK({ ext: 0.24, barrel: 0.009, mag: 'short', scope: true }), saiga: buildAK({ ext: -0.06, barrel: 0.016, muzR: 0.022, mag: 'box' }) };
+  WP.models = { m4: buildM4(), ak: buildAK({ ub: true }), ak12: buildAK({ rail: true, ub: true }), smg: buildSMG(), pistol: buildPistol(), igla: buildIgla(), rpg: buildIgla(true), pkm: buildAK({ ext: 0.16, barrel: 0.015, muzR: 0.02, mag: 'can', bipod: true, shroud: true }), svd: buildAK({ ext: 0.24, barrel: 0.009, mag: 'short', scope: true }), saiga: buildAK({ ext: -0.06, barrel: 0.016, muzR: 0.022, mag: 'box' }) };
   for (const m of Object.values(WP.models)) { m.g.visible = false; root.add(m.g); }
+  WP.attm = buildAttachments(VM); cam.add(WP.attm.scope);
   WP.throwArm = buildThrowArm(); WP.throwArm.pivot.visible = false; cam.add(WP.throwArm.pivot);
   WP.knife = buildKnifeArm(); WP.knife.pivot.visible = false; cam.add(WP.knife.pivot);
   // muzzle flash
@@ -344,37 +442,53 @@ export function initWeapon() {
   Object.assign(WP, {
     cur: 'm4', st: {}, cool: 0, reloadT: -1, reloadDur: 2.3, flashT: 0, kick: 0,
     swayX: 0, swayY: 0, sprintT: 0, adsT: 0, shotN: 0, bloom: 0, hidden: false,
-    heat: 0, overheated: false, dCool: 0, sw: null, throwT: -1, nades: 3, meleeT: -1,
+    heat: 0, overheated: false, dCool: 0, sw: null, throwT: -1, nades: 3, meleeT: -1, togT: -1, ubOn: false, tb: null,
   });
   resetWeapons();
   equip(WP.prim, true);
-  Object.defineProperty(WP, 'ammo', { get: () => WP.st[WP.cur].ammo, set: (v) => { WP.st[WP.cur].ammo = v; } });
-  Object.defineProperty(WP, 'reserve', { get: () => WP.st[WP.cur].reserve, set: (v) => { WP.st[WP.cur].reserve = v; } });
+  // ammo/reserve follow the active mode: the underbarrel's rounds while it is selected
+  const ubA = () => WP.ubOn && WP.ub && WP.cur === WP.prim;
+  Object.defineProperty(WP, 'ammo', { get: () => (ubA() ? WP.ub.ammo : WP.st[WP.cur].ammo), set: (v) => { if (ubA()) WP.ub.ammo = v; else WP.st[WP.cur].ammo = v; } });
+  Object.defineProperty(WP, 'reserve', { get: () => (ubA() ? WP.ub.reserve : WP.st[WP.cur].reserve), set: (v) => { if (ubA()) WP.ub.reserve = v; else WP.st[WP.cur].reserve = v; } });
 }
 
 export function resetWeapons() {
-  // every level starts with the Delta loadout: M4A1 + M1911; enemy guns (AK, PKM, ...) are picked up from the dead
+  // every level starts with the Delta loadout: M4A1 (red dot) + M1911; enemy guns (AK, PKM, ...) are picked up from the dead
   WP.st = { m4: { ammo: DEF.m4.mag, reserve: DEF.m4.reserve }, pistol: { ammo: DEF.pistol.mag, reserve: DEF.pistol.reserve } };
-  for (const k of ['ak', 'igla', 'rpg', 'pkm', 'svd', 'saiga']) WP.st[k] = { ammo: 0, reserve: 0 };
+  for (const k of Object.keys(DEF)) if (!WP.st[k]) WP.st[k] = { ammo: 0, reserve: 0 };
+  WP.att = { m4: { ...ATT0.m4 } }; WP.ub = null; WP.ubOn = false; WP.togT = -1; WP.tb = null;
   WP.hasIgla = false; WP.prim = 'm4'; WP.launch = null;
   WP.nades = 3; WP.reloadT = -1; WP.sw = null; WP.throwT = -1; WP.meleeT = -1; WP.heat = 0; WP.overheated = false;
   if (WP.models) equip(WP.prim, true);
 }
-export function curDef() { return DEF[WP.cur]; }
+// the active weapon definition (the underbarrel's while it is selected)
+export function curDef() { return WP.ubOn && WP.ub && WP.cur === WP.prim ? WP.ub.def : DEF[WP.cur]; }
+export function attOf(id) { return WP.att[id] || ATT0[id] || NOATT; }
+// ADS field of view of the current weapon (optic magnification)
+export function adsFov() { const m = WP.m; return m && m.adsFov && WP.cur === WP.prim ? m.adsFov : DEF[WP.cur].adsFov || 54; }
 
 function equip(id, instant) {
   for (const [k, m] of Object.entries(WP.models)) m.g.visible = k === id;
   WP.cur = id; WP.m = WP.models[id];
+  if (WP.attm && WP.m.mount !== undefined) fitAttachments(WP.attm, WP.m, attOf(id));
   WP.m.g.add(WP.flash); WP.flash.position.copy(WP.m.muzzle);
   if (!instant) play('magin', { vol: 0.35, rev: 0 });
 }
 export function giveIgla() { WP.hasIgla = true; WP.launch = 'igla'; WP.st.igla = { ammo: 1, reserve: 2 }; switchTo('igla'); }
 export const WDEF = DEF;
-// pick up / swap a weapon: long guns replace the primary slot, launchers the third slot
-export function giveWeapon(id, ammo, reserve) {
+// pick up / swap a weapon: long guns replace the primary slot (with their attachments), launchers the third slot
+export function giveWeapon(id, ammo, reserve, att) {
   const D = DEF[id]; if (!D) return;
   WP.st[id] = { ammo: ammo ?? D.mag, reserve: reserve ?? D.reserve };
-  if (D.launcher) { WP.launch = id; if (id === 'igla') WP.hasIgla = true; } else if (id !== 'pistol') WP.prim = id;
+  if (D.launcher) { WP.launch = id; if (id === 'igla') WP.hasIgla = true; }
+  else if (id !== 'pistol') {
+    WP.prim = id; WP.att[id] = { ...(att || ATT0[id] || NOATT) };
+    const m = WP.models[id], u = WP.att[id].under && m.ubm ? WP.att[id].under : null;
+    WP.att[id].under = u;
+    WP.ub = u ? { kind: u, def: UBDEF[u === 'gl' && m.ak ? 'gp' : u], ammo: UBDEF[u].mag, reserve: UBDEF[u].reserve } : null;
+    WP.ubOn = false;
+    if (WP.cur === id) equip(id, true); // same model, new attachments
+  }
   WP.sw = null; switchTo(id);
 }
 export function switchTo(id) {
@@ -383,11 +497,18 @@ export function switchTo(id) {
   if (!DEF[id].launcher && id !== 'pistol' && id !== WP.prim) return;
   if (id === WP.cur && !WP.sw) return;
   if (WP.sw && WP.sw.to === id) return;
-  WP.reloadT = -1;
+  WP.reloadT = -1; WP.ubOn = false; WP.togT = -1;
   WP.sw = { t: 0, to: id, swapped: false };
   play('rustle', { vol: 0.25, rev: 0 });
 }
-export function busy() { return !!WP.sw || WP.throwT >= 0 || WP.reloadT >= 0 || WP.meleeT >= 0; }
+// X: switch between the rifle and its underbarrel
+export function toggleUB() {
+  if (!WP.ub || WP.cur !== WP.prim || WP.sw || WP.throwT >= 0 || WP.meleeT >= 0 || WP.togT >= 0) return false;
+  WP.reloadT = -1; WP.togT = 0; WP.togDone = false;
+  play('rustle', { vol: 0.3, rev: 0, rate: 1.5 }); play('dry', { vol: 0.35, rev: 0, rate: 0.7, delay: 0.12 });
+  return true;
+}
+export function busy() { return !!WP.sw || WP.throwT >= 0 || WP.reloadT >= 0 || WP.meleeT >= 0 || WP.togT >= 0; }
 
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _mz = new THREE.Vector3();
 
@@ -410,19 +531,28 @@ function hitResult(hit, dir, dmg, force) {
 }
 
 export function muzzleWorld(out) {
-  const cam = G.camera, a = WP.adsT;
+  const cam = G.camera, a = WP.adsT, ub = WP.ubOn && WP.cur === WP.prim;
   _r.set(1, 0, 0).applyQuaternion(cam.quaternion);
   _u.set(0, 1, 0).applyQuaternion(cam.quaternion);
   cam.getWorldDirection(_d);
-  return out.copy(cam.position).addScaledVector(_d, WP.cur === 'pistol' ? 0.45 : WP.cur === 'igla' ? 1.2 : 0.75).addScaledVector(_r, lerp(0.12, 0, a)).addScaledVector(_u, lerp(-0.12, -0.06, a));
+  return out.copy(cam.position).addScaledVector(_d, WP.cur === 'pistol' ? 0.45 : WP.cur === 'igla' ? 1.2 : ub ? 0.6 : 0.75).addScaledVector(_r, lerp(0.12, 0, a)).addScaledVector(_u, lerp(-0.12, -0.06, a) - (ub ? 0.07 : 0));
 }
 
 export function fireWeapon(player) {
-  const W = WP, D = DEF[W.cur];
-  if (D.launcher) {
-    W.ammo--; W.cool = D.rate; W.kick = 1.6;
+  const W = WP, D = curDef();
+  if (D.launcher || D.gl) {
+    W.ammo--; W.cool = D.rate; W.kick = D.gl ? 1.2 : 1.6;
     const cam = G.camera; cam.getWorldDirection(_d);
     muzzleWorld(_mz);
+    if (D.gl) { // 40 mm grenade: slow round on a ballistic arc, explodes on impact once armed
+      _d.addScaledVector(_u, 0.035).normalize();
+      fireGL(_mz.clone(), _d.clone().multiplyScalar(44).add(_o.set(player.vel.x, 0, player.vel.z + (player.carryZ || 0))));
+      player.recoil(D.kick, (Math.random() - 0.5) * 0.01); player.addShake(0.12);
+      W.flashT = 0.03; gunShot('gl', { self: true, vol: 0.9 });
+      G.fx.alpha.spawn(_mz.x, _mz.y, _mz.z, 0, 0.3, 0, { life: 1.0, size: 0.12, grow: 4, c: [0.85, 0.85, 0.85], alpha: 0.35, wind: 0.6 });
+      if (G.onPlayerShot) G.onPlayerShot(cam.position, _d);
+      return;
+    }
     if (D.kind === 'rpg') fireRocket(_mz.clone(), _d.clone().add(_r.set(rr(-0.012, 0.012), rr(-0.008, 0.012), rr(-0.012, 0.012))).normalize(), { speed: 62, owner: 'player' });
     else if (G.onLaunch) G.onLaunch(_mz.clone(), _d.clone());
     player.recoil(D.kick, 0); player.addShake(0.25);
@@ -455,8 +585,8 @@ export function fireWeapon(player) {
   G.fx.flash(_mz, 0xffb060, 9, 7, 0.05);
   W.flashT = 0.045; W.kick = Math.min(1.6, W.kick + (W.cur === 'pistol' ? 1.3 : 1)); W.bloom = Math.min(1, W.bloom + 0.18);
   player.recoil(D.kick + Math.random() * 0.004 * (1 - W.adsT * 0.5), (Math.random() - 0.5) * 0.007);
-  play(D.snd, { vol: D.sndVol ?? (W.cur === 'pistol' ? 0.75 : 0.85), rate: D.sndRate || 1, rev: 0.4, prio: true });
-  ejectShell();
+  gunShot(D.snd, { self: true, vol: D.ub ? 0.8 : W.cur === 'pistol' ? 0.78 : 0.86 });
+  if (D.ub) play('pump', { vol: 0.4, rev: 0, delay: 0.32 }); else ejectShell();
   if (G.onPlayerShot) G.onPlayerShot(cam.position, _d);
 }
 export const fireRifle = fireWeapon;
@@ -487,7 +617,7 @@ export function fireDShK(player) {
 }
 
 export function startReload() {
-  const D = DEF[WP.cur];
+  const D = curDef();
   if (busy() || WP.ammo >= D.mag || WP.reserve <= 0) return;
   WP.reloadT = 0; WP.reloadEmpty = WP.ammo === 0; WP.reloadDur = D.reload[WP.reloadEmpty ? 1 : 0];
   WP.rsnd = 0;
@@ -502,8 +632,16 @@ export function startMelee() {
 
 export function startThrow() {
   if (WP.nades <= 0 || WP.throwT >= 0 || WP.sw || WP.meleeT >= 0) return false;
-  WP.reloadT = -1; WP.throwT = 0; WP.thrown = false;
+  WP.reloadT = -1; WP.throwT = 0; WP.thrown = false; WP.tb = null; WP.tbK = 1; WP.togT = -1;
   play('pin', { vol: 0.6, rev: 0 });
+  return true;
+}
+// G near a live enemy grenade: snatch it (it keeps burning) and lob it back on a quicker version of the throw
+export function startThrowBack(n) {
+  if (WP.throwT >= 0 || WP.sw || WP.meleeT >= 0) return false;
+  WP.reloadT = -1; WP.throwT = 0; WP.thrown = false; WP.tb = n; WP.tbK = 1.75; WP.togT = -1;
+  n.held = true; n.owner = 'player'; n.warned = true; n.g.visible = false;
+  play('rustle', { vol: 0.6, rev: 0, rate: 1.6 }); play('clink', { vol: 0.35, rev: 0, rate: 0.8 });
   return true;
 }
 
@@ -517,7 +655,7 @@ function ejectShell() {
 }
 
 export function updateViewmodel(dt, p) {
-  const W = WP, cam = WP.cam, mdl = W.m;
+  const W = WP, cam = WP.cam; let mdl = W.m;
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   W.sun.position.set(-0.45, 1, 0.35).applyQuaternion(G.camera.quaternion.clone().invert()).multiplyScalar(5);
   W.cool = Math.max(0, W.cool - dt); W.dCool = Math.max(0, W.dCool - dt);
@@ -532,23 +670,26 @@ export function updateViewmodel(dt, p) {
   const bx = Math.sin(p.bobPhase * Math.PI * 2) * 0.012 * bobA, by = -Math.abs(Math.cos(p.bobPhase * Math.PI * 2)) * 0.012 * bobA;
   const breathe = Math.sin(G.real * 1.6) * 0.0015 * (1 - ads * 0.7);
   const hip = mdl.hip, ad = [0, -mdl.sightY, mdl.adsZ - mdl.rearZ], sp = mdl.sprint;
-  let x = lerp(hip[0], ad[0], ads), y = lerp(hip[1], ad[1], ads), z = lerp(hip[2], ad[2], ads);
+  W.ubK = damp(W.ubK || 0, W.ubOn && W.cur === W.prim ? 1 : 0, 10, dt);
+  const ubh = mdl.ub && W.cur === W.prim ? 1 - ads : 0;                    // hip carry raised a little so the launcher shows
+  let x = lerp(hip[0], ad[0], ads) - ubh * 0.012, y = lerp(hip[1], ad[1], ads) + ubh * (0.028 + W.ubK * 0.012), z = lerp(hip[2], ad[2], ads);
   x = lerp(x, sp[0], spr); y = lerp(y, sp[1], spr); z = lerp(z, sp[2], spr);
-  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32;
+  let rx = spr * -0.3, ry = spr * 0.62, rz = spr * 0.32 + W.ubK * 0.12 * (1 - ads * 0.6);
   // weapon switch: lower, swap, raise
   if (W.sw) {
     W.sw.t += dt;
     const t = W.sw.t, low = t < 0.24 ? smooth(t / 0.24) : 1 - smooth((t - 0.24) / 0.3);
-    if (!W.sw.swapped && t >= 0.24) { W.sw.swapped = true; equip(W.sw.to); }
+    if (!W.sw.swapped && t >= 0.24) { W.sw.swapped = true; equip(W.sw.to); mdl = W.m; }
     y -= low * 0.32; rx -= low * 0.6; rz += low * 0.3;
     if (t >= 0.54) W.sw = null;
   }
-  // grenade throw: weapon drops away, left arm winds up overhand and lobs
+  // grenade throw: weapon drops away, left arm winds up overhand and lobs (throw-back: the same motion, 1.75x faster,
+  // starting from the hand coming up off the floor with the enemy grenade)
   const TA = W.throwArm;
   TA.pivot.visible = false;
   if (W.throwT >= 0) {
     W.throwT += dt;
-    const t = W.throwT;
+    const t = W.throwT * (W.tbK || 1);
     const low = keys([[0, 0], [0.12, 1], [0.55, 1], [0.85, 0]], t);
     y -= low * 0.3; rx -= low * 0.55; x += low * 0.08; rz -= low * 0.25;
     TA.pivot.visible = t < 0.66;
@@ -557,9 +698,21 @@ export function updateViewmodel(dt, p) {
       keysV([[0, [-0.18, -0.62, -0.3]], [0.12, [-0.15, -0.2, -0.42]], [0.2, [-0.17, -0.17, -0.41]], [0.32, [-0.26, -0.02, -0.33]],
         [0.4, [-0.05, 0.03, -0.56]], [0.52, [0.05, -0.3, -0.45]], [0.66, [0.0, -0.66, -0.3]]], t),
       keys([[0, 0.2], [0.2, 0.35], [0.32, 0.6], [0.42, -0.15], [0.6, -0.3]], t), 0.5);
-    TA.nade.visible = !W.thrown;
-    if (!W.thrown && t >= 0.37) { W.thrown = true; W.nades--; if (G.onThrow) G.onThrow(); play('rustle', { vol: 0.6, rev: 0, rate: 1.3 }); p.recoil(-0.012, 0); p.fovKick = 2; }
-    if (t >= 0.85) W.throwT = -1;
+    TA.nade.visible = !W.thrown && (W.tbK === 1 || t > 0.06);
+    if (!W.thrown && t >= 0.37) {
+      W.thrown = true;
+      if (W.tb) { const n = W.tb; W.tb = null; if (n.held && G.onThrowBack) G.onThrowBack(n); }
+      else { W.nades--; if (G.onThrow) G.onThrow(); }
+      play('rustle', { vol: 0.6, rev: 0, rate: 1.3 }); p.recoil(-0.012, 0); p.fovKick = 2;
+    }
+    if (t >= 0.85) { W.throwT = -1; W.tb = null; }
+  }
+  // underbarrel toggle: cant the rifle, thumb the selector
+  if (W.togT >= 0) {
+    W.togT += dt; const k = Math.sin(Math.min(1, W.togT / 0.34) * Math.PI);
+    rz -= k * 0.22; y -= k * 0.035; rx += k * 0.08;
+    if (!W.togDone && W.togT > 0.17) { W.togDone = true; W.ubOn = !W.ubOn; if (G.hud) G.hud._bk = null; }
+    if (W.togT >= 0.34) W.togT = -1;
   }
   // melee: knife slash across the screen
   const KA = W.knife;
@@ -583,17 +736,25 @@ export function updateViewmodel(dt, p) {
     const t = W.reloadT, D = W.reloadDur, k = D / 2.3;
     const tilt = Math.sin(Math.min(1, t / D) * Math.PI);
     rz += tilt * 0.55; rx += tilt * 0.18; y -= tilt * 0.04; x -= tilt * 0.02;
-    if (t > 0.35 * k && t < 1.0 * k) { magY = -Math.min(1, (t - 0.35 * k) / (0.3 * k)) * 0.35; if (t > 0.7 * k) magVis = false; }
+    if (W.ubOn && W.cur === W.prim) { rz -= tilt * 0.75; rx += tilt * 0.1; } // underbarrel: roll the other way, breech up; rifle mag stays
+    else if (t > 0.35 * k && t < 1.0 * k) { magY = -Math.min(1, (t - 0.35 * k) / (0.3 * k)) * 0.35; if (t > 0.7 * k) magVis = false; }
     else if (t >= 1.0 * k && t < 1.4 * k) magY = -(1 - (t - 1.0 * k) / (0.4 * k)) * 0.2;
     if (W.rsnd === 0 && t > 0.35 * k) { W.rsnd = 1; play('magout', { vol: 0.6, rev: 0.1 }); }
     if (W.rsnd === 1 && t > 1.35 * k) { W.rsnd = 2; play('magin', { vol: 0.7, rev: 0.1 }); }
     if (W.rsnd === 2 && W.reloadEmpty && t > 1.75 * k) { W.rsnd = 3; play('bolt', { vol: 0.6, rev: 0.1 }); rx -= 0.1; }
     if (t >= D) {
-      const need = DEF[W.cur].mag - W.ammo, take = Math.min(need, W.reserve);
+      const need = curDef().mag - W.ammo, take = Math.min(need, W.reserve);
       W.ammo += take; W.reserve -= take; W.reloadT = -1;
     }
   }
   mdl.mag.position.y = (mdl.magY0 || 0) + magY; mdl.mag.visible = magVis;
+  rz -= (p.leanOff || 0) * 0.3; x += (p.leanOff || 0) * 0.02;                // lean: a little extra cant
+  // 2x scope at full ADS: hide the gun, show the eyepiece view (it sways with the gun)
+  const sv = mdl.optic === 'x2' && W.cur === W.prim && W.adsT > 0.86 && !busy() && !W.hidden;
+  mdl.g.visible = !sv; W.attm.scope.visible = sv;
+  if (sv) W.attm.scope.position.set(W.swayX * 0.5 + bx * 0.3, W.swayY * 0.5 + by * 0.3 + breathe, W.kick * 0.01);
+  if (W.inspect) { const q = W.inspect; x = q[3]; y = q[4]; z = q[5]; rx = q[0]; ry = q[1]; rz = q[2]; } // test hook: fixed pose
+  { const ub = W.ubOn && W.cur === W.prim && mdl.ub; if (W._fub !== ub) { W._fub = ub; W.flash.position.copy(ub ? mdl.ubMuzzle : mdl.muzzle); } }
   const kz = W.cur === 'pistol' ? 0.045 : 0.035, kr = W.cur === 'pistol' ? 0.09 : 0.045;
   mdl.g.position.set(x + W.swayX + bx, y + W.swayY + by + breathe, z + W.kick * kz);
   mdl.g.rotation.set(rx + W.kick * kr + W.swayY * 0.6, ry + W.swayX * 0.8, rz + W.swayX * 0.5);
@@ -614,3 +775,6 @@ export function renderViewmodel(renderer) {
   renderer.clearDepth();
   renderer.render(WP.scene, WP.cam);
 }
+
+// test hooks (headless checks in tools/test_weapons.py)
+if (typeof window !== 'undefined') window.__wpn = { giveWeapon, curDef, adsFov, toggleUB, rollAtt, GL, DEF, UBDEF, throwNade };

@@ -85,7 +85,7 @@ function setQuality(name) {
   }
 }
 
-const CONTROLS = 'WASD 移动 · Shift 冲刺 · C 蹲伏 · 空格 跳跃/攀爬 · 左键 射击 · 右键 瞄准 · R 换弹 · 1/2/3 或滚轮 切换武器 · G 手雷 · V 近战 · 4 阔剑地雷 · F 互动 · Esc 暂停';
+const CONTROLS = 'WASD 移动 · Shift 冲刺 · C 蹲伏 · 空格 跳跃/攀爬 · Q/E 侧身探头 · 左键 射击 · 右键 瞄准 · R 换弹 · 1/2/3 或滚轮 切换武器 · X 切换下挂武器 · G 手雷（脚边敌雷按 G 掷回） · F 互动/近战 · 4 阔剑地雷 · F11 全屏 · Esc 暂停';
 function settingsHTML() {
   const qn = Q.name;
   return `<div class="m-set"><span>画质</span><div class="seg">${['low', 'medium', 'high'].map((k, i) => `<button data-q="${k}" aria-pressed="${qn === k}">${['低', '中', '高'][i]}</button>`).join('')}</div>
