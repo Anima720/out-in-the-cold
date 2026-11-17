@@ -1,12 +1,13 @@
 // Part 5 "最后阵地": the abandoned Soviet early-warning radar station.
 // Static level (no train frame). North = -z. The station sits on a plateau at y=0; ridge to the north.
-import { G, THREE, clamp, mulberry32 } from './core.js';
-import { Builder } from './geom.js';
+import { G, THREE, clamp, lerp, mulberry32 } from './core.js';
+import { Builder, mat4 } from './geom.js';
 import { M } from './mats.js';
 import { addBox } from './physics.js';
 import { W } from './world.js';
 
 export const S = { built: false, cols: [], cover: [], root: null, lights: [], powered: false };
+const _sv = new THREE.Vector3(), _sm = new THREE.Vector3(), _sy = new THREE.Vector3(0, 1, 0), _ss = new THREE.Vector3(1, 1, 1), _sq = new THREE.Quaternion(), _sf = new THREE.Vector3();
 
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
@@ -160,7 +161,8 @@ export function buildStation() {
   for (let i = 0; i <= 7; i++) B.cyl(9.75, 0.5 + i * 0.6, 3.4 - i * 0.95, 0.03, 0.03, 1.1, 'steel', STL);
   B.add(new THREE.CylinderGeometry(0.03, 0.03, 9.2, 6), 'steel', STL, new THREE.Matrix4().compose(new THREE.Vector3(9.75, 3.0, -0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.58, 0, 0)), new THREE.Vector3(1, 1, 1)));
   // --- roof: dish pedestal, alignment panel, vents
-  solid(-4.2, R, -1.2, -2.8, R + 1.4, 0.2, 'steel', 0x8a8e8f, 'metal');
+  solid(-4.25, R, -1.25, -2.75, R + 0.15, 0.25, 'steel', 0x6f7375, 'metal', false);                // dish pedestal base plate (visual built with the dish)
+  solid(-4.0, R + 0.15, -1.0, -3.0, R + 2.1, 0.0, 'steel', 0x8a8e8f, 'metal', false);               // pedestal tower
   solid(-1.3, R, 1.3, -0.3, R + 1.1, 1.9, 'steel', 0x5f6668, 'metal');
   B.boxC(-0.8, R + 0.85, 1.92, 0.7, 0.4, 0.02, 'screen', 0);
   S.panelPos = new THREE.Vector3(-0.8, R, 2.5);
@@ -224,7 +226,7 @@ export function buildStation() {
     solid(cx - w / 2, 0, cz - d / 2, cx + w / 2, 0.95, cz + d / 2, 'concrete', 0xa5a399);
     coverFor(cx, cz, 0.6, 2);
   };
-  barrier(3, -15); barrier(-3, -20); barrier(11, -21); barrier(-17, -8, 1); barrier(17, -4, 1); barrier(-7, -26); barrier(7.5, -27);
+  barrier(3, -15); barrier(-3.5, -17); barrier(11, -21); barrier(-17, -8, 1); barrier(17, -4, 1); barrier(-7, -26); barrier(7.5, -27);
   for (const [cx, cz] of [[-6, -12], [8, -17]]) { solid(cx - 0.6, 0, cz - 0.6, cx + 0.6, 1.2, cz + 0.6, 'crate', 0xffffff, 'wood'); B.boxC(cx + 0.1, 1.6, cz, 0.8, 0.8, 0.8, 'crate', 0xffffff, 0, 0.3, 0); coverFor(cx, cz, 0.6, 2); }
   for (let i = 0; i < 5; i++) solid(11 + (i % 3) * 0.75, 0, -10.5 + Math.floor(i / 3) * 0.75, 11.65 + (i % 3) * 0.75, 1.1, -9.85 + Math.floor(i / 3) * 0.75, 'paint', [0x6a3a2a, 0x3f5a4a, 0x6a5a3a][i % 3], 'metal');
   coverFor(11.8, -10, 1.2, 2);
@@ -234,7 +236,8 @@ export function buildStation() {
   coverFor(6.6, -31.2, 1.1, 1);
   // --- perimeter fence (gate north x -4..4, south gap x -3..3, breaches)
   const FX0 = -30, FX1 = 30, FZ0 = -30, FZ1 = 26;
-  const gaps = { n: [[-4, 4], [-22, -19]], s: [[-3, 3]], w: [[-14, -11]], e: [[-6, -3]] };
+  // gate x -5..5 (two truck lanes); breaches: NW, W, E as before + SW, W2, SE and NE-east (snowmobile lanes, assault.js)
+  const gaps = { n: [[-5, 5], [-22, -19]], s: [[-3, 3]], w: [[-14, -11], [3, 6], [18, 21]], e: [[-29, -26], [-6, -3], [14, 17]] };
   const fenceRun = (ax, az, bx, bz, side) => {
     const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 3), dx = (bx - ax) / L, dz = (bz - az) / L;
     for (let i = 0; i <= n; i++) {
@@ -264,7 +267,7 @@ export function buildStation() {
   fenceRun(FX0, FZ0, FX1, FZ0, 'n'); fenceRun(FX0, FZ1, FX1, FZ1, 's'); fenceRun(FX0, FZ0, FX0, FZ1, 'w'); fenceRun(FX1, FZ0, FX1, FZ1, 'e');
   S.entries = [{ x: 0, z: -31 }, { x: -20.5, z: -31 }, { x: -31, z: -12.5 }, { x: 31, z: -4.5 }];
   // open gate leaves
-  for (const sx of [-1, 1]) B.boxC(sx * 4.6, 1.2, -31.6, 0.08, 2.2, 3.0, 'steel', 0x4e5458, 0, sx * 0.3, 0);
+  for (const sx of [-1, 1]) B.boxC(sx * 5.15, 1.2, -31.55, 0.08, 2.2, 3.0, 'steel', 0x4e5458, 0, sx * 0.12, 0);
   // --- outside cover: rocks + concrete blocks along the approach
   const rockAt = (x, z, s) => {
     const y = ground5(x, z);
@@ -305,16 +308,47 @@ export function buildStation() {
   }
   const sim = new THREE.InstancedMesh(W.geo.scrub, W.mat.scrub, scrub.length);
   scrub.forEach((m, i) => sim.setMatrixAt(i, m)); sim.computeBoundingSphere(); root.add(sim);
-  // --- animated: dish + radar antenna
-  const db = new Builder();
-  const prof = []; for (let i = 0; i <= 12; i++) { const r = (i / 12) * 2.7; prof.push(new THREE.Vector2(r, (r * r) / 9)); }
-  const dishGeo = new THREE.LatheGeometry(prof, 28); dishGeo.rotateX(Math.PI / 2);
-  db.add(dishGeo, 'dish', 0xffffff, null);
-  db.cyl(0, 0, 0.0, 0.25, 0.3, 0.5, 'steel', 0x6f7375, Math.PI / 2, 0, 0);
-  for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2; db.add(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 5), 'steel', 0x7a7e80, new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * 1.0, Math.sin(a) * 1.0, -1.1), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(a) * 0.45, -Math.cos(a) * 0.45, 0)), new THREE.Vector3(1, 1, 1))); }
-  db.cyl(0, 0, -2.05, 0.14, 0.1, 0.35, 'steel', 0x3a3d3f, Math.PI / 2, 0, 0);
-  const dishYaw = new THREE.Group(); dishYaw.position.set(-3.5, R + 1.6, -0.5); root.add(dishYaw);
-  const dishEl = new THREE.Group(); dishYaw.add(dishEl); db.build(mats, dishEl);
+  // --- animated: Soviet-era satellite dish — pedestal tower, geared turntable with yoke + gearbox (yaw), ribbed parabolic
+  // reflector with rim ring, hub, feed horn + LNB on a quadripod and its cables (elevation). Concave side = local -z of S.dish.el.
+  const seg = (b, a, c, r, key, col, sides = 6) => { _sv.subVectors(c, a); const L = _sv.length(); b.add(new THREE.CylinderGeometry(r, r, L, sides), key, col, new THREE.Matrix4().compose(_sm.addVectors(a, c).multiplyScalar(0.5), _sq.setFromUnitVectors(_sy, _sv.normalize()), _ss)); };
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z), OL = 0x445040, DK = 0x2a2b2c;
+  B.boxC(-3.5, R + 0.075, -0.5, 1.5, 0.15, 1.5, 'steel', 0x6f7375);                                       // pedestal base plate + bolts
+  for (const [bx, bz] of [[-0.62, -0.62], [0.62, -0.62], [-0.62, 0.62], [0.62, 0.62]]) B.cyl(-3.5 + bx, R + 0.19, -0.5 + bz, 0.04, 0.04, 0.08, 'dark', DK, 0, 0, 0, 6);
+  B.cyl(-3.5, R + 1.1, -0.5, 0.42, 0.55, 1.9, 'steel', 0x8a8e8f, 0, 0, 0, 8);                             // tapered tower
+  B.cyl(-3.5, R + 1.72, -0.5, 0.455, 0.465, 0.14, 'paint', 0x7a3a2c, 0, 0, 0, 8);                         // stencil band
+  B.cyl(-3.5, R + 2.09, -0.5, 0.6, 0.6, 0.08, 'steel', 0x5f6366, 0, 0, 0, 16);                           // flange
+  B.boxC(-3.0, R + 0.75, -0.5, 0.05, 0.62, 0.4, 'steel', 0x55585b); B.boxC(-2.97, R + 0.75, -0.38, 0.03, 0.06, 0.05, 'dark', DK); // access hatch
+  seg(B, V3(-3.06, R + 0.15, -0.2), V3(-3.1, R + 2.02, -0.28), 0.022, 'dark', DK);                        // cable up the tower
+  seg(B, V3(-3.06, R + 0.04, -0.15), V3(-2.1, R + 0.04, 0.75), 0.025, 'dark', DK); seg(B, V3(-2.1, R + 0.04, 0.75), V3(-1.15, R + 0.04, 1.45), 0.025, 'dark', DK); // to the panel
+  const yb = new Builder();
+  yb.cyl(0, 0, 0, 0.62, 0.62, 0.16, 'steel', 0x6f7375, 0, 0, 0, 20);                                    // turntable + gear ring
+  yb.cyl(0, -0.05, 0, 0.67, 0.67, 0.05, 'dark', DK, 0, 0, 0, 28);
+  for (let i = 0; i < 28; i++) { const a = (i / 28) * Math.PI * 2; yb.boxC(Math.cos(a) * 0.69, -0.05, Math.sin(a) * 0.69, 0.05, 0.05, 0.04, 'dark', DK, 0, -a, 0); }
+  yb.boxC(0, 0.15, 0.05, 1.5, 0.14, 0.72, 'paint', OL);                                                  // yoke base + arms
+  for (const sx of [-1, 1]) { yb.boxC(sx * 0.68, 0.55, 0.05, 0.12, 0.85, 0.5, 'paint', OL); yb.cyl(sx * 0.7, 0.85, 0.05, 0.16, 0.16, 0.22, 'dark', DK, 0, 0, Math.PI / 2, 12); }
+  yb.boxC(0.98, 0.45, 0.22, 0.34, 0.44, 0.4, 'paint', OL); yb.cyl(0.98, 0.45, 0.52, 0.12, 0.12, 0.28, 'dark', DK, Math.PI / 2, 0, 0, 10); yb.boxC(0.98, 0.72, 0.1, 0.18, 0.12, 0.16, 'steel', 0x55585b); // gearbox, motor, junction box
+  seg(yb, V3(0.98, 0.25, 0.3), V3(0.4, 0.08, 0.45), 0.02, 'dark', DK);
+  const db = new Builder(), DZ = -0.35, FOC = 1.25, RR = 2.0, zAt = (r) => DZ - (r * r) / (4 * FOC);
+  const prof = []; for (let i = 0; i <= 14; i++) { const r = (i / 14) * RR; prof.push(new THREE.Vector2(r, (r * r) / (4 * FOC))); }
+  const dishGeo = new THREE.LatheGeometry(prof, 36); dishGeo.rotateX(-Math.PI / 2); dishGeo.translate(0, 0, DZ);
+  db.add(dishGeo, 'dish', 0xffffff, null);                                                               // reflector (double-sided)
+  db.add(new THREE.TorusGeometry(RR, 0.045, 6, 48), 'steel', 0x8b8f90, mat4(0, 0, zAt(RR)));             // rim ring
+  db.add(new THREE.TorusGeometry(1.2, 0.03, 5, 36), 'steel', 0x6f7375, mat4(0, 0, zAt(1.2) + 0.08));     // back truss ring
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);    // radial back ribs
+    for (const [r0, r1] of [[0.32, 0.9], [0.9, 1.5], [1.5, RR]]) seg(db, V3(c * r0, sn * r0, zAt(r0) + 0.07), V3(c * r1, sn * r1, zAt(r1) + 0.07), 0.032, 'steel', 0x6f7375, 4); }
+  db.cyl(0, 0, DZ + 0.13, 0.38, 0.38, 0.24, 'steel', 0x6f7375, Math.PI / 2, 0, 0, 16);                   // hub
+  db.boxC(0, 0, 0.0, 0.62, 0.62, 0.34, 'paint', OL);                                                     // mount block on the axle
+  db.cyl(0, 0, 0, 0.07, 0.07, 1.5, 'dark', DK, 0, 0, Math.PI / 2, 8);                                    // elevation axle
+  const FZ = DZ - FOC;                                                                                     // focus
+  db.cyl(0, 0, FZ - 0.05, 0.07, 0.21, 0.36, 'steel', 0x5f6366, -Math.PI / 2, 0, 0, 12);                  // feed horn, mouth toward the dish
+  db.boxC(0, 0, FZ - 0.32, 0.17, 0.17, 0.24, 'dark', DK);                                                // LNB
+  for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2, r = RR * 0.97;                // quadripod
+    seg(db, V3(Math.cos(a) * r, Math.sin(a) * r, zAt(r)), V3(Math.cos(a) * 0.1, Math.sin(a) * 0.1, FZ - 0.2), 0.026, 'steel', 0x8b8f90); }
+  { const a = Math.PI * 1.25, r = RR * 0.97; seg(db, V3(Math.cos(a) * 0.14, Math.sin(a) * 0.14, FZ - 0.3), V3(Math.cos(a) * r, Math.sin(a) * r - 0.05, zAt(r) - 0.03), 0.013, 'dark', DK); // feed cable down a strut,
+    seg(db, V3(Math.cos(a) * r, Math.sin(a) * r - 0.05, zAt(r) + 0.1), V3(Math.cos(a) * 0.4, Math.sin(a) * 0.4, DZ + 0.15), 0.013, 'dark', DK); } // round the rim to the hub
+  const dishYaw = new THREE.Group(); dishYaw.position.set(-3.5, R + 2.2, -0.5); root.add(dishYaw); yb.build(mats, dishYaw);
+  const dishEl = new THREE.Group(); dishEl.position.set(0, 0.85, 0.05); dishYaw.add(dishEl); db.build(mats, dishEl);
+  S.feedLocal = new THREE.Vector3(0, 0, FZ - 0.3);
   S.dish = { yaw: dishYaw, el: dishEl, aimYaw: 2.6, aimEl: 0.55, off: 0 };
   dishYaw.rotation.y = 2.6; dishEl.rotation.x = 0.55;
   const rb = new Builder();
@@ -334,7 +368,8 @@ export function buildStation() {
     lb.build(mats, piv);
     return piv;
   };
-  S.door = { l: leaf(-1), r: leaf(1), ang: 1.62, tgt: 1.62, vel: 0 };
+  S.door = { l: leaf(-1), r: leaf(1), ang: 1.62, tgt: 1.62, vel: 0, blown: null };
+  S.door.l0 = S.door.l.position.clone();
   // --- uplink operator panel on the front of the west console (screen + guarded transmit key), facing +x
   {
     const pg = new THREE.Group(); pg.position.set(-6.27, 0.15, -2.6); root.add(pg);
@@ -387,7 +422,17 @@ export function setUplink(state, pct = 0) {
   u.key.material.emissiveIntensity = state === 'off' ? 0.15 : state === 'wait' ? 1.4 : 0.6;
 }
 // door: ang 0 = closed, ~1.62 = open against nothing; kick() slams it open with a bounce
-export function setDoor(ang, instant = true) { const d = S.door; if (!d) return; d.tgt = ang; if (instant) { d.ang = ang; d.vel = 0; } }
+export function setDoor(ang, instant = true) {
+  const d = S.door; if (!d) return;
+  if (d.blown) { d.blown = null; d.l.position.copy(d.l0); d.l.rotation.set(0, ang, 0); d.r.rotation.set(0, -ang, 0); } // restore a blown-in leaf
+  d.tgt = ang; if (instant) { d.ang = ang; d.vel = 0; }
+}
+// breaching charge (finale): the left leaf is torn off its hinges and thrown flat onto the floor inside, the right one slams open
+export function blowDoor() {
+  const d = S.door; if (!d) return;
+  d.blown = { t: 0, p0: d.l.position.clone(), p1: new THREE.Vector3(-0.25, 0.19, 3.15), y1: 0.45, z0: d.l.rotation.y }; d.l.rotation.order = 'YXZ'; // flat first, then yaw
+  d.tgt = 1.85; d.vel = 34;
+}
 export function kickDoor() { const d = S.door; if (!d) return; d.tgt = 1.55; d.vel = 13; }
 
 export function setPower(on) {
@@ -404,12 +449,22 @@ export function updateStation(dt) {
   if (dr) {
     dr.vel += ((dr.tgt - dr.ang) * 60 - dr.vel * 7) * dt; dr.ang += dr.vel * dt;
     if (dr.ang > 1.85) { dr.ang = 1.85; dr.vel *= -0.35; }
-    dr.l.rotation.y = dr.ang; dr.r.rotation.y = -dr.ang;
+    if (dr.blown) { // flight of the torn-off leaf: short arc, tumbling, lands flat (pivot = hinge edge, so the leaf lies toward -z)
+      const b = dr.blown, u = Math.min(1, (b.t += dt) / 0.55), e = u * u;
+      dr.l.position.lerpVectors(b.p0, b.p1, u); dr.l.position.y += Math.sin(u * Math.PI) * 0.9;
+      dr.l.rotation.set(-Math.PI / 2 * e, lerp(b.z0, b.y1, u), Math.sin(u * Math.PI) * 0.9);
+      if (u >= 1 && !b.landed) { b.landed = true; G.fx?.debrisBurst?.(dr.l.position.clone().setZ(dr.l.position.z - 1), 6, { speed: 2, size: 0.08 }); }
+    } else dr.l.rotation.y = dr.ang;
+    dr.r.rotation.y = -dr.ang;
   }
   const d = S.dish;
   const ty = d.aimYaw + d.off, te = d.aimEl - d.off * 0.6;
   d.yaw.rotation.y += (ty - d.yaw.rotation.y) * Math.min(1, dt * 3);
   d.el.rotation.x += (te - d.el.rotation.x) * Math.min(1, dt * 3);
+  if (d.off > 0.5 && dt > 0 && S.feedLocal) { // hit: the feed smokes and sparks until realigned
+    if (Math.random() < dt * 7) { _sf.copy(S.feedLocal).applyMatrix4(d.el.matrixWorld); G.fx?.smoke?.(_sf, { size: 0.4, grow: 3, life: 2.5, color: 0x26241f, alpha: 0.5, vy: 1.2, wind: 1 }); }
+    if (Math.random() < dt * 2.5) { _sf.copy(S.feedLocal).applyMatrix4(d.el.matrixWorld); for (let i = 0; i < 5; i++) G.fx?.add?.spawn(_sf.x, _sf.y, _sf.z, (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4, { life: 0.3, size: 0.05, c: [1, 0.8, 0.45], grav: 12, drag: 0.5 }); }
+  }
 }
 
 export function hideStation() { if (S.root) S.root.visible = false; }
