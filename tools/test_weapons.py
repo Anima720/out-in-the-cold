@@ -113,6 +113,16 @@ async def main():
             for k, att, ads, tag in plan:
                 if only and tag not in only and "all" not in only: continue
                 await pose(k, att, ads, tag)
+            # side views of every rifle with attachments (fixed inspect pose, HUD hidden)
+            side = [("m4", {"optic": "reddot", "under": "gl"}), ("m4", {"optic": "x2", "under": "shotgun"}), ("ak", {"optic": "holo", "under": "gl"}),
+                    ("ak12", {"optic": "x2", "under": "shotgun"}), ("ak12", {"optic": "reddot", "under": "gl"}), ("smg", {"optic": "holo", "under": None}),
+                    ("saiga", {"optic": "reddot", "under": None}), ("svd", None), ("pkm", None), ("pistol", None)]
+            if not only or "side" in only or "all" in only:
+                await ev("__G.hud.show(false); __WP.inspect=[0.05, 1.25, 0.0, 0.02, -0.03, -0.62]")
+                for i, (k, att) in enumerate(side):
+                    await ev(f"{give}('{k}',30,90,{json.dumps(att) if att else 'undefined'}); __sim(0.9)")
+                    await snap(f"shots/w_side_{i}_{k}.png")
+                await ev("__G.hud.show(true); __WP.inspect=null; __sim(0.2)")
             if not only or "lean" in only or "all" in only:
                 await ev(f"{give}('m4',30,90,{{optic:'reddot',under:null}}); __sim(0.8)")
                 for kk, tag in (("KeyQ", "lean_q"), ("KeyE", "lean_e")):

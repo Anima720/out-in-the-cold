@@ -38,8 +38,8 @@ function dotTex() {
   const [c, g] = canvas(256), m = 128;
   let gr = g.createRadialGradient(m, m, 0, m, m, 34); gr.addColorStop(0, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  gr = g.createRadialGradient(m, m, 0, m, m, 7.5); gr.addColorStop(0, '#fff'); gr.addColorStop(0.65, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.beginPath(); g.arc(m, m, 7.5, 0, 6.283); g.fill();
+  gr = g.createRadialGradient(m, m, 0, m, m, 12); gr.addColorStop(0, '#fff'); gr.addColorStop(0.6, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(m, m, 12, 0, 6.283); g.fill();
   return tex(c);
 }
 function holoTex() {
@@ -178,9 +178,22 @@ function buildMasterkey(R) {
   return { g, muzzle: new THREE.Vector3(0, -0.016, -0.18), hand: -0.04 };
 }
 
+// full-ADS view through the 2x scope: the eye sits at the eyepiece, so the gun is hidden and only the eyepiece rim
+// and the reticle remain, fixed on the view axis (bullets go there); W's vignette dims the world around it
+function buildScopeView(R) {
+  const g = new THREE.Group(), E = OPT.x2.eye;
+  const rim = new THREE.Mesh(new THREE.RingGeometry(0.0166, 0.06, 48), R.dull); rim.position.z = -E; g.add(rim);
+  const lip = new THREE.Mesh(new THREE.RingGeometry(0.0163, 0.0176, 48), R.gun); lip.position.z = -E + 0.0004; g.add(lip);
+  g.add(plane(0.03, 0.03, R.retAcog, 0, 0, -E - 0.07, 11));
+  g.add(plane(0.03, 0.03, R.retChev, 0, 0, -E - 0.0705, 12));
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.0168, 32), R.lensA); lens.position.z = -E - 0.002; lens.renderOrder = 10; g.add(lens);
+  g.visible = false;
+  return g;
+}
+
 export function buildAttachments(VM) {
   const R = mats(VM);
-  const A = { opt: { reddot: buildRedDot(R), holo: buildHolo(R), x2: buildACOG(R) }, ub: { gl: buildM203(R, false), gp: buildM203(R, true), shotgun: buildMasterkey(R) } };
+  const A = { opt: { reddot: buildRedDot(R), holo: buildHolo(R), x2: buildACOG(R) }, ub: { gl: buildM203(R, false), gp: buildM203(R, true), shotgun: buildMasterkey(R) }, scope: buildScopeView(R) };
   for (const o of [...Object.values(A.opt), ...Object.values(A.ub)]) o.g.visible = false;
   return A;
 }

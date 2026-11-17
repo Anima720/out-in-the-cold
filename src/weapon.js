@@ -198,7 +198,7 @@ function buildM4() {
   for (const s of [-1, 1]) mb.boxC(s * 0.0135, -0.16, -0.06, 0.002, 0.14, 0.028, 'gunW', 0xffffff, 0, 0, 0, 0.001);
   mb.boxC(0, -0.243, -0.061, 0.031, 0.012, 0.074, 'poly', 0xffffff, 0, 0, 0, 0.004);
   mb.build(VM, mag, { cast: false }); g.add(mag);
-  return { g, mag, lh, rs, mount: { y: 0.0325, cy: 0.08, z: -0.012 }, ubm: { y: -0.03, z: -0.245 }, magY0: 0, sightY: SY, rearZ: RZ, muzzle: new THREE.Vector3(0, 0, -0.575), eject: new THREE.Vector3(0.026, 0.006, 0.0),
+  return { g, mag, lh, rs, mount: { y: 0.0325, cy: 0.084, z: -0.012 }, ubm: { y: -0.03, z: -0.245 }, magY0: 0, sightY: SY, rearZ: RZ, muzzle: new THREE.Vector3(0, 0, -0.575), eject: new THREE.Vector3(0.026, 0.006, 0.0),
     hip: [0.12, -0.135, -0.3], adsZ: -0.2, sprint: [0.07, -0.19, -0.28] };
 }
 
@@ -424,7 +424,7 @@ export function initWeapon() {
   VM = vmMats();
   WP.models = { m4: buildM4(), ak: buildAK({ ub: true }), ak12: buildAK({ rail: true, ub: true }), smg: buildSMG(), pistol: buildPistol(), igla: buildIgla(), rpg: buildIgla(true), pkm: buildAK({ ext: 0.16, barrel: 0.015, muzR: 0.02, mag: 'can', bipod: true, shroud: true }), svd: buildAK({ ext: 0.24, barrel: 0.009, mag: 'short', scope: true }), saiga: buildAK({ ext: -0.06, barrel: 0.016, muzR: 0.022, mag: 'box' }) };
   for (const m of Object.values(WP.models)) { m.g.visible = false; root.add(m.g); }
-  WP.attm = buildAttachments(VM);
+  WP.attm = buildAttachments(VM); cam.add(WP.attm.scope);
   WP.throwArm = buildThrowArm(); WP.throwArm.pivot.visible = false; cam.add(WP.throwArm.pivot);
   WP.knife = buildKnifeArm(); WP.knife.pivot.visible = false; cam.add(WP.knife.pivot);
   // muzzle flash
@@ -747,6 +747,11 @@ export function updateViewmodel(dt, p) {
   }
   mdl.mag.position.y = (mdl.magY0 || 0) + magY; mdl.mag.visible = magVis;
   rz -= (p.leanOff || 0) * 0.3; x += (p.leanOff || 0) * 0.02;                // lean: a little extra cant
+  // 2x scope at full ADS: hide the gun, show the eyepiece view (it sways with the gun)
+  const sv = mdl.optic === 'x2' && W.cur === W.prim && W.adsT > 0.86 && !busy() && !W.hidden;
+  mdl.g.visible = !sv; W.attm.scope.visible = sv;
+  if (sv) W.attm.scope.position.set(W.swayX * 0.5 + bx * 0.3, W.swayY * 0.5 + by * 0.3 + breathe, W.kick * 0.01);
+  if (W.inspect) { const q = W.inspect; x = q[3]; y = q[4]; z = q[5]; rx = q[0]; ry = q[1]; rz = q[2]; } // test hook: fixed pose
   { const ub = W.ubOn && W.cur === W.prim && mdl.ub; if (W._fub !== ub) { W._fub = ub; W.flash.position.copy(ub ? mdl.ubMuzzle : mdl.muzzle); } }
   const kz = W.cur === 'pistol' ? 0.045 : 0.035, kr = W.cur === 'pistol' ? 0.09 : 0.045;
   mdl.g.position.set(x + W.swayX + bx, y + W.swayY + by + breathe, z + W.kick * kz);
