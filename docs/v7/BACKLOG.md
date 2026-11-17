@@ -21,7 +21,7 @@ cross-package contracts are in the last section. Status is kept in HANDOFF.md.
 | 14 | Smarter enemy and squad AI; both sides can melee, with melee animations | AI |
 | 15 | Part 1: after taking the laptop intel you can still press F on it — fix | T |
 | 16 | Part 2: the mine cage elevator is crude — improve it | T |
-| 17 | Character names in Chinese (Sandman 睡魔, Truck 卡车, Grinch 格林奇, Price 普莱斯, Yuri 尤里, Nikolai 尼科莱); Colonel Krasin becomes just「俄军高级将领」 | Lead (final pass) |
+| 17 | Character names in Chinese (Sandman 睡魔, Truck 特拉克, Grinch 格林奇, Price 普莱斯, Yuri 尤里, Nikolai 尼科莱); Colonel Krasin becomes just「俄军高级将领」 | Lead (final pass) |
 | 18 | Post-credits beat moves: after Price drives to Hotel Oasis → Nikolai: "faint signal found" → black → credits start with the Hans Zimmer track | Lead |
 | 19 | Credits: creator is "Anima720", not 玩家/你 | Lead |
 | 20 | Finale breach: enemies BLOW the door in; Grinch shouts a line ("你休想……"), fires back, kills one, is killed | P4 |
@@ -34,6 +34,8 @@ cross-package contracts are in the last section. Status is kept in HANDOFF.md.
 | 28 | Last stand: when the attack starts, tell the player about the weapons along the walls and the roof machine gun | P4 |
 | 29 | Part 3 DShK section: an enemy mans a machine gun but never fires — make him shoot | T |
 | 30 | Loading screen still says「铁马」; must say「弃于寒冬」 | Lead |
+
+2026-11-17 试玩补充：Truck 中文名改为「特拉克」；特拉克和格林奇在中文字幕中称睡魔「队长」或「头儿」，不直呼其名；说话人标签和英文原台词保持不变。
 
 ## Packages and file ownership (v7)
 | Pkg | Owns | Items |
