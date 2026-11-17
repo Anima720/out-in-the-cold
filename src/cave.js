@@ -683,7 +683,7 @@ function updateSurface(dt) {
     after(4, () => { HUD.objective('用 RPG 摧毁 BTR'); HUD.setMarker(CV.rpgPos.clone().setY(1.2), 'RPG'); });
   }
   // reinforcements arrive from the flanks while the BTR is still alive (staggered, capped)
-  if (C.btr && !C.btr.dead && C.reinf < 3 && C.t - C.btrT > 7 + C.reinf * 11 && alive() < 8) {
+  if (C.btr && !C.btr.dead && C.reinf < 3 && C.t - C.btrT > 7 + C.reinf * 11 && alive() < 9) {
     const side = C.reinf % 2 ? 1 : -1, z0 = -70 - C.reinf * 14;
     [[side * 34, z0], [side * 37, z0 - 5], [side * 33, z0 + 6]].forEach(([x, z], i) => after(i * 1.3, () => { if (G.lvl === 3) new Raider(x, z, { cover: CV.coverS, maxTier: 1 }); }));
     C.reinf++;
