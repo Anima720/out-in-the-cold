@@ -216,9 +216,10 @@ async def main():
                     finally:
                         await ev("{const s=__eventCamera,c=__G.camera;c.position.copy(s.p);c.quaternion.copy(s.q);c.fov=s.fov;c.updateProjectionMatrix();c.updateMatrixWorld(true);__G.paused=s.paused;__WP.hidden=s.hidden;__G.hud.show(s.hud);delete window.__eventCamera;}")
                 assert await ev("__WP.ubOn && __WP.ub.kind==='gl' && __WP.ammo===1 && __wpn.GL.length===0"), "GL fixture is not ready"
+                # evaluate() invokes a function-valued result; installing the hook must return void.
                 await ev("""window.__glEvents=[];window.__glExplosion=__G.fx.explosion;
                   __G.fx.explosion=function(pos,size,o){const r=__wpn.GL[0],before=__G.fx.add.n;const result=__glExplosion.call(this,pos,size,o);
-                    if(r&&Math.abs(size-1.05)<1e-6)__glEvents.push({t:__G.t,pos:pos.toArray(),size,dist:r.dist,life:r.life,fireAdded:__G.fx.add.n-before});return result;};""")
+                    if(r&&Math.abs(size-1.05)<1e-6)__glEvents.push({t:__G.t,pos:pos.toArray(),size,dist:r.dist,life:r.life,fireAdded:__G.fx.add.n-before});return result;};void 0;""")
                 try:
                     r=await out("gl flight event", """(()=>{__input.lmb=true;__input.lmbPressed=true;__sim(1/60);__input.lmb=false;__sim(1/60);window.__glRound=__wpn.GL[0];
                       const r=__glRound;if(!r)return {alive:false,events:__glEvents};__G.camera.updateMatrixWorld(true);const p=r.pos.clone().project(__G.camera);
